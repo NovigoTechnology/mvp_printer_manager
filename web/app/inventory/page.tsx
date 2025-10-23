@@ -240,7 +240,12 @@ export default function Inventory() {
     wireless_capable: false,
     ownership_type: 'owned',
     status: 'active',
-    condition: 'good'
+    condition: 'good',
+    toner_black_code: '',
+    toner_cyan_code: '',
+    toner_magenta_code: '',
+    toner_yellow_code: '',
+    other_supplies: ''
   })
   useEffect(() => {
     fetchData()
@@ -444,7 +449,12 @@ export default function Inventory() {
           wireless_capable: false,
           ownership_type: 'owned',
           status: 'active',
-          condition: 'good'
+          condition: 'good',
+          toner_black_code: '',
+          toner_cyan_code: '',
+          toner_magenta_code: '',
+          toner_yellow_code: '',
+          other_supplies: ''
         })
         alert('Impresora agregada exitosamente!')
       } else {

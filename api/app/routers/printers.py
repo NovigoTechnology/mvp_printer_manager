@@ -79,6 +79,7 @@ class PrinterResponse(BaseModel):
     
     # Características técnicas
     is_color: bool
+    printer_type: str
     print_technology: Optional[str]
     max_paper_size: Optional[str]
     duplex_capable: bool
@@ -108,6 +109,13 @@ class PrinterResponse(BaseModel):
     notes: Optional[str]
     responsible_person: Optional[str]
     cost_center: Optional[str]
+    
+    # Información de insumos
+    toner_black_code: Optional[str]
+    toner_cyan_code: Optional[str]
+    toner_magenta_code: Optional[str]
+    toner_yellow_code: Optional[str]
+    other_supplies: Optional[str]
     
     # Timestamps
     created_at: datetime
