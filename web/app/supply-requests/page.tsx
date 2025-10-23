@@ -79,18 +79,10 @@ export default function SupplyRequestsPage() {
     department: '',
     priority: 'normal'
   })
-  
-  // Estado para agregar nuevo insumo
-  const [newSupply, setNewSupply] = useState({
-    type: 'toner_black' as SupplyItem['type'],
-    description: '',
-    quantity: 1,
-    code: ''
-  })
 
   // Estados para el modal de insumos
   const [showSuppliesModal, setShowSuppliesModal] = useState(false)
-  const [availableSupplies, setAvailableSupplies] = useState<SupplyItem[]>([])
+  const [modalSupplies, setModalSupplies] = useState<SupplyItem[]>([])
 
   // Estados de búsqueda avanzada
   const [advancedSearch, setAdvancedSearch] = useState({
@@ -110,98 +102,6 @@ export default function SupplyRequestsPage() {
   // Funciones para generar ID único
   const generateId = () => Math.random().toString(36).substr(2, 9)
 
-  // Función para generar insumos disponibles para la impresora
-  const generateAvailableSupplies = (printer: Printer): SupplyItem[] => {
-    const supplies: SupplyItem[] = []
-
-    // Agregar tóner negro (siempre disponible)
-    supplies.push({
-      id: generateId(),
-      type: 'toner_black',
-      description: `Tóner Negro - ${printer.brand} ${printer.model}`,
-      quantity: 1,
-      code: printer.toner_black_code || 'No especificado'
-    })
-
-    // Agregar tóners de color solo si la impresora es a color
-    if (printer.is_color) {
-      supplies.push({
-        id: generateId(),
-        type: 'toner_cyan',
-        description: `Tóner Cian - ${printer.brand} ${printer.model}`,
-        quantity: 1,
-        code: printer.toner_cyan_code || 'No especificado'
-      })
-
-      supplies.push({
-        id: generateId(),
-        type: 'toner_magenta',
-        description: `Tóner Magenta - ${printer.brand} ${printer.model}`,
-        quantity: 1,
-        code: printer.toner_magenta_code || 'No especificado'
-      })
-
-      supplies.push({
-        id: generateId(),
-        type: 'toner_yellow',
-        description: `Tóner Amarillo - ${printer.brand} ${printer.model}`,
-        quantity: 1,
-        code: printer.toner_yellow_code || 'No especificado'
-      })
-    }
-
-    // Agregar insumos comunes
-    supplies.push({
-      id: generateId(),
-      type: 'unidad_imagen',
-      description: `Unidad de Imagen - ${printer.brand} ${printer.model}`,
-      quantity: 1,
-      code: 'Por especificar'
-    })
-
-    supplies.push({
-      id: generateId(),
-      type: 'papel',
-      description: 'Papel A4 75g/m²',
-      quantity: 5,
-      code: 'Estándar'
-    })
-
-    supplies.push({
-      id: generateId(),
-      type: 'papel',
-      description: 'Papel A4 80g/m²',
-      quantity: 5,
-      code: 'Premium'
-    })
-
-    supplies.push({
-      id: generateId(),
-      type: 'otro',
-      description: `Kit de Mantenimiento - ${printer.brand} ${printer.model}`,
-      quantity: 1,
-      code: 'Por especificar'
-    })
-
-    supplies.push({
-      id: generateId(),
-      type: 'otro',
-      description: `Fusor - ${printer.brand} ${printer.model}`,
-      quantity: 1,
-      code: 'Por especificar'
-    })
-
-    supplies.push({
-      id: generateId(),
-      type: 'otro',
-      description: `Tambor - ${printer.brand} ${printer.model}`,
-      quantity: 1,
-      code: 'Por especificar'
-    })
-
-    return supplies
-  }
-
   // Función para abrir el modal de insumos
   const openSuppliesModal = () => {
     if (!selectedPrinter) {
@@ -209,88 +109,63 @@ export default function SupplyRequestsPage() {
       return
     }
 
-    const supplies = generateAvailableSupplies(selectedPrinter)
-    setAvailableSupplies(supplies)
-    setShowSuppliesModal(true)
-  }
-
-  // Función para agregar insumo desde el modal
-  const addSupplyFromModal = (supply: SupplyItem) => {
-    // Verificar si ya existe este tipo de insumo
-    const existingSupply = formData.supplies.find(s => 
-      s.type === supply.type && s.code === supply.code
-    )
-
-    if (existingSupply) {
-      // Si ya existe, incrementar la cantidad
-      setFormData(prev => ({
-        ...prev,
-        supplies: prev.supplies.map(s => 
-          s.id === existingSupply.id 
-            ? { ...s, quantity: s.quantity + supply.quantity }
-            : s
-        )
-      }))
-    } else {
-      // Si no existe, agregar nuevo
-      const newItem: SupplyItem = {
-        ...supply,
-        id: generateId() // Generar nuevo ID
-      }
-
-      setFormData(prev => ({
-        ...prev,
-        supplies: [...prev.supplies, newItem]
-      }))
-    }
-  }
-
-  // Función para agregar un insumo a la lista
-  const addSupplyItem = () => {
-    if (!newSupply.description.trim()) {
-      alert('Por favor ingrese una descripción para el insumo')
-      return
-    }
-
-    // Para toners, usar el código de la impresora si está disponible
-    let code = newSupply.code
-    if (selectedPrinter && newSupply.type.startsWith('toner_') && !code) {
-      switch (newSupply.type) {
-        case 'toner_black':
-          code = selectedPrinter.toner_black_code || ''
-          break
-        case 'toner_cyan':
-          code = selectedPrinter.toner_cyan_code || ''
-          break
-        case 'toner_magenta':
-          code = selectedPrinter.toner_magenta_code || ''
-          break
-        case 'toner_yellow':
-          code = selectedPrinter.toner_yellow_code || ''
-          break
-      }
-    }
-
-    const newItem: SupplyItem = {
+    // Inicializar con una fila vacía
+    setModalSupplies([{
       id: generateId(),
-      type: newSupply.type,
-      description: newSupply.description,
-      quantity: newSupply.quantity,
-      code: code
-    }
-
-    setFormData(prev => ({
-      ...prev,
-      supplies: [...prev.supplies, newItem]
-    }))
-
-    // Limpiar formulario
-    setNewSupply({
       type: 'toner_black',
       description: '',
       quantity: 1,
       code: ''
-    })
+    }])
+    setShowSuppliesModal(true)
+  }
+
+  // Función para agregar nueva fila en el modal
+  const addRowInModal = () => {
+    setModalSupplies(prev => [...prev, {
+      id: generateId(),
+      type: 'toner_black',
+      description: '',
+      quantity: 1,
+      code: ''
+    }])
+  }
+
+  // Función para eliminar fila del modal
+  const removeRowFromModal = (id: string) => {
+    setModalSupplies(prev => prev.filter(item => item.id !== id))
+  }
+
+  // Función para actualizar fila en el modal
+  const updateRowInModal = (id: string, field: keyof SupplyItem, value: any) => {
+    setModalSupplies(prev => prev.map(item => 
+      item.id === id ? { ...item, [field]: value } : item
+    ))
+  }
+
+  // Función para confirmar y agregar todos los insumos del modal
+  const confirmModalSupplies = () => {
+    const validSupplies = modalSupplies.filter(supply => 
+      supply.description.trim() !== '' || (supply.code && supply.code.trim() !== '')
+    )
+
+    if (validSupplies.length === 0) {
+      alert('Por favor agregue al menos un insumo con descripción o código')
+      return
+    }
+
+    // Agregar los insumos válidos a la lista principal
+    setFormData(prev => ({
+      ...prev,
+      supplies: [...prev.supplies, ...validSupplies.map(supply => ({
+        ...supply,
+        id: generateId() // Generar nuevo ID para evitar conflictos
+      }))]
+    }))
+
+    // Cerrar modal
+    setShowSuppliesModal(false)
+    setModalSupplies([])
   }
 
   // Función para eliminar un insumo
@@ -555,107 +430,16 @@ export default function SupplyRequestsPage() {
                   </div>
                 </div>
 
-                {/* Sección de Agregar Insumos */}
+                {/* Botón para Agregar Insumos */}
                 {selectedPrinter && (
-                  <div className="border border-gray-200 rounded-lg p-4">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Agregar Insumo</h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Tipo de insumo */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Tipo de Insumo
-                        </label>
-                        <select
-                          value={newSupply.type}
-                          onChange={(e) => setNewSupply(prev => ({
-                            ...prev, 
-                            type: e.target.value as SupplyItem['type'],
-                            // Pre-llenar código si es tóner
-                            code: e.target.value.startsWith('toner_') ? (
-                              selectedPrinter?.[`${e.target.value}_code` as keyof Printer] as string || ''
-                            ) : ''
-                          }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          {Object.entries(SUPPLY_TYPES).map(([key, value]) => {
-                            // Solo mostrar tóners de color si la impresora es a color
-                            if (!selectedPrinter.is_color && ['toner_cyan', 'toner_magenta', 'toner_yellow'].includes(key)) {
-                              return null
-                            }
-                            return (
-                              <option key={key} value={key}>
-                                {value.icon} {value.label}
-                              </option>
-                            )
-                          })}
-                        </select>
-                      </div>
-
-                      {/* Cantidad */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Cantidad
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={newSupply.quantity}
-                          onChange={(e) => setNewSupply(prev => ({...prev, quantity: parseInt(e.target.value) || 1}))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-
-                      {/* Descripción */}
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Descripción
-                        </label>
-                        <input
-                          type="text"
-                          value={newSupply.description}
-                          onChange={(e) => setNewSupply(prev => ({...prev, description: e.target.value}))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder={
-                            newSupply.type.startsWith('toner_') ? 'Ej: Tóner original HP' :
-                            newSupply.type === 'unidad_imagen' ? 'Ej: Unidad de imagen original' :
-                            newSupply.type === 'papel' ? 'Ej: Papel A4 75g' :
-                            'Descripción del insumo'
-                          }
-                        />
-                      </div>
-
-                      {/* Código (opcional) */}
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Código (Opcional)
-                        </label>
-                        <input
-                          type="text"
-                          value={newSupply.code}
-                          onChange={(e) => setNewSupply(prev => ({...prev, code: e.target.value}))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="Código específico del insumo"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex space-x-3">
-                      <button
-                        type="button"
-                        onClick={addSupplyItem}
-                        className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        Agregar Manualmente
-                      </button>
-                      <button
-                        type="button"
-                        onClick={openSuppliesModal}
-                        className="flex-1 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                      >
-                        📦 Ver Insumos Disponibles
-                      </button>
-                    </div>
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={openSuppliesModal}
+                      className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg font-medium"
+                    >
+                      📦 Agregar Insumo
+                    </button>
                   </div>
                 )}
 
@@ -838,16 +622,16 @@ export default function SupplyRequestsPage() {
         </div>
       </div>
       
-      {/* Modal de Insumos Disponibles */}
+      {/* Modal de Agregar Insumos */}
       {showSuppliesModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[80vh] overflow-hidden">
             {/* Header del modal */}
             <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900">
-                    Insumos Disponibles
+                    Agregar Insumos
                   </h3>
                   <p className="text-sm text-gray-600 mt-1">
                     {selectedPrinter?.brand} {selectedPrinter?.model} - {selectedPrinter?.asset_tag}
@@ -863,104 +647,98 @@ export default function SupplyRequestsPage() {
             </div>
 
             {/* Contenido del modal */}
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-              <div className="mb-4">
-                <p className="text-sm text-gray-600">
-                  Haga clic en "Agregar" para incluir el insumo en su solicitud. 
-                  Puede ajustar la cantidad después de agregarlo.
-                </p>
-              </div>
-
-              {/* Tabla de insumos */}
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Tipo
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Descripción
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Código
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Cantidad Sugerida
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Acción
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {availableSupplies.map((supply, index) => (
-                      <tr key={supply.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <span className="text-2xl mr-2">{SUPPLY_TYPES[supply.type].icon}</span>
-                            <span className="text-sm font-medium text-gray-900">
-                              {SUPPLY_TYPES[supply.type].label}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{supply.description}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            supply.code === 'No especificado' || supply.code === 'Por especificar'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-green-100 text-green-800'
-                          }`}>
-                            {supply.code}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {supply.quantity} {supply.type === 'papel' ? 'resmas' : 'unidad(es)'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <button
-                            onClick={() => {
-                              addSupplyFromModal(supply)
-                              // Mostrar confirmación visual
-                              const button = document.getElementById(`add-btn-${supply.id}`)
-                              if (button) {
-                                const originalText = button.textContent
-                                button.textContent = '✓ Agregado'
-                                button.className = button.className.replace('bg-blue-600 hover:bg-blue-700', 'bg-green-600')
-                                setTimeout(() => {
-                                  button.textContent = originalText
-                                  button.className = button.className.replace('bg-green-600', 'bg-blue-600 hover:bg-blue-700')
-                                }, 1500)
-                              }
-                            }}
-                            id={`add-btn-${supply.id}`}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          >
-                            Agregar
-                          </button>
-                        </td>
+            <div className="p-6 overflow-y-auto max-h-[calc(80vh-160px)]">
+              {/* Tabla minimalista y compacta */}
+              <div className="space-y-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-2 px-3 text-sm font-medium text-gray-700 w-1/3">
+                          Código
+                        </th>
+                        <th className="text-left py-2 px-3 text-sm font-medium text-gray-700 w-1/2">
+                          Descripción
+                        </th>
+                        <th className="text-left py-2 px-3 text-sm font-medium text-gray-700 w-20">
+                          Cantidad
+                        </th>
+                        <th className="w-10"></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="space-y-1">
+                      {modalSupplies.map((supply, index) => (
+                        <tr key={supply.id} className="border-b border-gray-100">
+                          <td className="py-2 px-3">
+                            <input
+                              type="text"
+                              value={supply.code || ''}
+                              onChange={(e) => updateRowInModal(supply.id, 'code', e.target.value)}
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="Código del insumo"
+                            />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input
+                              type="text"
+                              value={supply.description}
+                              onChange={(e) => updateRowInModal(supply.id, 'description', e.target.value)}
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="Descripción del insumo"
+                            />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input
+                              type="number"
+                              min="1"
+                              value={supply.quantity}
+                              onChange={(e) => updateRowInModal(supply.id, 'quantity', parseInt(e.target.value) || 1)}
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </td>
+                          <td className="py-2 px-1">
+                            {modalSupplies.length > 1 && (
+                              <button
+                                onClick={() => removeRowFromModal(supply.id)}
+                                className="text-red-500 hover:text-red-700 text-sm"
+                                title="Eliminar fila"
+                              >
+                                🗑️
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Botón para agregar nueva fila */}
+                <div className="flex justify-start">
+                  <button
+                    onClick={addRowInModal}
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  >
+                    + Agregar otra fila
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* Footer del modal */}
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-              <div className="flex justify-between items-center">
-                <div className="text-sm text-gray-600">
-                  💡 Tip: Los códigos mostrados provienen de la configuración de la impresora
-                </div>
-                <button
-                  onClick={() => setShowSuppliesModal(false)}
-                  className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500"
-                >
-                  Cerrar
-                </button>
-              </div>
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-between">
+              <button
+                onClick={() => setShowSuppliesModal(false)}
+                className="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmModalSupplies}
+                className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                Agregar Insumos
+              </button>
             </div>
           </div>
         </div>
