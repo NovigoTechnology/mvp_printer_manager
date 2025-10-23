@@ -409,7 +409,7 @@ export default function Inventory() {
           alert(`Error al eliminar la impresora: ${response.status} - ${responseText}`)
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting printer:', error)
       alert(`Error al eliminar la impresora: ${error.message || 'Error de conexión'}`)
     }
@@ -524,7 +524,7 @@ export default function Inventory() {
                   <div className="flex-shrink-0">
                     <div className="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
                       <span className="text-white text-sm font-medium">
-                        {stats.status_distribution.find(s => s.status === 'active')?.count || 0}
+                        {stats.status_distribution.find((s: any) => s.status === 'active')?.count || 0}
                       </span>
                     </div>
                   </div>
@@ -532,7 +532,7 @@ export default function Inventory() {
                     <dl>
                       <dt className="text-sm font-medium text-gray-500 truncate">Active</dt>
                       <dd className="text-lg font-medium text-gray-900">
-                        {stats.status_distribution.find(s => s.status === 'active')?.count || 0}
+                        {stats.status_distribution.find((s: any) => s.status === 'active')?.count || 0}
                       </dd>
                     </dl>
                   </div>
@@ -546,7 +546,7 @@ export default function Inventory() {
                   <div className="flex-shrink-0">
                     <div className="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
                       <span className="text-white text-sm font-medium">
-                        {stats.ownership_distribution.find(o => o.type === 'leased')?.count || 0}
+                        {stats.ownership_distribution.find((o: any) => o.type === 'leased')?.count || 0}
                       </span>
                     </div>
                   </div>
@@ -554,7 +554,7 @@ export default function Inventory() {
                     <dl>
                       <dt className="text-sm font-medium text-gray-500 truncate">Leased</dt>
                       <dd className="text-lg font-medium text-gray-900">
-                        {stats.ownership_distribution.find(o => o.type === 'leased')?.count || 0}
+                        {stats.ownership_distribution.find((o: any) => o.type === 'leased')?.count || 0}
                       </dd>
                     </dl>
                   </div>
@@ -1366,7 +1366,7 @@ export default function Inventory() {
                           <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Impresora</label>
                           <select
                             value={editForm.printer_type || 'printer'}
-                            onChange={(e) => setEditForm({...editForm, printer_type: e.target.value})}
+                            onChange={(e) => setEditForm({...editForm, printer_type: e.target.value as 'printer' | 'multifunction' | 'scanner'})}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             <option value="printer">Solo Impresora</option>
@@ -2438,8 +2438,6 @@ export default function Inventory() {
                               )}
                             </div>
                           </div>
-                            </div>
-                          </div>
 
                           <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-lg border border-green-100">
                             <h4 className="text-lg font-semibold text-green-900 mb-4 flex items-center">
@@ -2457,9 +2455,8 @@ export default function Inventory() {
                                   rows={8}
                                   className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
                                   placeholder="Tambores, fusores, kits de mantenimiento, rollos de transferencia, etc.&#10;&#10;Ejemplo:&#10;- Tambor: DR-2400&#10;- Fusor: RM1-6319&#10;- Kit de mantenimiento: MK-8505"
-                                  </div>
-                                </>
-                              )}
+                                />
+                              </div>
                             </div>
                           </div>
 
