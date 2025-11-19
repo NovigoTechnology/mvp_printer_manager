@@ -39,6 +39,12 @@ export interface Printer {
   ownership_type: string
   status: string
   condition: string
+  equipment_condition: string
+  
+  // Contadores iniciales (solo para equipos usados)
+  initial_counter_bw: number
+  initial_counter_color: number
+  initial_counter_total: number
   
   // Información adicional
   notes?: string

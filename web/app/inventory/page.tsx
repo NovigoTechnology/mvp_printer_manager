@@ -2,8 +2,40 @@
 
 import { useState, useEffect } from 'react'
 import { Printer, InventoryStats } from '../../types/printer'
+import { PrinterIcon } from '../../components/icons'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
+
+interface StockItem {
+  id: number;
+  item_code: string;
+  item_name: string;
+  item_type: string;
+  brand?: string;
+  model?: string;
+  description?: string;
+  compatible_printers?: string;
+  unit_of_measure: string;
+  minimum_stock: number;
+  maximum_stock: number;
+  cost_per_unit: number;
+  supplier?: string;
+  supplier_code?: string;
+  storage_location_id?: number;
+  is_active: boolean;
+  created_at: string;
+  current_stock?: number;
+  reserved_stock?: number;
+  available_stock?: number;
+}
+
+interface PrinterSupply {
+  id?: number;
+  printer_id: number;
+  stock_item_id: number;
+  is_primary: boolean;
+  notes?: string;
+}
 
 interface TonerRequest {
   id: number
@@ -108,7 +140,7 @@ function TonerHistoryTab({ printerId }: { printerId: number }) {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-8">
-        <div className="text-gray-500">Cargando historial de pedidos...</div>
+        <div className="text-gray-500">Cargando historial de solicitudes...</div>
       </div>
     )
   }
@@ -116,19 +148,19 @@ function TonerHistoryTab({ printerId }: { printerId: number }) {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h4 className="text-lg font-semibold text-gray-900">Historial de Pedidos de Insumos</h4>
+        <h4 className="text-lg font-semibold text-gray-900">Historial de Solicitudes de Servicio/Insumos</h4>
         <a
           href="/supply-requests"
           className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
         >
-          Nuevo Pedido
+          Nuevo Pedido de Servicio/Insumos
         </a>
       </div>
 
       {tonerHistory.length === 0 ? (
         <div className="text-center py-12">
-          <div className="text-gray-400 text-lg mb-2">Sin pedidos de tóner</div>
-          <p className="text-gray-500">No hay pedidos registrados para este equipo</p>
+          <div className="text-gray-400 text-lg mb-2">Sin solicitudes registradas</div>
+          <p className="text-gray-500">No hay solicitudes registradas para este equipo</p>
         </div>
       ) : (
         <div className="space-y-4 max-h-96 overflow-y-auto">
@@ -137,7 +169,7 @@ function TonerHistoryTab({ printerId }: { printerId: number }) {
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <div className="text-sm font-semibold text-gray-900 mb-1">
-                    Pedido #{request.id} - {new Date(request.request_date).toLocaleDateString()}
+                    Solicitud #{request.id} - {new Date(request.request_date).toLocaleDateString()}
                   </div>
                   <div className="text-sm text-gray-600">
                     <strong>Solicitado por:</strong> {request.requested_by}
@@ -218,7 +250,7 @@ export default function Inventory() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [conditionFilter, setConditionFilter] = useState('all')
-  const [ownershipFilter, setOwnershipFilter] = useState('all')
+  const [supplierFilter, setSupplierFilter] = useState('all')
   const [stats, setStats] = useState<any>(null)
   const [selectedPrinter, setSelectedPrinter] = useState<Printer | null>(null)
   const [loading, setLoading] = useState(true)
@@ -241,15 +273,55 @@ export default function Inventory() {
     ownership_type: 'owned',
     status: 'active',
     condition: 'good',
+    equipment_condition: 'new',
+    initial_counter_bw: 0,
+    initial_counter_color: 0,
+    initial_counter_total: 0,
     toner_black_code: '',
     toner_cyan_code: '',
     toner_magenta_code: '',
     toner_yellow_code: '',
     other_supplies: ''
   })
+  
+  // Estado para gestión de insumos
+  const [stockItems, setStockItems] = useState<StockItem[]>([])
+  const [printerSupplies, setPrinterSupplies] = useState<PrinterSupply[]>([])
+  const [showSupplyModal, setShowSupplyModal] = useState(false)
+  const [selectedSupplies, setSelectedSupplies] = useState<number[]>([])
+  
+  // Estados para ordenamiento y gestión de columnas
+  const [sortField, setSortField] = useState<string>('')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [visibleColumns, setVisibleColumns] = useState({
+    printerInfo: true,
+    location: true,
+    status: true,
+    proveedor: true,
+    warranty: true,
+    acciones: true
+  })
+  const [showColumnManager, setShowColumnManager] = useState(false)
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  
   useEffect(() => {
     fetchData()
   }, [])
+
+  // Efecto para cerrar paneles al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element
+      if (showColumnManager && !target.closest('.column-manager-panel')) {
+        setShowColumnManager(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showColumnManager])
 
   const fetchData = async () => {
     try {
@@ -263,10 +335,71 @@ export default function Inventory() {
       const statsData = await statsResponse.json()
       setStats(statsData)
 
+      // Fetch stock items
+      await fetchStockItems()
+
       setLoading(false)
     } catch (error) {
       console.error('Error fetching data:', error)
       setLoading(false)
+    }
+  }
+
+  const fetchStockItems = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/stock/items/`)
+      if (response.ok) {
+        const data = await response.json()
+        setStockItems(data)
+      }
+    } catch (error) {
+      console.error('Error fetching stock items:', error)
+    }
+  }
+
+  const fetchPrinterSupplies = async (printerId: number) => {
+    try {
+      const response = await fetch(`${API_BASE}/printers/${printerId}/supplies`)
+      if (response.ok) {
+        const data = await response.json()
+        setPrinterSupplies(data)
+        setSelectedSupplies(data.map((supply: PrinterSupply) => supply.stock_item_id))
+      } else if (response.status === 404) {
+        // Endpoint doesn't exist yet, initialize empty
+        setPrinterSupplies([])
+        setSelectedSupplies([])
+      }
+    } catch (error) {
+      console.error('Error fetching printer supplies:', error)
+      // Initialize empty if there's an error
+      setPrinterSupplies([])
+      setSelectedSupplies([])
+    }
+  }
+
+  const savePrinterSupplies = async (printerId: number, suppliesData: number[]) => {
+    try {
+      const response = await fetch(`${API_BASE}/printers/${printerId}/supplies`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          stock_item_ids: suppliesData
+        }),
+      })
+      
+      if (response.ok) {
+        alert('Insumos guardados exitosamente')
+      } else if (response.status === 404) {
+        alert('Error: Impresora o insumos no encontrados')
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Error al guardar los insumos')
+      }
+    } catch (error) {
+      console.error('Error saving printer supplies:', error)
+      alert('Error al guardar los insumos. Por favor intente más tarde.')
     }
   }
 
@@ -276,7 +409,7 @@ export default function Inventory() {
       if (searchTerm) params.append('query', searchTerm)
       if (statusFilter !== 'all') params.append('status', statusFilter)
       if (conditionFilter !== 'all') params.append('condition', conditionFilter)
-      if (ownershipFilter !== 'all') params.append('ownership_type', ownershipFilter)
+      if (supplierFilter !== 'all') params.append('supplier', supplierFilter)
 
       const response = await fetch(`${API_BASE}/printers/inventory/search?${params}`)
       const data = await response.json()
@@ -288,7 +421,7 @@ export default function Inventory() {
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (searchTerm || statusFilter !== 'all' || conditionFilter !== 'all' || ownershipFilter !== 'all') {
+      if (searchTerm || statusFilter !== 'all' || conditionFilter !== 'all' || supplierFilter !== 'all') {
         searchPrinters()
       } else {
         fetchData()
@@ -296,10 +429,10 @@ export default function Inventory() {
     }, 300)
 
     return () => clearTimeout(timeoutId)
-  }, [searchTerm, statusFilter, conditionFilter, ownershipFilter])
+  }, [searchTerm, statusFilter, conditionFilter, supplierFilter])
 
   const getStatusColor = (status: string) => {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case 'active': return 'bg-green-100 text-green-800'
       case 'inactive': return 'bg-gray-100 text-gray-800'
       case 'maintenance': return 'bg-yellow-100 text-yellow-800'
@@ -309,7 +442,7 @@ export default function Inventory() {
   }
 
   const getConditionColor = (condition: string) => {
-    switch (condition) {
+    switch (condition.toLowerCase()) {
       case 'excellent': return 'bg-green-100 text-green-800'
       case 'good': return 'bg-blue-100 text-blue-800'
       case 'fair': return 'bg-yellow-100 text-yellow-800'
@@ -318,8 +451,9 @@ export default function Inventory() {
     }
   }
 
-  const getOwnershipColor = (ownership: string) => {
-    switch (ownership) {
+  const getOwnershipColor = (ownership: string | null) => {
+    if (!ownership) return 'bg-gray-100 text-gray-800'
+    switch (ownership.toLowerCase()) {
       case 'owned': return 'bg-blue-100 text-blue-800'
       case 'leased': return 'bg-green-100 text-green-800'
       case 'rented': return 'bg-yellow-100 text-yellow-800'
@@ -331,6 +465,8 @@ export default function Inventory() {
     setEditingPrinter(printer)
     setEditForm({ ...printer })
     setSelectedPrinter(null)
+    // Cargar insumos asignados a la impresora
+    fetchPrinterSupplies(printer.id)
   }
 
   const handleEditSubmit = async (e: any) => {
@@ -365,6 +501,10 @@ export default function Inventory() {
     setEditingPrinter(null)
     setEditForm({})
     setEditActiveTab('basic')
+    // Limpiar estados de insumos
+    setPrinterSupplies([])
+    setSelectedSupplies([])
+    setShowSupplyModal(false)
   }
 
   const handleDelete = async (printerId: number, printerName: string) => {
@@ -423,6 +563,16 @@ export default function Inventory() {
   const handleAddSubmit = async (e: any) => {
     e.preventDefault()
 
+    // Validación: Si es equipo usado, los contadores iniciales son obligatorios
+    if (addForm.equipment_condition === 'used') {
+      if ((addForm.initial_counter_bw || 0) === 0 && 
+          (addForm.initial_counter_color || 0) === 0 && 
+          (addForm.initial_counter_total || 0) === 0) {
+        alert('Para equipos usados, debe especificar al menos un contador inicial')
+        return
+      }
+    }
+
     try {
       const response = await fetch(`${API_BASE}/printers/`, {
         method: 'POST',
@@ -450,6 +600,10 @@ export default function Inventory() {
           ownership_type: 'owned',
           status: 'active',
           condition: 'good',
+          equipment_condition: 'new',
+          initial_counter_bw: 0,
+          initial_counter_color: 0,
+          initial_counter_total: 0,
           toner_black_code: '',
           toner_cyan_code: '',
           toner_magenta_code: '',
@@ -483,8 +637,97 @@ export default function Inventory() {
       wireless_capable: false,
       ownership_type: 'owned',
       status: 'active',
-      condition: 'good'
+      condition: 'good',
+      equipment_condition: 'new',
+      initial_counter_bw: 0,
+      initial_counter_color: 0,
+      initial_counter_total: 0,
+      toner_black_code: '',
+      toner_cyan_code: '',
+      toner_magenta_code: '',
+      toner_yellow_code: '',
+      other_supplies: ''
     })
+  }
+
+  // Función para ordenar columnas
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('asc')
+    }
+  }
+
+  // Función para obtener impresoras ordenadas
+  const getSortedPrinters = () => {
+    if (!sortField) return printers
+
+    return [...printers].sort((a, b) => {
+      let aValue: any
+      let bValue: any
+
+      switch (sortField) {
+        case 'printerInfo':
+          aValue = `${a.brand} ${a.model}`.toLowerCase()
+          bValue = `${b.brand} ${b.model}`.toLowerCase()
+          break
+        case 'location':
+          aValue = (a.location || '').toLowerCase()
+          bValue = (b.location || '').toLowerCase()
+          break
+        case 'status':
+          aValue = a.status.toLowerCase()
+          bValue = b.status.toLowerCase()
+          break
+        case 'proveedor':
+          aValue = (a.supplier || '').toLowerCase()
+          bValue = (b.supplier || '').toLowerCase()
+          break
+        case 'warranty':
+          aValue = a.warranty_expiry ? new Date(a.warranty_expiry).getTime() : 0
+          bValue = b.warranty_expiry ? new Date(b.warranty_expiry).getTime() : 0
+          break
+        default:
+          return 0
+      }
+
+      if (sortDirection === 'asc') {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0
+      } else {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0
+      }
+    })
+  }
+
+  // Función para alternar visibilidad de columnas
+  const toggleColumn = (columnKey: string) => {
+    setVisibleColumns(prev => ({
+      ...prev,
+      [columnKey]: !prev[columnKey as keyof typeof prev]
+    }))
+  }
+
+  // Componente para el icono de ordenamiento
+  const SortIcon = ({ field }: { field: string }) => {
+    if (sortField !== field) {
+      return (
+        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+        </svg>
+      )
+    }
+    
+    return sortDirection === 'asc' ? (
+      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+      </svg>
+    ) : (
+      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+    )
   }
 
   if (loading) {
@@ -634,16 +877,23 @@ export default function Inventory() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Ownership</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Proveedor</label>
               <select
-                value={ownershipFilter}
-                onChange={(e) => setOwnershipFilter(e.target.value)}
+                value={supplierFilter}
+                onChange={(e) => setSupplierFilter(e.target.value)}
                 className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="all">All Types</option>
-                <option value="owned">Owned</option>
-                <option value="leased">Leased</option>
-                <option value="rented">Rented</option>
+                <option value="all">Todos los Proveedores</option>
+                <option value="hp">HP</option>
+                <option value="canon">Canon</option>
+                <option value="epson">Epson</option>
+                <option value="brother">Brother</option>
+                <option value="xerox">Xerox</option>
+                <option value="ricoh">Ricoh</option>
+                <option value="oki">OKI</option>
+                <option value="konica">Konica Minolta</option>
+                <option value="samsung">Samsung</option>
+                <option value="lexmark">Lexmark</option>
               </select>
             </div>
             <div className="flex items-end">
@@ -660,125 +910,344 @@ export default function Inventory() {
           </div>
         </div>
 
+        {/* Panel de Filtros Avanzados */}
+        {showAdvancedFilters && (
+          <div className="bg-white shadow rounded-lg p-6 mb-6 border-l-4 border-blue-500">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.414A1 1 0 013 6.707V4z" />
+                </svg>
+                Filtros Avanzados
+              </h3>
+              <button
+                onClick={() => setShowAdvancedFilters(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Equipo</label>
+                <select className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                  <option value="">Todos los tipos</option>
+                  <option value="printer">Solo Impresora</option>
+                  <option value="multifunction">Multifunción</option>
+                  <option value="scanner">Solo Scanner</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Capacidad de Color</label>
+                <select className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                  <option value="">Todos</option>
+                  <option value="color">Color</option>
+                  <option value="mono">Monocromático</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Garantía</label>
+                <select className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                  <option value="">Todas</option>
+                  <option value="active">Activa</option>
+                  <option value="expired">Vencida</option>
+                  <option value="soon">Vence pronto (30 días)</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Fecha de Compra</label>
+                <select className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                  <option value="">Cualquier fecha</option>
+                  <option value="last_year">Último año</option>
+                  <option value="last_2_years">Últimos 2 años</option>
+                  <option value="older">Más de 2 años</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="mt-4 flex space-x-3">
+              <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                Aplicar Filtros
+              </button>
+              <button className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors">
+                Limpiar Filtros
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Printers Table */}
         <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">
+                Inventario de Impresoras ({getSortedPrinters().length} equipos)
+              </h3>
+              <div className="flex space-x-2">
+                {/* Botón para gestión de columnas */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowColumnManager(!showColumnManager)}
+                    className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200"
+                    title="Gestionar columnas"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                    </svg>
+                  </button>
+                  
+                  {/* Panel de gestión de columnas */}
+                  {showColumnManager && (
+                    <div className="column-manager-panel absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                      <div className="p-4">
+                        <div className="flex justify-between items-center mb-3">
+                          <h4 className="text-sm font-medium text-gray-900">Mostrar Columnas</h4>
+                          <button
+                            onClick={() => setShowColumnManager(false)}
+                            className="text-gray-400 hover:text-gray-600"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          {Object.entries(visibleColumns).map(([key, value]) => (
+                            <label key={key} className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={value}
+                                onChange={() => toggleColumn(key)}
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                disabled={key === 'acciones'} // Las acciones siempre están visibles
+                              />
+                              <span className="ml-2 text-sm text-gray-700">
+                                {key === 'printerInfo' && 'Información del Equipo'}
+                                {key === 'location' && 'Ubicación'}
+                                {key === 'status' && 'Estado'}
+                                {key === 'proveedor' && 'Proveedor'}
+                                {key === 'warranty' && 'Garantía'}
+                                {key === 'acciones' && 'Acciones'}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Botón para filtros avanzados */}
+                <button
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                  className={`p-2 rounded-lg transition-all duration-200 ${
+                    showAdvancedFilters 
+                      ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' 
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                  title="Filtros avanzados"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.414A1 1 0 013 6.707V4z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Printer Info
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Location
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Ownership
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Warranty
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Acciones
-                </th>
+                {visibleColumns.printerInfo && (
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('printerInfo')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Printer Info</span>
+                      <SortIcon field="printerInfo" />
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.location && (
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('location')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Location</span>
+                      <SortIcon field="location" />
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.status && (
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('status')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Status</span>
+                      <SortIcon field="status" />
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.proveedor && (
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('proveedor')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Proveedor</span>
+                      <SortIcon field="proveedor" />
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.warranty && (
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    onClick={() => handleSort('warranty')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Warranty</span>
+                      <SortIcon field="warranty" />
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.acciones && (
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Acciones
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {printers.map((printer) => (
+              {getSortedPrinters().map((printer) => (
                 <tr key={printer.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {printer.brand} {printer.model}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {printer.serial_number && `S/N: ${printer.serial_number}`}
-                        {printer.asset_tag && ` • Asset: ${printer.asset_tag}`}
-                        {printer.printer_type && ` • ${
-                          printer.printer_type === 'printer' ? 'Impresora' :
-                          printer.printer_type === 'multifunction' ? 'Multifunción' :
-                          printer.printer_type === 'scanner' ? 'Scanner' : printer.printer_type
-                        }`}
-                      </div>
-                      <div className="text-sm text-gray-500">IP: {printer.ip}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{printer.location || 'N/A'}</div>
-                    <div className="text-sm text-gray-500">
-                      {printer.department && `Dept: ${printer.department}`}
-                      {printer.floor && ` • Floor: ${printer.floor}`}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex flex-col space-y-1">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(printer.status)}`}>
-                        {printer.status}
-                      </span>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getConditionColor(printer.condition)}`}>
-                        {printer.condition}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getOwnershipColor(printer.ownership_type)}`}>
-                      {printer.ownership_type}
-                    </span>
-                    {printer.supplier && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        Supplier: {printer.supplier}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {printer.warranty_expiry ? (
-                      <div>
-                        <div>{new Date(printer.warranty_expiry).toLocaleDateString()}</div>
-                        <div className="text-xs text-gray-500">
-                          {new Date(printer.warranty_expiry) < new Date() ? 'Expired' : 'Active'}
+                  {visibleColumns.printerInfo && (
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <PrinterIcon brand={printer.brand} size={24} className="mr-3 flex-shrink-0" />
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {printer.brand} {printer.model}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {printer.serial_number && `S/N: ${printer.serial_number}`}
+                            {printer.asset_tag && ` • Asset: ${printer.asset_tag}`}
+                            {printer.printer_type && ` • ${
+                              printer.printer_type === 'printer' ? 'Impresora' :
+                              printer.printer_type === 'multifunction' ? 'Multifunción' :
+                              printer.printer_type === 'scanner' ? 'Scanner' : printer.printer_type
+                            }`}
+                          </div>
+                          <div className="text-sm text-gray-500">IP: {printer.ip}</div>
                         </div>
                       </div>
-                    ) : (
-                      'N/A'
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center justify-center space-x-2">
-                      <button
-                        onClick={() => setSelectedPrinter(printer)}
-                        className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-all duration-200"
-                        title="Ver detalles"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => startEdit(printer)}
-                        className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-all duration-200"
-                        title="Editar"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleDelete(printer.id, `${printer.brand} ${printer.model}`)
-                        }}
-                        className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-all duration-200"
-                        title="Eliminar"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  </td>
+                    </td>
+                  )}
+                  {visibleColumns.location && (
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{printer.location || 'N/A'}</div>
+                      <div className="text-sm text-gray-500">
+                        {printer.department && `Dept: ${printer.department}`}
+                        {printer.floor && ` • Floor: ${printer.floor}`}
+                      </div>
+                    </td>
+                  )}
+                  {visibleColumns.status && (
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex flex-col space-y-1">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(printer.status)}`}>
+                          {printer.status}
+                        </span>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getConditionColor(printer.condition)}`}>
+                          {printer.condition}
+                        </span>
+                      </div>
+                    </td>
+                  )}
+                  {visibleColumns.proveedor && (
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getOwnershipColor(printer.ownership_type)}`}>
+                        {printer.ownership_type}
+                      </span>
+                      {printer.supplier && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          Supplier: {printer.supplier}
+                        </div>
+                      )}
+                    </td>
+                  )}
+                  {visibleColumns.warranty && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {printer.warranty_expiry ? (
+                        <div>
+                          <div>{new Date(printer.warranty_expiry).toLocaleDateString()}</div>
+                          <div className="text-xs text-gray-500">
+                            {new Date(printer.warranty_expiry) < new Date() ? 'Expired' : 'Active'}
+                          </div>
+                        </div>
+                      ) : (
+                        'N/A'
+                      )}
+                    </td>
+                  )}
+                  {visibleColumns.acciones && (
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center justify-center space-x-2">
+                        <button
+                          onClick={() => setSelectedPrinter(printer)}
+                          className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-all duration-200"
+                          title="Ver detalles"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => startEdit(printer)}
+                          className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-all duration-200"
+                          title="Editar"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setEditingPrinter(printer)
+                            await fetchPrinterSupplies(printer.id)
+                            setShowSupplyModal(true)
+                          }}
+                          className="p-2 text-green-600 hover:text-green-900 hover:bg-green-50 rounded-lg transition-all duration-200"
+                          title="Agregar Insumos"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDelete(printer.id, `${printer.brand} ${printer.model}`)
+                          }}
+                          className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-all duration-200"
+                          title="Eliminar"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -1692,74 +2161,136 @@ export default function Inventory() {
                     )}
 
                     {editActiveTab === 'supplies' && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-6">
                         {/* Información sobre el tipo de impresora */}
-                        <div className="md:col-span-2 mb-4">
-                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                            <div className="flex items-center">
-                              <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              <span className="text-sm font-medium text-blue-800">
-                                {editForm.is_color 
-                                  ? 'Impresora a color - Se muestran todos los tóners' 
-                                  : 'Impresora monocromática - Solo se muestra tóner negro'
-                                }
-                              </span>
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <div className="flex items-center">
+                            <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="text-sm font-medium text-blue-800">
+                              Seleccione los insumos que puede solicitar este equipo desde el inventario
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Sección de insumos del inventario */}
+                        <div>
+                          <div className="flex justify-between items-center mb-4">
+                            <h4 className="text-lg font-medium text-gray-900">Insumos Disponibles en Inventario</h4>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                fetchPrinterSupplies(editingPrinter?.id || 0)
+                                setShowSupplyModal(true)
+                              }}
+                              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                            >
+                              Seleccionar Insumos
+                            </button>
+                          </div>
+
+                          {/* Lista de insumos actualmente asignados */}
+                          <div className="border border-gray-200 rounded-lg">
+                            <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+                              <h5 className="text-sm font-medium text-gray-900">Insumos Asignados a este Equipo</h5>
+                            </div>
+                            <div className="p-4">
+                              {printerSupplies.length > 0 ? (
+                                <div className="space-y-2">
+                                  {printerSupplies.map((supply) => {
+                                    const stockItem = stockItems.find(item => item.id === supply.stock_item_id)
+                                    return stockItem ? (
+                                      <div key={supply.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-md">
+                                        <div className="flex-1">
+                                          <div className="font-medium text-gray-900">{stockItem.item_name}</div>
+                                          <div className="text-sm text-gray-600">
+                                            Código: {stockItem.item_code} | Tipo: {stockItem.item_type}
+                                            {stockItem.brand && ` | Marca: ${stockItem.brand}`}
+                                          </div>
+                                          {stockItem.description && (
+                                            <div className="text-sm text-gray-500">{stockItem.description}</div>
+                                          )}
+                                          {supply.is_primary && (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mt-1">
+                                              Insumo Principal
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-sm text-gray-500">
+                                          Stock: {stockItem.current_stock || 0}
+                                        </div>
+                                      </div>
+                                    ) : null
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="text-center py-8 text-gray-500">
+                                  <p>No hay insumos asignados a este equipo</p>
+                                  <p className="text-sm mt-1">Use el botón "Seleccionar Insumos" para agregar insumos desde el inventario</p>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
 
-                        {/* Tóner Negro - Siempre visible */}
+                        {/* Sección de códigos de tóner (mantenida para compatibilidad) */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Código Tóner Negro</label>
-                          <input
-                            type="text"
-                            value={editForm.toner_black_code || ''}
-                            onChange={(e) => setEditForm({...editForm, toner_black_code: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Ej: HP-12A"
-                          />
+                          <h4 className="text-lg font-medium text-gray-900 mb-4">Códigos de Tóner (Manual)</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Tóner Negro - Siempre visible */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Código Tóner Negro</label>
+                              <input
+                                type="text"
+                                value={editForm.toner_black_code || ''}
+                                onChange={(e) => setEditForm({...editForm, toner_black_code: e.target.value})}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Ej: HP-12A"
+                              />
+                            </div>
+
+                            {/* Tóners de color - Solo si es_color está marcado */}
+                            {editForm.is_color && (
+                              <>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-2">Código Tóner Cian</label>
+                                  <input
+                                    type="text"
+                                    value={editForm.toner_cyan_code || ''}
+                                    onChange={(e) => setEditForm({...editForm, toner_cyan_code: e.target.value})}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Ej: HP-410A-C"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-2">Código Tóner Magenta</label>
+                                  <input
+                                    type="text"
+                                    value={editForm.toner_magenta_code || ''}
+                                    onChange={(e) => setEditForm({...editForm, toner_magenta_code: e.target.value})}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Ej: HP-410A-M"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-2">Código Tóner Amarillo</label>
+                                  <input
+                                    type="text"
+                                    value={editForm.toner_yellow_code || ''}
+                                    onChange={(e) => setEditForm({...editForm, toner_yellow_code: e.target.value})}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Ej: HP-410A-Y"
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
 
-                        {/* Tóners de color - Solo si es_color está marcado */}
-                        {editForm.is_color && (
-                          <>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Código Tóner Cian</label>
-                              <input
-                                type="text"
-                                value={editForm.toner_cyan_code || ''}
-                                onChange={(e) => setEditForm({...editForm, toner_cyan_code: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="Ej: HP-410A-C"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Código Tóner Magenta</label>
-                              <input
-                                type="text"
-                                value={editForm.toner_magenta_code || ''}
-                                onChange={(e) => setEditForm({...editForm, toner_magenta_code: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="Ej: HP-410A-M"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Código Tóner Amarillo</label>
-                              <input
-                                type="text"
-                                value={editForm.toner_yellow_code || ''}
-                                onChange={(e) => setEditForm({...editForm, toner_yellow_code: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="Ej: HP-410A-Y"
-                              />
-                            </div>
-                          </>
-                        )}
-
-                        <div className="md:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Otros Insumos</label>
+                        {/* Otros insumos */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Otros Insumos (Texto Libre)</label>
                           <textarea
                             value={editForm.other_supplies || ''}
                             onChange={(e) => setEditForm({...editForm, other_supplies: e.target.value})}
@@ -1926,6 +2457,19 @@ export default function Inventory() {
                               <p className="text-xs text-gray-500 mt-1">Tipo de dispositivo según sus funcionalidades</p>
                             </div>
                             <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Condición del Equipo *</label>
+                              <select
+                                required
+                                value={addForm.equipment_condition || 'new'}
+                                onChange={(e) => setAddForm({...addForm, equipment_condition: e.target.value})}
+                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                              >
+                                <option value="new">Nuevo</option>
+                                <option value="used">Usado</option>
+                              </select>
+                              <p className="text-xs text-gray-500 mt-1">Indique si el equipo es nuevo o usado</p>
+                            </div>
+                            <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">Número de Serie</label>
                               <input
                                 type="text"
@@ -1935,6 +2479,56 @@ export default function Inventory() {
                                 placeholder="ABC123456789"
                               />
                             </div>
+                            
+                            {/* Contadores Iniciales - Solo para equipos usados */}
+                            {addForm.equipment_condition === 'used' && (
+                              <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                <h5 className="text-sm font-semibold text-yellow-800 mb-3 flex items-center">
+                                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                  </svg>
+                                  Contadores Iniciales (Equipo Usado)
+                                </h5>
+                                <p className="text-xs text-yellow-700 mb-3">
+                                  Para equipos usados, ingrese al menos un contador inicial. Esto es necesario para calcular correctamente las páginas impresas en futuros registros.
+                                </p>
+                                <div className="space-y-3">
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Contador B/N</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={addForm.initial_counter_bw || ''}
+                                      onChange={(e) => setAddForm({...addForm, initial_counter_bw: parseInt(e.target.value) || 0})}
+                                      className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-3 py-2"
+                                      placeholder="0"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Contador Color</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={addForm.initial_counter_color || ''}
+                                      onChange={(e) => setAddForm({...addForm, initial_counter_color: parseInt(e.target.value) || 0})}
+                                      className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-3 py-2"
+                                      placeholder="0"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Contador Total</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={addForm.initial_counter_total || ''}
+                                      onChange={(e) => setAddForm({...addForm, initial_counter_total: parseInt(e.target.value) || 0})}
+                                      className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-3 py-2"
+                                      placeholder="0"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                         
@@ -2555,6 +3149,129 @@ export default function Inventory() {
                     </div>
                   </div>
                 </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Supply Selection Modal */}
+        {showSupplyModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+              {/* Header del modal */}
+              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900">
+                      Seleccionar Insumos para la Impresora
+                    </h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {editingPrinter?.brand} {editingPrinter?.model} - {editingPrinter?.asset_tag}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowSupplyModal(false)}
+                    className="text-gray-400 hover:text-gray-600 text-2xl"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* Contenido del modal */}
+              <div className="p-6 overflow-y-auto max-h-[calc(80vh-160px)]">
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600 mb-4">
+                    Seleccione los insumos del inventario que pueden ser solicitados para este equipo:
+                  </p>
+                  
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {stockItems.map((item) => (
+                      <div key={item.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
+                        <label className="flex items-start space-x-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedSupplies.includes(item.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedSupplies(prev => [...prev, item.id])
+                              } else {
+                                setSelectedSupplies(prev => prev.filter(id => id !== item.id))
+                              }
+                            }}
+                            className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="font-medium text-gray-900">{item.item_name}</h4>
+                                <p className="text-sm text-gray-600">
+                                  Código: {item.item_code} | Tipo: {item.item_type}
+                                </p>
+                                {item.brand && (
+                                  <p className="text-sm text-gray-500">Marca: {item.brand}</p>
+                                )}
+                                {item.description && (
+                                  <p className="text-sm text-gray-500 mt-1">{item.description}</p>
+                                )}
+                                {item.compatible_printers && (
+                                  <p className="text-xs text-blue-600 mt-1">
+                                    Compatible: {item.compatible_printers}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-medium text-gray-900">
+                                  Stock: {item.current_stock || 0}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {item.unit_of_measure}
+                                </div>
+                                {item.supplier && (
+                                  <div className="text-xs text-gray-500">
+                                    {item.supplier}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+
+                  {stockItems.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No hay insumos disponibles en el inventario</p>
+                      <p className="text-sm mt-1">Primero agregue insumos al módulo de Stock</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer del modal */}
+              <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+                <div className="text-sm text-gray-600">
+                  {selectedSupplies.length} insumo(s) seleccionado(s)
+                </div>
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => setShowSupplyModal(false)}
+                    className="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={async () => {
+                      await savePrinterSupplies(editingPrinter?.id || 0, selectedSupplies)
+                      await fetchPrinterSupplies(editingPrinter?.id || 0)
+                      setShowSupplyModal(false)
+                    }}
+                    className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    Guardar Selección
+                  </button>
+                </div>
               </div>
             </div>
           </div>

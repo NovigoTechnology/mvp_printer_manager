@@ -10,6 +10,21 @@ export interface LeaseContract {
   fixed_annual_cost: number;
   included_copies_bw: number;
   included_copies_color: number;
+  
+  // Soporte multimoneda
+  currency: 'ARS' | 'USD';
+  exchange_rate: number;
+  cost_bw_per_copy_usd: number;
+  cost_color_per_copy_usd: number;
+  fixed_monthly_cost_usd: number;
+  fixed_annual_cost_usd: number;
+  
+  // Costos de exceso para el contrato general
+  overage_cost_bw?: number;
+  overage_cost_color?: number;
+  overage_cost_bw_usd?: number;
+  overage_cost_color_usd?: number;
+  
   total_printers: number;
   printers_bw_only: number;
   printers_color: number;
@@ -23,14 +38,19 @@ export interface LeaseContract {
   contact_person?: string;
   contact_email?: string;
   contact_phone?: string;
+  contact_position?: string;
+  priority?: string;
   department?: string;
   cost_center?: string;
   budget_code?: string;
+  internal_notes?: string;
+  special_conditions?: string;
   terms_and_conditions?: string;
   notes?: string;
   created_at: string;
   updated_at?: string;
   contract_printers: ContractPrinter[];
+  contract_companies: ContractCompany[];
 }
 
 export interface ContractPrinter {
@@ -52,6 +72,21 @@ export interface ContractPrinter {
     location?: string;
     is_color: boolean;
   };
+}
+
+import { Company } from './company';
+
+export interface ContractCompany {
+  id: number;
+  company_id: number;
+  role: 'client' | 'partner' | 'supplier' | 'guarantor';
+  participation_percentage: number;
+  is_primary: boolean;
+  start_date?: string;
+  end_date?: string;
+  is_active: boolean;
+  notes?: string;
+  company?: Company;
 }
 
 export interface ContractStats {

@@ -6,7 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from contextlib import asynccontextmanager
 
 from .db import engine, Base, get_db
-from .routers import auth, printers, incidents, reports, counters, contracts, toner_requests
+from .routers import auth, printers, incidents, reports, counters, contracts, toner_requests, stock, discovery_configs, billing, exchange_rates, companies
 from .workers.polling import start_scheduler
 
 # Create tables
@@ -31,14 +31,14 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware
-origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+# CORS middleware - más permisivo para desarrollo
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],  # Permitir todos los orígenes en desarrollo
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Permitir todos los métodos
+    allow_headers=["*"],  # Permitir todos los headers
+    expose_headers=["*"]  # Exponer todos los headers
 )
 
 # Include routers
@@ -48,7 +48,24 @@ app.include_router(incidents.router, prefix="/incidents", tags=["incidents"])
 app.include_router(reports.router, prefix="/reports", tags=["reports"])
 app.include_router(counters.router, prefix="/counters", tags=["counters"])
 app.include_router(contracts.router, prefix="/contracts", tags=["contracts"])
+app.include_router(companies.router, prefix="/companies", tags=["companies"])
+app.include_router(billing.router, prefix="/api", tags=["billing"])
 app.include_router(toner_requests.router, prefix="/api", tags=["toner-requests"])
+app.include_router(stock.router, prefix="/stock", tags=["stock"])
+app.include_router(discovery_configs.router, prefix="/discovery", tags=["discovery-configs"])
+app.include_router(exchange_rates.router, prefix="/exchange-rates", tags=["exchange-rates"])
+
+# Import and include auto_counters router
+from .routers import auto_counters
+app.include_router(auto_counters.router, prefix="/auto-counters", tags=["auto-counters"])
+
+# Import and include counter_collection router
+from .routers import counter_collection
+app.include_router(counter_collection.router, prefix="/counter-collection", tags=["counter-collection"])
+
+# Import and include printer_tools router
+from .routers import printer_tools
+app.include_router(printer_tools.router, prefix="/printer-tools", tags=["printer-tools"])
 
 @app.get("/")
 async def root():

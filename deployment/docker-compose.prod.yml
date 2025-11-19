@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: printer_fleet_db
+      POSTGRES_USER: printer_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secure_password_2024}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - printer_network
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    networks:
+      - printer_network
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  api:
+    build: 
+      context: ./api
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://printer_user:${DB_PASSWORD:-secure_password_2024}@db:5432/printer_fleet_db
+      - REDIS_URL=redis://redis:6379
+      - ENVIRONMENT=production
+      - CORS_ORIGINS=http://localhost:3000,http://IP_DEL_SERVIDOR:3000
+    depends_on:
+      - db
+      - redis
+    networks:
+      - printer_network
+    restart: unless-stopped
+    volumes:
+      - ./api:/app
+    ports:
+      - "8000:8000"
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    environment:
+      - NEXT_PUBLIC_API_BASE=http://IP_DEL_SERVIDOR:8000
+      - NODE_ENV=production
+    depends_on:
+      - api
+    networks:
+      - printer_network
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  printer_network:
+    driver: bridge

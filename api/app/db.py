@@ -17,3 +17,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
+# Function to get database session (for services)
+def get_db_session():
+    return SessionLocal()

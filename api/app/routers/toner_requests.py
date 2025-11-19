@@ -6,7 +6,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from ..db import get_db
-from ..models import TonerRequest, Printer
+from ..models import TonerRequest, Printer, Incident
 
 router = APIRouter()
 
@@ -42,6 +42,7 @@ class TonerRequestUpdate(BaseModel):
 class TonerRequestResponse(BaseModel):
     id: int
     printer_id: int
+    incident_id: Optional[int]
     request_date: datetime
     status: str
     priority: str
@@ -78,6 +79,10 @@ class TonerRequestResponse(BaseModel):
     printer_serial_number: Optional[str] = None
     printer_asset_tag: Optional[str] = None
     printer_location: Optional[str] = None
+    
+    # Información del incidente relacionado
+    incident_status: Optional[str] = None
+    incident_title: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -138,6 +143,49 @@ def create_toner_request(request: TonerRequestCreate, db: Session = Depends(get_
         priority=request.priority
     )
     
+    # Crear incidente automáticamente
+    supplies_list = []
+    if request.toner_black_requested:
+        supplies_list.append(f"Tóner Negro (x{request.toner_black_quantity})")
+    if request.toner_cyan_requested:
+        supplies_list.append(f"Tóner Cian (x{request.toner_cyan_quantity})")
+    if request.toner_magenta_requested:
+        supplies_list.append(f"Tóner Magenta (x{request.toner_magenta_quantity})")
+    if request.toner_yellow_requested:
+        supplies_list.append(f"Tóner Amarillo (x{request.toner_yellow_quantity})")
+    if request.other_supplies_requested:
+        supplies_list.append(f"Otros: {request.other_supplies_requested}")
+    
+    incident_title = f"Solicitud de Insumos - {printer.brand} {printer.model}"
+    incident_description = f"""Solicitud de insumos/servicio generada automáticamente.
+
+Impresora: {printer.brand} {printer.model} (Asset: {printer.asset_tag})
+Ubicación: {printer.location or 'No especificada'}
+Solicitado por: {request.requested_by}
+Departamento: {request.department or 'No especificado'}
+
+Insumos solicitados:
+{chr(10).join('- ' + item for item in supplies_list)}
+
+Justificación: {request.justification or 'No especificada'}
+Notas adicionales: {request.notes or 'Ninguna'}"""
+    
+    # Crear el incidente relacionado
+    incident = Incident(
+        printer_id=request.printer_id,
+        title=incident_title,
+        description=incident_description,
+        status="open",
+        priority=request.priority if request.priority in ["low", "medium", "high", "critical"] else "medium"
+    )
+    
+    db.add(incident)
+    db.commit()
+    db.refresh(incident)
+    
+    # Asociar el incidente con la solicitud
+    db_request.incident_id = incident.id
+    
     db.add(db_request)
     db.commit()
     db.refresh(db_request)
@@ -172,7 +220,7 @@ def get_toner_requests(
     
     requests = query.offset(skip).limit(limit).all()
     
-    # Agregar información de impresora a cada pedido
+    # Agregar información de impresora e incidente a cada pedido
     result = []
     for req in requests:
         response_data = TonerRequestResponse.from_orm(req)
@@ -181,6 +229,14 @@ def get_toner_requests(
         response_data.printer_serial_number = req.printer.serial_number
         response_data.printer_asset_tag = req.printer.asset_tag
         response_data.printer_location = req.printer.location
+        
+        # Agregar información del incidente si existe
+        if req.incident_id:
+            incident = db.query(Incident).filter(Incident.id == req.incident_id).first()
+            if incident:
+                response_data.incident_status = incident.status
+                response_data.incident_title = incident.title
+        
         result.append(response_data)
     
     return result

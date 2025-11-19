@@ -201,6 +201,103 @@ def get_summary_stats(db: Session = Depends(get_db)):
         "low_toner_alerts": low_toner_count
     }
 
+@router.get("/daily-usage")
+def get_daily_usage(
+    days: int = 30,
+    printer_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get daily usage data for charts - based on recorded_at dates from counter collections"""
+    from ..models import MonthlyCounter
+    from datetime import datetime, timedelta
+    
+    # Calculate date range
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days)
+    
+    # Base query
+    query = db.query(
+        MonthlyCounter.printer_id,
+        MonthlyCounter.pages_printed_total,
+        MonthlyCounter.pages_printed_bw,
+        MonthlyCounter.pages_printed_color,
+        MonthlyCounter.recorded_at,
+        Printer.brand,
+        Printer.model,
+        Printer.hostname,
+        Printer.asset_tag
+    ).join(
+        Printer, MonthlyCounter.printer_id == Printer.id
+    ).filter(
+        MonthlyCounter.recorded_at >= start_date,
+        MonthlyCounter.recorded_at <= end_date,
+        Printer.status == "active"
+    )
+    
+    # Filter by specific printer if requested
+    if printer_id:
+        query = query.filter(MonthlyCounter.printer_id == printer_id)
+    
+    query = query.order_by(MonthlyCounter.recorded_at.desc())
+    
+    results = query.all()
+    
+    # Group by date and printer
+    daily_data = {}
+    printer_info = {}
+    
+    for row in results:
+        # Get date only (without time)
+        date_key = row.recorded_at.strftime('%Y-%m-%d')
+        printer_key = f"{row.printer_id}"
+        
+        # Store printer info
+        if printer_key not in printer_info:
+            printer_info[printer_key] = {
+                "printer_id": row.printer_id,
+                "name": f"{row.brand} {row.model}",
+                "hostname": row.hostname,
+                "asset_tag": row.asset_tag
+            }
+        
+        # Initialize date if not exists
+        if date_key not in daily_data:
+            daily_data[date_key] = {}
+        
+        # Store the most recent reading for this printer on this date
+        if printer_key not in daily_data[date_key]:
+            daily_data[date_key][printer_key] = {
+                "total_pages": row.pages_printed_total or 0,
+                "bw_pages": row.pages_printed_bw or 0,
+                "color_pages": row.pages_printed_color or 0
+            }
+    
+    # Format data for charts
+    chart_data = []
+    all_dates = sorted(daily_data.keys())
+    
+    for date_key in all_dates:
+        day_data = {"date": date_key}
+        
+        # Add data for each printer
+        for printer_key, printer_data in daily_data[date_key].items():
+            printer_name = printer_info[printer_key]["name"]
+            day_data[f"{printer_name}_total"] = printer_data["total_pages"]
+            day_data[f"{printer_name}_bw"] = printer_data["bw_pages"]
+            day_data[f"{printer_name}_color"] = printer_data["color_pages"]
+        
+        chart_data.append(day_data)
+    
+    return {
+        "chart_data": chart_data,
+        "printers": list(printer_info.values()),
+        "date_range": {
+            "start": start_date.strftime('%Y-%m-%d'),
+            "end": end_date.strftime('%Y-%m-%d'),
+            "days": days
+        }
+    }
+
 @router.get("/printing-history")
 def get_printing_history(db: Session = Depends(get_db)):
     """Get printing history by printer and month"""

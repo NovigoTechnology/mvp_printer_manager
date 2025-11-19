@@ -5,7 +5,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from ..db import get_db
-from ..models import Incident, Printer
+from ..models import Incident, Printer, TonerRequest
 
 router = APIRouter()
 
@@ -52,18 +52,49 @@ def list_incidents(
     
     incidents = query.order_by(Incident.created_at.desc()).all()
     
-    # Add printer info to each incident
+    # Join with printer data using proper SQLAlchemy relationships
+    result = []
     for incident in incidents:
+        incident_dict = {
+            "id": incident.id,
+            "printer_id": incident.printer_id,
+            "title": incident.title,
+            "description": incident.description,
+            "status": incident.status,
+            "priority": incident.priority,
+            "created_at": incident.created_at,
+            "updated_at": incident.updated_at,
+            "resolved_at": incident.resolved_at,
+            "printer": None,
+            "toner_requests": []
+        }
+        
+        # Get printer info
         printer = db.query(Printer).filter(Printer.id == incident.printer_id).first()
         if printer:
-            incident.printer = {
+            incident_dict["printer"] = {
                 "id": printer.id,
                 "brand": printer.brand,
                 "model": printer.model,
                 "location": printer.location
             }
+        
+        # Get related toner requests
+        toner_requests = db.query(TonerRequest).filter(TonerRequest.incident_id == incident.id).all()
+        incident_dict["toner_requests"] = [
+            {
+                "id": req.id,
+                "requested_by": req.requested_by,
+                "justification": req.justification,
+                "status": req.status,
+                "created_at": req.created_at
+            }
+            for req in toner_requests
+        ]
+        
+        result.append(incident_dict)
     
-    return incidents
+    return result
 
 @router.post("/", response_model=IncidentResponse)
 def create_incident(incident: IncidentCreate, db: Session = Depends(get_db)):
@@ -106,6 +137,7 @@ def update_incident(incident_id: int, incident_update: IncidentUpdate, db: Sessi
         raise HTTPException(status_code=404, detail="Incident not found")
     
     update_data = incident_update.dict(exclude_unset=True)
+    old_status = incident.status
     
     # If status is being changed to resolved, set resolved_at
     if "status" in update_data and update_data["status"] == "resolved":
@@ -116,6 +148,25 @@ def update_incident(incident_id: int, incident_update: IncidentUpdate, db: Sessi
     
     db.commit()
     db.refresh(incident)
+    
+    # Actualizar estado de solicitudes de tóner relacionadas si el estado del incidente cambió
+    if "status" in update_data and update_data["status"] != old_status:
+        new_status = update_data["status"]
+        
+        # Buscar solicitudes de tóner relacionadas con este incidente
+        related_requests = db.query(TonerRequest).filter(TonerRequest.incident_id == incident_id).all()
+        
+        for request in related_requests:
+            if new_status == "in_progress":
+                request.status = "approved"
+                request.approved_date = datetime.utcnow()
+                request.approved_by = "Sistema (por actualización de incidente)"
+            elif new_status == "resolved":
+                request.status = "delivered"
+                request.delivered_date = datetime.utcnow()
+        
+        db.commit()
+    
     return incident
 
 @router.delete("/{incident_id}")

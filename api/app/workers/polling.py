@@ -2,10 +2,12 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime, timedelta
 import asyncio
 from sqlalchemy.orm import Session
+import json
 
 from ..db import SessionLocal
-from ..models import Printer, UsageReport
+from ..models import Printer, UsageReport, CounterSchedule
 from ..services.snmp import SNMPService
+from ..services.exchange_rate_service import update_exchange_rates_task
 
 def poll_all_printers():
     """Poll all printers and save usage reports"""
@@ -102,6 +104,202 @@ def start_scheduler(scheduler: AsyncIOScheduler):
         replace_existing=True
     )
     
+    # Update exchange rates daily at 9 AM
+    scheduler.add_job(
+        update_exchange_rates_task,
+        'cron',
+        hour=9,
+        minute=0,
+        id='update_exchange_rates',
+        name='Update exchange rates from APIs',
+        replace_existing=True
+    )
+    
+    # Check for scheduled counter jobs every 5 minutes
+    scheduler.add_job(
+        check_scheduled_counters,
+        'interval',
+        minutes=5,
+        id='check_scheduled_counters',
+        name='Check and execute scheduled counter jobs',
+        replace_existing=True
+    )
+    
     print("Scheduled tasks configured:")
     print("- Poll printers: every 30 minutes")
     print("- Cleanup old reports: daily at 2:00 AM")
+    print("- Check scheduled counters: every 5 minutes")
+    print("- Update exchange rates: daily at 9:00 AM")
+
+def check_scheduled_counters():
+    """Check for scheduled counter jobs that need to be executed"""
+    db = SessionLocal()
+    try:
+        now = datetime.utcnow()
+        
+        # Get active schedules that are due to run
+        due_schedules = db.query(CounterSchedule).filter(
+            CounterSchedule.is_active == True,
+            CounterSchedule.next_run <= now
+        ).all()
+        
+        for schedule in due_schedules:
+            try:
+                print(f"Executing scheduled counter job: {schedule.name} (ID: {schedule.id})")
+                execute_scheduled_counter_job(schedule.id, db)
+            except Exception as e:
+                print(f"Error executing scheduled counter job {schedule.id}: {str(e)}")
+                # Update error count
+                schedule.error_count += 1
+                schedule.last_error = str(e)
+                db.commit()
+                
+    except Exception as e:
+        print(f"Error in check_scheduled_counters: {str(e)}")
+    finally:
+        db.close()
+
+def execute_scheduled_counter_job(schedule_id: int, db: Session):
+    """Execute a specific scheduled counter job"""
+    try:
+        schedule = db.query(CounterSchedule).filter(CounterSchedule.id == schedule_id).first()
+        if not schedule:
+            print(f"Schedule {schedule_id} not found")
+            return
+        
+        # Get target printers
+        if schedule.target_type == "all":
+            printers = db.query(Printer).filter(Printer.status == "active").all()
+        elif schedule.target_type == "selection":
+            printer_ids = json.loads(schedule.printer_ids) if schedule.printer_ids else []
+            printers = db.query(Printer).filter(
+                Printer.id.in_(printer_ids),
+                Printer.status == "active"
+            ).all()
+        else:  # single
+            printer_ids = json.loads(schedule.printer_ids) if schedule.printer_ids else []
+            if printer_ids:
+                printers = db.query(Printer).filter(
+                    Printer.id == printer_ids[0],
+                    Printer.status == "active"
+                ).all()
+            else:
+                printers = []
+        
+        if not printers:
+            print(f"No active printers found for schedule {schedule_id}")
+            return
+        
+        # Initialize SNMP service
+        snmp_service = SNMPService()
+        polled_count = 0
+        error_count = 0
+        errors = []
+        
+        # Poll each printer
+        for printer in printers:
+            try:
+                # Check if we already have a report for today
+                today = datetime.utcnow().date()
+                existing_report = db.query(UsageReport).filter(
+                    UsageReport.printer_id == printer.id,
+                    UsageReport.date >= datetime.combine(today, datetime.min.time()),
+                    UsageReport.date < datetime.combine(today + timedelta(days=1), datetime.min.time())
+                ).first()
+                
+                if existing_report:
+                    print(f"Report for printer {printer.id} ({printer.ip}) already exists for today")
+                    continue
+                
+                # Poll the printer
+                data = snmp_service.poll_printer(printer.ip, printer.snmp_profile)
+                
+                # Create usage report
+                usage_report = UsageReport(
+                    printer_id=printer.id,
+                    date=datetime.utcnow(),
+                    pages_printed_mono=data.get('pages_printed_mono', 0),
+                    pages_printed_color=data.get('pages_printed_color', 0),
+                    toner_level_black=data.get('toner_level_black'),
+                    toner_level_cyan=data.get('toner_level_cyan'),
+                    toner_level_magenta=data.get('toner_level_magenta'),
+                    toner_level_yellow=data.get('toner_level_yellow'),
+                    paper_level=data.get('paper_level'),
+                    status=data.get('status', 'unknown')
+                )
+                
+                db.add(usage_report)
+                polled_count += 1
+                print(f"Successfully polled printer {printer.id} ({printer.ip})")
+                
+            except Exception as e:
+                error_msg = f"Error polling printer {printer.id} ({printer.ip}): {str(e)}"
+                errors.append(error_msg)
+                error_count += 1
+                print(error_msg)
+                continue
+        
+        # Update schedule statistics
+        schedule.last_run = datetime.utcnow()
+        schedule.next_run = calculate_next_run_time(schedule)
+        schedule.run_count += 1
+        
+        if errors:
+            schedule.error_count += 1
+            schedule.last_error = "; ".join(errors[:3])  # Store first 3 errors
+        else:
+            schedule.last_error = None
+        
+        db.commit()
+        
+        print(f"Scheduled job {schedule_id} completed: {polled_count} printers polled, {error_count} errors")
+        
+    except Exception as e:
+        print(f"Error in execute_scheduled_counter_job: {str(e)}")
+        raise
+
+def calculate_next_run_time(schedule: CounterSchedule) -> datetime:
+    """Calculate the next run time for a schedule"""
+    now = datetime.utcnow()
+    
+    if schedule.schedule_type == "interval" and schedule.interval_minutes:
+        return now + timedelta(minutes=schedule.interval_minutes)
+    
+    elif schedule.schedule_type == "daily" and schedule.time_of_day:
+        try:
+            hour, minute = map(int, schedule.time_of_day.split(':'))
+            next_run = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if next_run <= now:
+                next_run += timedelta(days=1)
+            return next_run
+        except ValueError:
+            return now + timedelta(hours=24)
+    
+    elif schedule.schedule_type == "weekly" and schedule.time_of_day and schedule.day_of_week is not None:
+        try:
+            hour, minute = map(int, schedule.time_of_day.split(':'))
+            days_ahead = schedule.day_of_week - now.weekday()
+            if days_ahead <= 0:  # Target day already happened this week
+                days_ahead += 7
+            next_run = now + timedelta(days=days_ahead)
+            next_run = next_run.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            return next_run
+        except ValueError:
+            return now + timedelta(days=7)
+    
+    elif schedule.schedule_type == "monthly" and schedule.time_of_day and schedule.day_of_month:
+        try:
+            hour, minute = map(int, schedule.time_of_day.split(':'))
+            next_run = now.replace(day=schedule.day_of_month, hour=hour, minute=minute, second=0, microsecond=0)
+            if next_run <= now:
+                # Move to next month
+                if now.month == 12:
+                    next_run = next_run.replace(year=now.year + 1, month=1)
+                else:
+                    next_run = next_run.replace(month=now.month + 1)
+            return next_run
+        except ValueError:
+            return now + timedelta(days=30)
+    
+    # Default fallback: next day
+    return now + timedelta(hours=24)

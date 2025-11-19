@@ -45,6 +45,7 @@ out/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.production
 
 # IDE
 .vscode/
@@ -77,3 +78,40 @@ logs
 # Temporary files
 *.tmp
 *.temp
+*.bak
+*.bak2
+
+# Development and backup files
+development/
+*.backup
+*_backup.*
+*-backup.*
+*page-test.*
+*page-minimal-test.*
+*page-full-backup.*
+
+# Documentation files (keep only README.md)
+*_FIXES.md
+*_SUCCESS.md
+*_SUMMARY.md
+*_OPTIMIZATION.md
+ERROR_*.md
+CLEANUP_*.md
+FINAL_*.md
+RECOMPIL*.md
+CONTRACT_*.md
+EQUIPMENT_*.md
+
+# Test files in root
+test_*.py
+*_test.py
+
+# TypeScript
+*.tsbuildinfo
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
