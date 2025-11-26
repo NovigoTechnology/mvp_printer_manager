@@ -1105,14 +1105,29 @@ export default function MedicalPrinters() {
                           const date = new Date(day.timestamp)
                           const dayName = date.toLocaleDateString('es-AR', { weekday: 'long' })
                           const dateStr = date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                          const hasCartridgeChange = day.cartridge_change_detected === true
                           
                           return (
-                            <tr key={index} className="hover:bg-gray-50">
+                            <tr key={index} className={`hover:bg-gray-50 ${hasCartridgeChange ? 'bg-yellow-50 border-l-4 border-yellow-500' : ''}`}>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                {dateStr}
+                                <div className="flex items-center gap-2">
+                                  {hasCartridgeChange && (
+                                    <span className="text-yellow-600" title="Cambio de cartucho detectado">
+                                      🔄
+                                    </span>
+                                  )}
+                                  {dateStr}
+                                </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
-                                {dayName}
+                                <div className="flex flex-col">
+                                  <span>{dayName}</span>
+                                  {hasCartridgeChange && (
+                                    <span className="text-xs font-semibold text-yellow-700 mt-1">
+                                      Se cambió cartucho
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
                                 <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-800">
@@ -1120,8 +1135,11 @@ export default function MedicalPrinters() {
                                 </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
-                                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-800">
+                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${
+                                  hasCartridgeChange ? 'bg-yellow-100 text-yellow-800 ring-2 ring-yellow-500' : 'bg-green-100 text-green-800'
+                                }`}>
                                   {day.total_available}
+                                  {hasCartridgeChange && ' ⬆'}
                                 </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900">

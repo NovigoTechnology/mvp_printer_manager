@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, and_
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import logging
 
 from ..db import get_db
-from ..models import Printer, MedicalPrinterCounter
+from ..models import Printer, MedicalPrinterCounter, MedicalPrinterSnapshot, MedicalPrinterTrayConfig
 from ..services.medical_printer_service import DrypixScraper
+from ..services.cartridge_detection_service import CartridgeDetectionService
 import json
 
 router = APIRouter()
@@ -318,7 +319,10 @@ async def get_print_history(printer_id: int, days: int = 30, db: Session = Depen
                     'total_printed': counter.total_printed,
                     'total_available': counter.total_available,
                     'total_trays_loaded': counter.total_trays_loaded,
-                    'is_online': counter.is_online
+                    'is_online': counter.is_online,
+                    'cartridge_change_detected': counter.cartridge_change_detected if hasattr(counter, 'cartridge_change_detected') else False,
+                    'tray_number_changed': counter.tray_number_changed if hasattr(counter, 'tray_number_changed') else None,
+                    'films_added': counter.films_added if hasattr(counter, 'films_added') else 0
                 }
         
         # Convertir a lista y ordenar por fecha descendente
@@ -610,4 +614,245 @@ async def get_printer_uptime(
         raise HTTPException(
             status_code=500,
             detail=f"Error al calcular uptime: {str(e)}"
+        )
+
+# =============================================================================
+# ENDPOINTS DE CONFIGURACIÓN DE BANDEJAS
+# =============================================================================
+
+class TrayConfigCreate(BaseModel):
+    printer_id: int
+    tray_number: int
+    films_per_cartridge: int = 100
+    cartridge_type: Optional[str] = None
+    notes: Optional[str] = None
+
+class TrayConfigUpdate(BaseModel):
+    films_per_cartridge: Optional[int] = None
+    cartridge_type: Optional[str] = None
+    notes: Optional[str] = None
+
+class TrayConfigResponse(BaseModel):
+    id: int
+    printer_id: int
+    tray_number: int
+    films_per_cartridge: int
+    cartridge_type: Optional[str]
+    notes: Optional[str]
+    created_at: datetime
+    updated_at: Optional[datetime]
+    
+    class Config:
+        from_attributes = True
+
+@router.post("/tray-config", response_model=TrayConfigResponse)
+async def create_tray_config(config: TrayConfigCreate, db: Session = Depends(get_db)):
+    """Configurar capacidad de una bandeja específica"""
+    
+    # Verificar que la impresora existe
+    printer = db.query(Printer).filter(Printer.id == config.printer_id).first()
+    if not printer:
+        raise HTTPException(status_code=404, detail="Impresora no encontrada")
+    
+    # Verificar si ya existe configuración
+    existing = db.query(MedicalPrinterTrayConfig).filter(
+        and_(
+            MedicalPrinterTrayConfig.printer_id == config.printer_id,
+            MedicalPrinterTrayConfig.tray_number == config.tray_number
+        )
+    ).first()
+    
+    if existing:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Ya existe configuración para esta bandeja. Use PUT /tray-config/{existing.id} para actualizar."
+        )
+    
+    db_config = MedicalPrinterTrayConfig(**config.dict())
+    db.add(db_config)
+    db.commit()
+    db.refresh(db_config)
+    
+    return db_config
+
+@router.get("/{printer_id}/tray-config", response_model=List[TrayConfigResponse])
+async def get_tray_configs(printer_id: int, db: Session = Depends(get_db)):
+    """Obtener configuraciones de bandejas de una impresora"""
+    
+    printer = db.query(Printer).filter(Printer.id == printer_id).first()
+    if not printer:
+        raise HTTPException(status_code=404, detail="Impresora no encontrada")
+    
+    configs = db.query(MedicalPrinterTrayConfig).filter(
+        MedicalPrinterTrayConfig.printer_id == printer_id
+    ).order_by(MedicalPrinterTrayConfig.tray_number).all()
+    
+    return configs
+
+@router.put("/tray-config/{config_id}", response_model=TrayConfigResponse)
+async def update_tray_config(
+    config_id: int,
+    update_data: TrayConfigUpdate,
+    db: Session = Depends(get_db)
+):
+    """Actualizar configuración de bandeja"""
+    
+    config = db.query(MedicalPrinterTrayConfig).filter(
+        MedicalPrinterTrayConfig.id == config_id
+    ).first()
+    
+    if not config:
+        raise HTTPException(status_code=404, detail="Configuración no encontrada")
+    
+    if update_data.films_per_cartridge is not None:
+        config.films_per_cartridge = update_data.films_per_cartridge
+    if update_data.cartridge_type is not None:
+        config.cartridge_type = update_data.cartridge_type
+    if update_data.notes is not None:
+        config.notes = update_data.notes
+    
+    config.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(config)
+    return config
+
+@router.delete("/tray-config/{config_id}")
+async def delete_tray_config(config_id: int, db: Session = Depends(get_db)):
+    """Eliminar configuración de bandeja (vuelve a default 100 films)"""
+    
+    config = db.query(MedicalPrinterTrayConfig).filter(
+        MedicalPrinterTrayConfig.id == config_id
+    ).first()
+    
+    if not config:
+        raise HTTPException(status_code=404, detail="Configuración no encontrada")
+    
+    db.delete(config)
+    db.commit()
+    
+    return {"message": "Configuración eliminada exitosamente"}
+
+# =============================================================================
+# ENDPOINTS DE SNAPSHOTS HORARIOS
+# =============================================================================
+
+class SnapshotResponse(BaseModel):
+    id: int
+    printer_id: int
+    tray_number: int
+    films_available: int
+    films_printed: int
+    cartridge_change_detected: bool
+    auto_detected: bool
+    snapshot_time: datetime
+    refill_id: Optional[int]
+    notes: Optional[str]
+    
+    class Config:
+        from_attributes = True
+
+@router.get("/{printer_id}/snapshots", response_model=List[SnapshotResponse])
+async def get_snapshots(
+    printer_id: int,
+    tray_number: Optional[int] = None,
+    days: int = 7,
+    db: Session = Depends(get_db)
+):
+    """Obtener snapshots horarios de una impresora"""
+    
+    printer = db.query(Printer).filter(Printer.id == printer_id).first()
+    if not printer:
+        raise HTTPException(status_code=404, detail="Impresora no encontrada")
+    
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    
+    query = db.query(MedicalPrinterSnapshot).filter(
+        and_(
+            MedicalPrinterSnapshot.printer_id == printer_id,
+            MedicalPrinterSnapshot.snapshot_time >= cutoff
+        )
+    )
+    
+    if tray_number is not None:
+        query = query.filter(MedicalPrinterSnapshot.tray_number == tray_number)
+    
+    snapshots = query.order_by(MedicalPrinterSnapshot.snapshot_time.desc()).all()
+    return snapshots
+
+@router.get("/{printer_id}/cartridge-changes", response_model=List[SnapshotResponse])
+async def get_cartridge_changes(
+    printer_id: int,
+    days: int = 30,
+    db: Session = Depends(get_db)
+):
+    """Obtener solo los snapshots donde se detectaron cambios de cartucho"""
+    
+    printer = db.query(Printer).filter(Printer.id == printer_id).first()
+    if not printer:
+        raise HTTPException(status_code=404, detail="Impresora no encontrada")
+    
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    
+    snapshots = db.query(MedicalPrinterSnapshot).filter(
+        and_(
+            MedicalPrinterSnapshot.printer_id == printer_id,
+            MedicalPrinterSnapshot.cartridge_change_detected == True,
+            MedicalPrinterSnapshot.snapshot_time >= cutoff
+        )
+    ).order_by(MedicalPrinterSnapshot.snapshot_time.desc()).all()
+    
+    return snapshots
+
+@router.post("/{printer_id}/manual-snapshot")
+async def create_manual_snapshot(
+    printer_id: int,
+    db: Session = Depends(get_db)
+):
+    """Crear snapshot manual (forzar polling fuera de horario)"""
+    
+    printer = db.query(Printer).filter(Printer.id == printer_id).first()
+    if not printer:
+        raise HTTPException(status_code=404, detail="Impresora no encontrada")
+    
+    try:
+        # Crear scraper y obtener contadores actuales
+        scraper = DrypixScraper(
+            ip=printer.ip,
+            port=20051,
+            username='dryprinter',
+            password='fujifilm'
+        )
+        
+        counters = scraper.get_counters()
+        
+        if not counters or 'trays' not in counters:
+            raise HTTPException(
+                status_code=500,
+                detail="No se pudieron obtener contadores de la impresora"
+            )
+        
+        snapshots_created = []
+        snapshot_time = datetime.utcnow()
+        
+        for tray in counters['trays']:
+            snapshot = CartridgeDetectionService.create_snapshot(
+                db=db,
+                printer_id=printer_id,
+                tray_number=tray['tray_number'],
+                films_available=tray['available'],
+                snapshot_time=snapshot_time
+            )
+            snapshots_created.append(snapshot)
+        
+        return {
+            "message": f"{len(snapshots_created)} snapshots creados",
+            "snapshots": [SnapshotResponse.from_orm(s) for s in snapshots_created]
+        }
+    
+    except Exception as e:
+        logger.error(f"Error creating manual snapshot: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al crear snapshot: {str(e)}"
         )

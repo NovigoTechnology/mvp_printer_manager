@@ -82,3 +82,20 @@ async def root():
 @app.get("/health")
 async def health_check(db: Session = Depends(get_db)):
     return {"status": "healthy", "database": "connected"}
+
+@app.get("/scheduler/jobs")
+async def get_scheduler_jobs():
+    """Ver jobs activos del scheduler"""
+    jobs = scheduler.get_jobs()
+    return {
+        "total_jobs": len(jobs),
+        "jobs": [
+            {
+                "id": job.id,
+                "name": job.name,
+                "next_run_time": str(job.next_run_time) if job.next_run_time else None,
+                "trigger": str(job.trigger)
+            }
+            for job in jobs
+        ]
+    }

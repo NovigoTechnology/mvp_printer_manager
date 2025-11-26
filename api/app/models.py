@@ -76,6 +76,8 @@ class Printer(Base):
     counter_readings = relationship("CounterReading", back_populates="printer")
     invoice_lines = relationship("InvoiceLine", back_populates="printer")
     ip_history = relationship("PrinterIPHistory", back_populates="printer", cascade="all, delete-orphan")
+    tray_configs = relationship("MedicalPrinterTrayConfig", back_populates="printer", cascade="all, delete-orphan")
+    snapshots = relationship("MedicalPrinterSnapshot", back_populates="printer", cascade="all, delete-orphan")
 
 class Incident(Base):
     __tablename__ = "incidents"
@@ -847,6 +849,11 @@ class MedicalPrinterCounter(Base):
     total_trays_loaded = Column(Integer, default=0)      # Número de bandejas cargadas
     is_online = Column(Boolean, default=True)            # Estado de la impresora
     
+    # Detección de cambio de cartucho
+    cartridge_change_detected = Column(Boolean, default=False)  # Si se detectó cambio de cartucho
+    tray_number_changed = Column(Integer, nullable=True)         # Número de bandeja donde se detectó el cambio
+    films_added = Column(Integer, default=0)                     # Films agregados en el cambio
+    
     # Datos completos en formato JSON (incluye detalle por bandeja)
     raw_data = Column(Text)  # JSON con estructura completa: {trays: {...}, summary: {...}}
     
@@ -897,6 +904,9 @@ class MedicalPrinterRefill(Base):
     supplier = Column(String(200))                        # Proveedor del insumo
     cost = Column(Float, default=0.0)                     # Costo del cartucho
     
+    # Detección automática
+    auto_detected = Column(Boolean, default=False)        # Si fue detectado automáticamente
+    
     # Usuario y notas
     loaded_by = Column(String(100))                       # Usuario que cargó el cartucho
     notes = Column(Text)                                  # Notas adicionales
@@ -905,3 +915,50 @@ class MedicalPrinterRefill(Base):
     printer = relationship("Printer")
     incident = relationship("Incident")
     toner_request = relationship("TonerRequest")
+    snapshots = relationship("MedicalPrinterSnapshot", back_populates="refill")
+
+class MedicalPrinterTrayConfig(Base):
+    """
+    Configuración de capacidad de bandejas por impresora médica
+    Permite configurar la capacidad de cada cartucho por bandeja
+    """
+    __tablename__ = "medical_printer_tray_config"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    printer_id = Column(Integer, ForeignKey("printers.id", ondelete="CASCADE"), nullable=False)
+    tray_number = Column(Integer, nullable=False)
+    films_per_cartridge = Column(Integer, nullable=False, default=100)
+    cartridge_type = Column(String(100))
+    notes = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    printer = relationship("Printer", back_populates="tray_configs")
+    
+    __table_args__ = (
+        UniqueConstraint('printer_id', 'tray_number', name='unique_printer_tray'),
+    )
+
+class MedicalPrinterSnapshot(Base):
+    """
+    Snapshots horarios de contadores de impresoras médicas
+    Permite tracking detallado y detección automática de cambios de cartucho
+    """
+    __tablename__ = "medical_printer_snapshots"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    printer_id = Column(Integer, ForeignKey("printers.id", ondelete="CASCADE"), nullable=False, index=True)
+    tray_number = Column(Integer, nullable=False)
+    films_available = Column(Integer, nullable=False)
+    films_printed = Column(Integer, nullable=False, default=0)
+    cartridge_change_detected = Column(Boolean, nullable=False, default=False)
+    auto_detected = Column(Boolean, nullable=False, default=False)
+    snapshot_time = Column(DateTime(timezone=True), nullable=False, index=True)
+    refill_id = Column(Integer, ForeignKey("medical_printer_refills.id", ondelete="SET NULL"))
+    notes = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    printer = relationship("Printer", back_populates="snapshots")
+    refill = relationship("MedicalPrinterRefill", back_populates="snapshots")

@@ -9,6 +9,7 @@ from ..models import Printer, UsageReport, CounterSchedule, MedicalPrinterCounte
 from ..services.snmp import SNMPService
 from ..services.medical_printer_service import DrypixScraper
 from ..services.exchange_rate_service import update_exchange_rates_task
+from .hourly_medical_polling import poll_medical_printers_hourly, cleanup_old_snapshots_job
 
 def poll_all_printers():
     """Poll all printers and save usage reports"""
@@ -119,16 +120,70 @@ def poll_medical_printers():
                 result = scraper.get_counters()
                 
                 if result:
+                    # Detectar cambios de cartucho comparando con registro anterior
+                    cartridge_change_detected = False
+                    tray_number_changed = None
+                    films_added = 0
+                    daily_printed = result['summary']['total_printed']  # Por defecto, el contador actual
+                    
+                    # Obtener último registro
+                    last_record = db.query(MedicalPrinterCounter).filter(
+                        MedicalPrinterCounter.printer_id == printer.id
+                    ).order_by(MedicalPrinterCounter.timestamp.desc()).first()
+                    
+                    if last_record and last_record.raw_data:
+                        try:
+                            last_data = json.loads(last_record.raw_data)
+                            current_data = result
+                            
+                            # Comparar cada bandeja
+                            MIN_INCREMENT_THRESHOLD = 20  # Umbral mínimo para detectar cambio
+                            
+                            for tray_key in current_data.get('trays', {}).keys():
+                                current_available = current_data['trays'][tray_key]['available']
+                                current_printed = current_data['trays'][tray_key]['printed']
+                                last_available = last_data.get('trays', {}).get(tray_key, {}).get('available', 0)
+                                last_printed = last_data.get('trays', {}).get(tray_key, {}).get('printed', 0)
+                                
+                                increment = current_available - last_available
+                                
+                                if increment >= MIN_INCREMENT_THRESHOLD:
+                                    # Cambio de cartucho detectado
+                                    cartridge_change_detected = True
+                                    tray_number_changed = current_data['trays'][tray_key]['tray_number']
+                                    films_added = 100  # Siempre son 100 films por cartucho nuevo
+                                    
+                                    # CORRECCIÓN: Calcular cuánto se imprimió del cartucho ANTERIOR
+                                    # Lo que se imprimió = lo que había disponible antes (se consumió todo)
+                                    # Más lo que ya estaba impreso
+                                    films_printed_from_old_cartridge = last_available
+                                    
+                                    # El total impreso para este snapshot debe reflejar lo del cartucho anterior
+                                    daily_printed = films_printed_from_old_cartridge
+                                    
+                                    print(f"🔄 CAMBIO DE CARTUCHO DETECTADO - Printer {printer.id} {tray_key}: "
+                                          f"Disponibles: {last_available} → {current_available}")
+                                    print(f"   Films impresos del cartucho anterior: {films_printed_from_old_cartridge}")
+                                    print(f"   Cartucho nuevo cargado: 100 films")
+                                    break  # Solo registrar el primer cambio detectado
+                        except Exception as e:
+                            print(f"Error al detectar cambios de cartucho: {str(e)}")
+                    
                     # Save counter snapshot
                     counter_record = MedicalPrinterCounter(
                         printer_id=printer.id,
                         timestamp=datetime.utcnow(),
-                        total_printed=result['summary']['total_printed'],
+                        total_printed=daily_printed,  # Corregido para reflejar lo impreso del cartucho anterior si hubo cambio
                         total_available=result['summary']['total_available'],
                         total_trays_loaded=result['summary']['total_trays_loaded'],
                         is_online=result['is_online'],
+                        cartridge_change_detected=cartridge_change_detected,
+                        tray_number_changed=tray_number_changed,
+                        films_added=films_added,
                         raw_data=json.dumps(result),
-                        collection_method='automatic'
+                        collection_method='automatic',
+                        notes=f"Se cambió cartucho (100 films). Impresos del cartucho anterior: {daily_printed}" 
+                              if cartridge_change_detected else None
                     )
                     
                     db.add(counter_record)
@@ -197,7 +252,7 @@ def start_scheduler(scheduler: AsyncIOScheduler):
         replace_existing=True
     )
     
-    # Poll medical printers daily at 7 AM
+    # Poll medical printers daily at 7 AM (snapshots diarios históricos)
     scheduler.add_job(
         poll_medical_printers,
         'cron',
@@ -208,12 +263,35 @@ def start_scheduler(scheduler: AsyncIOScheduler):
         replace_existing=True
     )
     
+    # Poll medical printers every hour (snapshots horarios + detección automática)
+    scheduler.add_job(
+        poll_medical_printers_hourly,
+        'cron',
+        minute=0,  # A la hora en punto
+        id='poll_medical_printers_hourly',
+        name='Hourly medical printer snapshots with auto cartridge detection',
+        replace_existing=True
+    )
+    
+    # Cleanup old snapshots daily at 3 AM
+    scheduler.add_job(
+        cleanup_old_snapshots_job,
+        'cron',
+        hour=3,
+        minute=0,
+        id='cleanup_old_snapshots',
+        name='Cleanup old hourly snapshots (keep 30 days)',
+        replace_existing=True
+    )
+    
     print("Scheduled tasks configured:")
     print("- Poll printers: every 30 minutes")
     print("- Cleanup old reports: daily at 2:00 AM")
     print("- Check scheduled counters: every 5 minutes")
     print("- Update exchange rates: daily at 9:00 AM")
-    print("- Poll medical printers: daily at 7:00 AM")
+    print("- Poll medical printers (daily): daily at 7:00 AM")
+    print("- Poll medical printers (hourly): every hour for cartridge detection")
+    print("- Cleanup old snapshots: daily at 3:00 AM")
 
 def check_scheduled_counters():
     """Check for scheduled counter jobs that need to be executed"""
