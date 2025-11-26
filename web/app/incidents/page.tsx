@@ -5,6 +5,30 @@ import { Card, Badge, Button } from '@/components/ui'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
 
+interface Printer {
+  id: number
+  brand: string
+  model: string
+  location: string | null
+  serial_number?: string
+}
+
+interface Technician {
+  id: number
+  name: string
+  email: string | null
+  specialty: string | null
+  active: boolean
+}
+
+interface SystemUser {
+  id: number
+  name: string
+  email: string | null
+  department: string | null
+  active: boolean
+}
+
 interface Incident {
   id: number
   printer_id: number
@@ -12,15 +36,18 @@ interface Incident {
   description: string | null
   status: string
   priority: string
+  incident_type: string
+  notes: string | null
+  assigned_to: string | null
+  assigned_to_id: number | null
+  assigned_to_name: string | null
+  reported_by: string | null
+  reported_by_id: number | null
+  reported_by_name: string | null
   created_at: string
   updated_at: string | null
   resolved_at: string | null
-  printer?: {
-    id: number
-    brand: string
-    model: string
-    location: string | null
-  }
+  printer?: Printer
   toner_requests?: Array<{
     id: number
     requested_by: string
@@ -32,16 +59,44 @@ interface Incident {
 
 type ViewType = 'cards' | 'table' | 'kanban'
 
-export default function Incidents() {
+export default function IncidentsPage() {
   const [incidents, setIncidents] = useState<Incident[]>([])
+  const [technicians, setTechnicians] = useState<Technician[]>([])
+  const [systemUsers, setSystemUsers] = useState<SystemUser[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
-  const [viewType, setViewType] = useState<ViewType>('cards')
+  const [viewType, setViewType] = useState<ViewType>('table')
   const [showFilters, setShowFilters] = useState(false)
+  const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showResolveModal, setShowResolveModal] = useState(false)
+  const [showStatusModal, setShowStatusModal] = useState(false)
 
   useEffect(() => {
     fetchIncidents()
+    fetchTechnicians()
+    fetchSystemUsers()
   }, [filter])
+
+  const fetchTechnicians = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/technicians/`)
+      const data = await response.json()
+      setTechnicians(data)
+    } catch (error) {
+      console.error('Error fetching technicians:', error)
+    }
+  }
+
+  const fetchSystemUsers = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/users/`)
+      const data = await response.json()
+      setSystemUsers(data)
+    } catch (error) {
+      console.error('Error fetching system users:', error)
+    }
+  }
 
   const fetchIncidents = async () => {
     try {
@@ -60,25 +115,19 @@ export default function Incidents() {
     }
   }
 
-  const updateIncidentStatus = async (incidentId: number, newStatus: string) => {
-    try {
-      const response = await fetch(`${API_BASE}/incidents/${incidentId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: newStatus }),
-      })
-      
-      if (response.ok) {
-        fetchIncidents()
-      } else {
-        alert('Failed to update incident')
-      }
-    } catch (error) {
-      console.error('Error updating incident:', error)
-      alert('Error updating incident')
-    }
+  const openEditModal = (incident: Incident) => {
+    setSelectedIncident(incident)
+    setShowEditModal(true)
+  }
+
+  const openResolveModal = (incident: Incident) => {
+    setSelectedIncident(incident)
+    setShowResolveModal(true)
+  }
+
+  const openStatusModal = (incident: Incident) => {
+    setSelectedIncident(incident)
+    setShowStatusModal(true)
   }
 
   const getPriorityColor = (priority: string) => {
@@ -99,46 +148,39 @@ export default function Incidents() {
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'pending':
-        return 'bg-gray-100 text-gray-800 border-gray-300'
+        return 'bg-gray-100 text-gray-800'
       case 'open':
-        return 'bg-red-100 text-red-800 border-red-300'
+        return 'bg-red-100 text-red-800'
       case 'in_progress':
-        return 'bg-blue-100 text-blue-800 border-blue-300'
+        return 'bg-blue-100 text-blue-800'
       case 'resolved':
-        return 'bg-green-100 text-green-800 border-green-300'
+        return 'bg-green-100 text-green-800'
+      case 'cancelled':
+        return 'bg-gray-300 text-gray-700'
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-300'
+        return 'bg-gray-100 text-gray-800'
     }
   }
 
   const getStatusLabel = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return 'Pendiente'
-      case 'open':
-        return 'Abierto'
-      case 'in_progress':
-        return 'En Progreso'
-      case 'resolved':
-        return 'Resuelto'
-      default:
-        return status
+    const labels: Record<string, string> = {
+      pending: 'Pendiente',
+      open: 'Abierto',
+      in_progress: 'En Progreso',
+      resolved: 'Resuelto',
+      cancelled: 'Cancelado'
     }
+    return labels[status.toLowerCase()] || status
   }
 
   const getPriorityLabel = (priority: string) => {
-    switch (priority) {
-      case 'critical':
-        return 'Crítica'
-      case 'high':
-        return 'Alta'
-      case 'medium':
-        return 'Media'
-      case 'low':
-        return 'Baja'
-      default:
-        return priority
+    const labels: Record<string, string> = {
+      critical: 'Crítica',
+      high: 'Alta',
+      medium: 'Media',
+      low: 'Baja'
     }
+    return labels[priority] || priority
   }
 
   const formatDate = (dateString: string) => {
@@ -165,20 +207,33 @@ export default function Incidents() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Prioridad</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {incidents.map((incident) => (
                 <tr key={incident.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#{incident.id}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{incident.title}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900">
+                    <div className="max-w-xs">
+                      <div className="font-medium">{incident.title}</div>
+                      {incident.assigned_to_name && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          Asignado: {incident.assigned_to_name}
+                        </div>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-6 py-4 text-sm text-gray-500">
                     {incident.printer ? `${incident.printer.brand} ${incident.printer.model}` : `ID: ${incident.printer_id}`}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(incident.status)}`}>
+                    <button
+                      onClick={() => openStatusModal(incident)}
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(incident.status)} hover:opacity-80 transition-opacity`}
+                    >
                       {getStatusLabel(incident.status)}
-                    </span>
+                    </button>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(incident.priority)}`}>
@@ -186,6 +241,30 @@ export default function Incidents() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(incident.created_at)}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => openEditModal(incident)}
+                        className="text-blue-600 hover:text-blue-900"
+                        title="Editar"
+                      >
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      {incident.status !== 'resolved' && (
+                        <button
+                          onClick={() => openResolveModal(incident)}
+                          className="text-green-600 hover:text-green-900"
+                          title="Resolver"
+                        >
+                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -197,10 +276,9 @@ export default function Incidents() {
 
   function renderKanbanView() {
     const statusColumns = [
-      { key: 'pending', title: 'Pendientes', color: 'bg-gray-50 border-gray-300' },
-      { key: 'open', title: 'Abiertos', color: 'bg-red-50 border-red-300' },
-      { key: 'in_progress', title: 'En Progreso', color: 'bg-blue-50 border-blue-300' },
-      { key: 'resolved', title: 'Resueltos', color: 'bg-green-50 border-green-300' }
+      { key: 'open', title: 'Abiertos', color: 'bg-red-50' },
+      { key: 'in_progress', title: 'En Progreso', color: 'bg-blue-50' },
+      { key: 'resolved', title: 'Resueltos', color: 'bg-green-50' }
     ]
 
     return (
@@ -208,33 +286,48 @@ export default function Incidents() {
         {statusColumns.map((column) => {
           const columnIncidents = incidents.filter(incident => incident.status === column.key)
           return (
-            <div key={column.key} className={`flex-shrink-0 w-80 ${column.color} rounded-lg border p-4`}>
+            <div key={column.key} className={`flex-shrink-0 w-96 ${column.color} rounded-lg p-4`}>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-gray-900">{column.title}</h3>
                 <span className="bg-white px-2 py-1 rounded-full text-sm font-medium text-gray-600">{columnIncidents.length}</span>
               </div>
-              <div className="space-y-3 max-h-96 overflow-y-auto">
+              <div className="space-y-3 max-h-[600px] overflow-y-auto">
                 {columnIncidents.map((incident) => (
                   <div key={incident.id} className="bg-white rounded-lg p-4 shadow-sm border hover:shadow-md transition-shadow duration-200">
                     <div className="flex items-start justify-between mb-2">
-                      <h4 className="font-medium text-gray-900 text-sm">Incidente #{incident.id}</h4>
+                      <h4 className="font-medium text-gray-900 text-sm">#{incident.id}</h4>
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(incident.priority)}`}>
                         {getPriorityLabel(incident.priority)}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-800 mb-2 line-clamp-2">{incident.title}</p>
+                    <p className="text-sm text-gray-800 mb-2 font-medium">{incident.title}</p>
                     {incident.printer && (
                       <div className="text-xs text-gray-600 mb-2">
                         <span className="font-medium">Impresora:</span> {incident.printer.brand} {incident.printer.model}
-                        {incident.printer.location && ` - ${incident.printer.location}`}
                       </div>
                     )}
-                    {incident.toner_requests && incident.toner_requests.length > 0 && (
+                    {incident.assigned_to_name && (
                       <div className="text-xs text-blue-600 mb-2">
-                        <span className="font-medium">Solicitante:</span> {incident.toner_requests[0].requested_by}
+                        <span className="font-medium">Asignado:</span> {incident.assigned_to_name}
                       </div>
                     )}
-                    <div className="text-xs text-gray-500">{formatDate(incident.created_at)}</div>
+                    <div className="text-xs text-gray-500 mb-3">{formatDate(incident.created_at)}</div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openEditModal(incident)}
+                        className="flex-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                      >
+                        Editar
+                      </button>
+                      {incident.status !== 'resolved' && (
+                        <button
+                          onClick={() => openResolveModal(incident)}
+                          className="flex-1 px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                        >
+                          Resolver
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
                 {columnIncidents.length === 0 && (
@@ -332,6 +425,7 @@ export default function Incidents() {
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
                   className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  title="Filtrar por estado"
                 >
                   <option value="all">Todos los Estados</option>
                   <option value="pending">Pendientes</option>
@@ -427,6 +521,444 @@ export default function Incidents() {
           </div>
         )}
       </Card>
+
+      {/* Modals */}
+      {showEditModal && selectedIncident && (
+        <EditModal
+          incident={selectedIncident}
+          technicians={technicians}
+          systemUsers={systemUsers}
+          onClose={() => {
+            setShowEditModal(false)
+            setSelectedIncident(null)
+          }}
+          onSuccess={() => {
+            fetchIncidents()
+            setShowEditModal(false)
+            setSelectedIncident(null)
+          }}
+        />
+      )}
+
+      {showResolveModal && selectedIncident && (
+        <ResolveModal
+          incident={selectedIncident}
+          technicians={technicians}
+          onClose={() => {
+            setShowResolveModal(false)
+            setSelectedIncident(null)
+          }}
+          onSuccess={() => {
+            fetchIncidents()
+            setShowResolveModal(false)
+            setSelectedIncident(null)
+          }}
+        />
+      )}
+
+      {showStatusModal && selectedIncident && (
+        <StatusModal
+          incident={selectedIncident}
+          technicians={technicians}
+          onClose={() => {
+            setShowStatusModal(false)
+            setSelectedIncident(null)
+          }}
+          onSuccess={() => {
+            fetchIncidents()
+            setShowStatusModal(false)
+            setSelectedIncident(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// Edit Modal Component
+function EditModal({ incident, technicians, systemUsers, onClose, onSuccess }: any) {
+  const [formData, setFormData] = useState({
+    title: incident.title,
+    description: incident.description || '',
+    priority: incident.priority,
+    assigned_to_id: incident.assigned_to_id || '',
+    reported_by_id: incident.reported_by_id || ''
+  })
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+
+    try {
+      const response = await fetch(`${API_BASE}/incidents/${incident.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          assigned_to_id: formData.assigned_to_id ? parseInt(formData.assigned_to_id) : null,
+          reported_by_id: formData.reported_by_id ? parseInt(formData.reported_by_id) : null
+        })
+      })
+
+      if (response.ok) {
+        onSuccess()
+      } else {
+        alert('Error al actualizar el incidente')
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Error al actualizar el incidente')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">Editar Incidente #{incident.id}</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Cerrar modal">
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Título *</label>
+              <input
+                type="text"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+                title="Título del incidente"
+                placeholder="Título del incidente"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                title="Descripción del incidente"
+                placeholder="Descripción detallada del incidente"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Prioridad *</label>
+                <select
+                  value={formData.priority}
+                  onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                  title="Prioridad del incidente"
+                >
+                  <option value="low">Baja</option>
+                  <option value="medium">Media</option>
+                  <option value="high">Alta</option>
+                  <option value="critical">Crítica</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Asignado a</label>
+                <select
+                  value={formData.assigned_to_id}
+                  onChange={(e) => setFormData({ ...formData, assigned_to_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Sin asignar</option>
+                  {technicians.map((tech: any) => (
+                    <option key={tech.id} value={tech.id}>
+                      {tech.name} {tech.specialty ? `(${tech.specialty})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Reportado por</label>
+              <select
+                value={formData.reported_by_id}
+                onChange={(e) => setFormData({ ...formData, reported_by_id: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Anónimo</option>
+                {systemUsers.map((user: any) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name} {user.department ? `- ${user.department}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                {submitting ? 'Guardando...' : 'Guardar Cambios'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Resolve Modal Component
+function ResolveModal({ incident, technicians, onClose, onSuccess }: any) {
+  const [formData, setFormData] = useState({
+    resolution: '',
+    resolved_by_id: '',
+    resolution_notes: ''
+  })
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+
+    try {
+      const response = await fetch(`${API_BASE}/incidents/${incident.id}/resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          resolved_by_id: parseInt(formData.resolved_by_id)
+        })
+      })
+
+      if (response.ok) {
+        onSuccess()
+      } else {
+        alert('Error al resolver el incidente')
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Error al resolver el incidente')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg max-w-2xl w-full">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">Resolver Incidente #{incident.id}</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Cerrar modal">
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+            <p className="text-sm text-blue-700">
+              <strong>Incidente:</strong> {incident.title}
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Resolución *</label>
+              <textarea
+                value={formData.resolution}
+                onChange={(e) => setFormData({ ...formData, resolution: e.target.value })}
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Describe cómo se resolvió el incidente..."
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Resuelto por *</label>
+              <select
+                value={formData.resolved_by_id}
+                onChange={(e) => setFormData({ ...formData, resolved_by_id: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+                title="Técnico que resolvió el incidente"
+              >
+                <option value="">Seleccionar técnico...</option>
+                {technicians.map((tech: any) => (
+                  <option key={tech.id} value={tech.id}>
+                    {tech.name} {tech.specialty ? `(${tech.specialty})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Notas adicionales</label>
+              <textarea
+                value={formData.resolution_notes}
+                onChange={(e) => setFormData({ ...formData, resolution_notes: e.target.value })}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Observaciones, piezas reemplazadas, etc..."
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+              >
+                {submitting ? 'Resolviendo...' : 'Marcar como Resuelto'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Status Modal Component
+function StatusModal({ incident, technicians, onClose, onSuccess }: any) {
+  const [formData, setFormData] = useState({
+    status: incident.status,
+    notes: '',
+    assigned_to_id: incident.assigned_to_id || ''
+  })
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+
+    try {
+      const response = await fetch(`${API_BASE}/incidents/${incident.id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          assigned_to_id: formData.assigned_to_id ? parseInt(formData.assigned_to_id) : null
+        })
+      })
+
+      if (response.ok) {
+        onSuccess()
+      } else {
+        alert('Error al cambiar el estado')
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Error al cambiar el estado')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg max-w-lg w-full">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold text-gray-900">Cambiar Estado</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Cerrar modal">
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nuevo Estado *</label>
+              <select
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+                title="Estado del incidente"
+              >
+                <option value="open">Abierto</option>
+                <option value="in_progress">En Progreso</option>
+                <option value="resolved">Resuelto</option>
+                <option value="cancelled">Cancelado</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Asignar a</label>
+              <select
+                value={formData.assigned_to_id}
+                onChange={(e) => setFormData({ ...formData, assigned_to_id: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                title="Asignar técnico"
+              >
+                <option value="">Sin asignar</option>
+                {technicians.map((tech: any) => (
+                  <option key={tech.id} value={tech.id}>
+                    {tech.name} {tech.specialty ? `(${tech.specialty})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Notas del cambio</label>
+              <textarea
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Razón del cambio de estado..."
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                {submitting ? 'Actualizando...' : 'Cambiar Estado'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   )
 }

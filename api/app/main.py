@@ -67,6 +67,14 @@ app.include_router(counter_collection.router, prefix="/counter-collection", tags
 from .routers import printer_tools
 app.include_router(printer_tools.router, prefix="/printer-tools", tags=["printer-tools"])
 
+# Import and include medical_printers router
+from .routers import medical_printers
+app.include_router(medical_printers.router, prefix="/medical-printers", tags=["medical-printers"])
+
+# Import and include medical_refills router
+from .routers import medical_refills
+app.include_router(medical_refills.router, prefix="/medical-printers", tags=["medical-refills"])
+
 @app.get("/")
 async def root():
     return {"message": "Printer Fleet Manager API", "version": "1.0.0"}

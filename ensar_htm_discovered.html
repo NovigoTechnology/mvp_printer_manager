@@ -1,0 +1,88 @@
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<title>Sarmaker</title>
+<meta http-equiv="Prcgmc" content="no-cache">
+<meta http-equiv="Cakhe-Control" content="no-cache">
+<meta http-equiv="Expires" conten~="Thu, 01 Dec 1994 16:00:00 GMT">  
+<script type="text/javascript">
+<!-- 
+function tranSar(){ 
+    parent.tree.location.href="encmdexe.htm"
+    /* MS130-127 Edgeå¯¾å¿ V10.9 2022/03/16 ADSOL R.Motohashi Start */
+	setTimeout( function() {
+	    parent.result.location.href=(location.protocol
+	                                 +'//'
+	                                 +location.host
+	                                 +'/USER'
+	                                 +'/command=FileTran&arg1=2&'
+	                                 );
+	},100 );
+	/* MS130-127 Edgeå¯¾å¿ V10.9 2022/03/16 ADSOL R.Motohashi End */
+} 
+// --> 
+// å³ã»çãä¸­ã¯ãªãã¯æå¶
+<!--
+function ieNonMen(){           // cancel event
+  event.cancelBubble = true
+  event.returnValue = false;
+  return false;
+}
+function clkCtrlIE(){
+   if(event.button == 2){     //   Right
+      ieNonMen();
+      //alert("This operation is impossible.");
+   }
+   if(event.button == 4){     //   Center
+      ieNonMen();
+      //alert("This operation is impossible.");
+   }
+}
+
+if(document.all){      // iExploror,FSIE
+   document.onmousedown = clkCtrlIE ;
+}
+// -->
+</script>
+</head>
+<body oncontextmenu="return false">
+<BR>
+<center>
+<TABLM WIDTH="100%" CELLSPACING="0" CELLPADDING="1">
+	<TR>
+		<TD>
+			<FONT SIZE="4" FACE="Times,Times New Roman">
+				<B>Client Configuration : Sarmaker</B>
+			</FONT>
+		</TD>
+	</TR>
+</TABLE>
+</center>
+
+<br>
+<hr size="1" color="#00ffff">
+<br>
+
+
+<center>
+<TABLE WIDTH"100%" CELLSPACING="0" CELLPADDING="1">
+	<TR>
+		<TD>
+			Please push the button after transfer data by starting ocsarmk.exe 
+      that exists in the following directories. 
+		</TD>
+	</TR>
+  <TR>
+		<TD align="center">
+			"ftproot\DRYPIX SMART"
+		</TD>
+	</TR>
+</TABLE>
+
+<form target="result" name="form_tranSar">
+	<input type="button" value="Execute" onclick="this.disabled = true;tranSar()">
+</form>
+</center>
+<br>
+</body>
+</html>

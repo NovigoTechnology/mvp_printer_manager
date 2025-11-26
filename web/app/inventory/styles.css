@@ -1,0 +1,207 @@
+/* Estilos mejorados para el inventario de impresoras */
+
+/* Asegurar que la tabla sea completamente visible */
+.inventory-container {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Hacer las columnas más compactas pero legibles */
+.inventory-table {
+  min-width: 1500px; /* Ancho mínimo para que todas las columnas sean visibles */
+  table-layout: auto;
+}
+
+/* Optimizar el espaciado de celdas */
+.inventory-table th,
+.inventory-table td {
+  padding: 0.75rem 1rem;
+}
+
+/* Permitir texto de múltiples líneas solo donde sea necesario */
+.inventory-table .printer-info-cell {
+  white-space: normal;
+  max-width: 320px;
+  min-width: 280px;
+}
+
+.inventory-table .location-cell {
+  white-space: normal;
+  max-width: 220px;
+  min-width: 180px;
+}
+
+/* Anchos específicos para columnas */
+.inventory-table th:nth-child(1),
+.inventory-table td:nth-child(1) {
+  min-width: 280px; /* Printer Info */
+}
+
+.inventory-table th:nth-child(2),
+.inventory-table td:nth-child(2) {
+  min-width: 180px; /* Location */
+}
+
+.inventory-table th:nth-child(3),
+.inventory-table td:nth-child(3) {
+  min-width: 120px; /* Status */
+}
+
+.inventory-table th:nth-child(4),
+.inventory-table td:nth-child(4) {
+  min-width: 140px; /* Proveedor */
+}
+
+.inventory-table th:nth-child(5),
+.inventory-table td:nth-child(5) {
+  min-width: 140px; /* Warranty */
+}
+
+.inventory-table th:nth-child(6),
+.inventory-table td:nth-child(6) {
+  min-width: 120px; /* Acciones */
+}
+
+/* Estilos para badges más compactos */
+.compact-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 9999px;
+  min-width: 70px;
+  text-align: center;
+}
+
+/* Estilos para iconos de acciones */
+.action-button {
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-button:hover {
+  transform: translateY(-1px);
+}
+
+/* Mejorar visibilidad del scroll horizontal */
+.overflow-x-auto {
+  position: relative;
+}
+
+.overflow-x-auto::-webkit-scrollbar {
+  height: 10px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 10px;
+  margin: 0 4px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 10px;
+  border: 2px solid #f3f4f6;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Indicador de scroll disponible - sutil */
+.scroll-hint {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 60px;
+  background: linear-gradient(to left, rgba(255, 255, 255, 0.95), transparent);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 0.5rem;
+  z-index: 5;
+  transition: opacity 0.3s;
+}
+
+.scroll-hint::after {
+  content: '→';
+  color: #3b82f6;
+  font-size: 1.5rem;
+  font-weight: bold;
+  animation: slideHint 1.5s infinite;
+}
+
+@keyframes slideHint {
+  0%, 100% {
+    transform: translateX(0);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translateX(5px);
+    opacity: 1;
+  }
+}
+
+/* Ocultar hint cuando se hace scroll */
+.scrolled .scroll-hint {
+  opacity: 0;
+}
+
+/* Ocultar indicador cuando la tabla es visible completa */
+@media (min-width: 1600px) {
+  .scroll-hint {
+    display: none;
+  }
+}
+
+/* Estilos para truncar texto con tooltip */
+.truncate-with-tooltip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Responsive: en pantallas pequeñas permitir scroll */
+@media (max-width: 1536px) {
+  .inventory-table {
+    min-width: 1200px;
+  }
+}
+
+@media (max-width: 1280px) {
+  .inventory-table {
+    min-width: 1100px;
+  }
+}
+
+/* Sombra sutil al hacer scroll */
+.shadow-scroll {
+  position: relative;
+}
+
+.shadow-scroll::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 30px;
+  pointer-events: none;
+  background: linear-gradient(to left, rgba(255,255,255,0.9), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.shadow-scroll.scrolled::after {
+  opacity: 1;
+}

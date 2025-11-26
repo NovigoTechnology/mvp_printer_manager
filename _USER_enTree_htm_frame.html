@@ -1,0 +1,350 @@
+<html><head><title>Setting 1</title><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Cache-Control" content="no-cache"><meta http-equiv="Expires" content="Thu, 01 Dec 1994 16:00:00 GMT"><meta http-equiv="content-type" content="text/html; charset=UTF-8"><STYLE type="text/css"><!--A.a1 {  display: block;width: 60px;color: #000000;background-color: #cccccc;border: outset 2px #cccccc;margin: 0px;padding: 3px 1px 1px 0px;font-size: 12px;line-height: 12px;text-align: center;text-decoration: none;}A.a1:hover {  color: #000000;background-color: #cccccc;border: inset 2px #cccccc;margin: 0px;padding: 4px 0px 0px 1px;}A.a1:active { color: #000000; }A.a1:visited { color: #000000; }A.a2:hover {  color: #000000;  position : relative;  top: 1px;left: 1px;}--></STYLE><script type="text/javascript">
+<!--
+
+function frmove() {
+	parent.right.rows="220,*";
+}
+function jump(){ 
+	parent.result.location.href = "oceanbl.htm"; 
+} 
+function dispblank(){ 
+	parent.result.location.href = "oceanbl.htm"; 
+}
+function fr2blank(){ 
+	parent.result.location.href = "oceanbl.htm";
+	parent.execute.location.href = "oceanbl.htm";
+} 
+function Fn_OnClose(){
+	alert('aaa');
+    blowserkind = navigator.userAgent;
+    if(blowserkind.indexOf('MSIE') >= 0){
+	alert('bbb');
+	top.opener = '';
+    }else if(blowserkind.indexOf('Mozilla/4') >= 0){
+	top.name = 'CLOSE_WINDOW';
+    	wid = window.open('','CLOSE_WINDOW');
+    }
+	alert('ccc');
+    top.close();
+}
+function sepDefault(){
+	parent.right.rows="*,140";
+}
+function sepChange(height){
+	parent.right.rows=height + ",*";
+}
+/*function opnEnd(){ */
+/*	parent.bPopBLK = true;*/
+/*	parent.location.href = "/USER/command=ModeRequest&arg1=1";*/
+/*} */
+/* V2.4対応 Add YSK yano 071003 Start*/
+/* 右・真ん中クリック抑制*/
+function ieNonMen(){           /* cancel event*/
+  event.cancelBubble = true;
+  event.returnValue = false;
+  return false;
+}
+//function clkCtrlIE(){
+//   if(event.button == 2){     /*   Right*/
+//      ieNonMen();
+      /*alert("This operation is impossible.");*/
+//   }
+//   if(event.button == 4){     /*   Center*/
+//      ieNonMen();
+//      /*alert("This operation is impossible.");*/
+//   }
+//}
+//
+//if(document.all){      /* iExploror,FSIE*/
+//   document.onmousedown = clkCtrlIE ;
+//}
+/* ポップアップブロック解除*/
+function opnEnd(){
+  parent.bPopBLK = true;
+/*	parent.location.href = "/USER/command=ModeRequest&arg1=1";*/
+	parent.location.href = "/USER/enEndUtl.htm";
+}
+/* V2.4対応 Add YSK yano 071003 End*/
+
+// -->
+</script>
+
+</HEAD>
+<A NAME="top"> </A>
+<BODY BGCOLOR="#FFFFFF" TEXT="#606060" LINK="#E09770" VLINK="#5F9F9F" ALINK="#FF0000" oncontextmenu="return false">
+<CENTER>
+<BR>
+<TABLE WIDTH="100%%" CELLSPACING="0" CELLPADDING="1">
+<TD><FONT SIZE="6" FACE="Times,Times New Roman"><B>DRYPIX SMART maintenance tree</B></FONT></TD>
+
+
+</B></FONT>　</TD></TR></TABLE><SPACER TYPE="vertical" SIZE="5">
+
+<!------------------------------------------------------------------->
+<HR SIZE="5" WIDTH="98%%">
+<TABLE BORDER="0" CELLSPACING="0" CELLPADDING="1" BGCOLOR="#EFEAEA" WIDTH="100%%">
+<TR><TD COLSPAN="3"><TABLE BORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD></TD></TR></TABLE></TD></TR>
+<TR><TD>　</TD><TD BGCOLOR="#FFFFFF" WIDTH="96%%" ALIGN="center"><TABLE BORDER="0" CELLSPACING="0" CELLPADDING="0">
+<TR><TD><A NAME="tips">－ <FONT FACE="Times,Times New Roman">Tips</FONT> －</A></TD></TR></TABLE></TD><TD>　</TD></TR>
+<TR><TD COLSPAN="3"><TABLE BORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD></TD></TR></TABLE></TD></TR>
+</TABLE><P>
+<!------------------------------------------------------------------->
+
+<TABLE WIDTH="95%%">
+	<TR>
+		<TD>
+			Please select the command from a left tree chart. <BR>
+			A concrete content is displayed on the upper right of the screen and execute it, please. <BR>
+			The result is displayed in the lower right of the screen. <BR>
+		</TD>
+	</TR>
+</TABLE>
+
+<!------------------------------------------------------------------->
+<TABLE WIDTH="95%%">
+	<TR>
+		<TD>
+			<!-- MS130-127 Edge対応 V10.9 2022/03/16 ADSOL R.Motohashi -->
+			Please click [Logout] button when you stop the access from service PC.
+					<BR>
+					<A class="a1" href="javascript:opnEnd();">Logout</A>
+		</TD>
+	</TR>
+</TABLE>
+<!------------------------------------------------------------------->
+<HR SIZE="5" WIDTH="98%%">
+<TABLE BORDER="0" CELLSPACING="0" CELLPADDING="1" BGCOLOR="#EFEAEA" WIDTH="100%%">
+<TR><TD COLSPAN="3"><TABLE BORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD></TD></TR></TABLE></TD></TR>
+<TR><TD>　</TD><TD BGCOLOR="#FFFFFF" WIDTH="96%%" ALIGN="center"><TABLE BORDER="0" CELLSPACING="0" CELLPADDING="0">
+<TR><TD><A NAME="tree">－ <FONT FACE="Times,Times New Roman">Maintenance tree</FONT> －</A></TD></TR></TABLE></TD><TD>　</TD></TR>
+<TR><TD COLSPAN="3"><TABLE BORDER="0" CELLSPACING="0" CELLPADDING="0"><TR><TD></TD></TR></TABLE></TD></TR>
+</TABLE><P>
+<!------------------------------------------------------------------->
+
+<TABLE BORDER="0" CELLSPACING="0" CELLPADDING="0" WIDTH="95%%">
+
+
+<SCRIPT language="JavaScript"> 
+<!-- 
+function ok(id){if(document.all(id).style.display == "none")
+{document.all(id).style.display="block";}else{document.all(id).style.display="none";}} 
+--> 
+</SCRIPT>
+<STYLE TYPE="text/css">
+<!--
+A{text-decoration:none}
+-->
+</STYLE> 
+
+<FONT SIZE=2pt FACE="Times,Times New Roman,Osaka,ＭＳ Ｐ ゴシック">
+<!-- MS130-127 Edge対応 V10.9 2022/03/16 ADSOL R.Motohashi -->
+<DIV align=left> 
+<B><A HREF="JavaScript:ok('tree1');" onclick="sepDefault();fr2blank()">*DRYPIX SMART</A></B><BR> 
+<DIV ID="tree1" style="display:;" align=left> 
+　┣ <A HREF="JavaScript:ok('tree2');" onclick="sepDefault();fr2blank()">+System information and setup</A><BR> 
+<DIV ID="tree2" style="display:;">
+　┃　┣ <A HREF="/SETTING/?settingMode=4" onclick="sepDefault();fr2blank()" target="execute">Setting1</A><BR>
+　┃　┃　┣ Check Version<BR>
+　┃　┃　┣ Input Serial No.<BR>
+　┃　┃　┣ Set DICOM<BR>
+　┃　┃　┣ Set Network<BR>
+　┃　┃　┣ Display Mac address<BR>
+　┃　┃　┣ Registration service pc<BR>
+　┃　┃　┣ Set DJMode<BR>
+　┃　┃　┗ Dealer No.<BR>
+　┃　┣ <A HREF="/SETTING/?settingMode=5" onclick="sepDefault();fr2blank()" target="execute">Setting2</A><BR>
+　┃　┃　┣ Select 10x14/11x14<BR>  <!--[5500 V1.5] 大四つ対応(11x14) 20131029 YSK kotani-->
+　┃　┃　┣ Set Rem.Films<BR>
+　┃　┃　┣ Set Tray<BR>
+　┃　┃　┣ Enable Film Size<BR>
+　┃　┃　┣ Enable QC<BR>
+　┃　┃　┣ Set Target Den.<BR>
+　┃　┃　┣ Printing Dmax<BR>
+　┃　┃　┣ Real Dmax on film<BR>
+　┃　┃　┣ Adjust Dmax<BR>
+　┃　┃　┣ Enable ManmoQC<BR>
+<!--
+　┃　┃　┣ User SMPTE<BR>
+-->
+　┃　┃　┣ Check Counters<BR>
+　┃　┃　┣ Clear Counters<BR>
+　┃　┃　┣ Automated F.D.C.<BR>
+　┃　┃　┣ Set Film infomation<BR>
+　┃　┃　┗ Display indv. data<BR>
+　┃　┣ <A HREF="/SETTING/?settingMode=6" onclick="sepDefault();fr2blank()" target="execute">Setting3</A><BR>
+　┃　┃　┣ Set SMPTE<BR>
+　┃　┃　┣ Set Date<BR>
+　┃　┃　┣ Ele Save Mode<BR> 
+　┃　┃　┣ Set Alarm<BR>
+<!--
+　┃　┃　┗ Reboot<BR>
+-->
+<!-- 2017/10/20 FFS Kitahara PLUS2 MS142-137 Start 5500 V10.5 MS130-70 -->
+<!--
+//　┃　┃　┣ Reboot<BR>
+-->
+　┃　┃　┣ Shutdown<BR>
+<!-- 2017/10/25 FFS Kitahara PLUS2 MS142-137 End -->
+<!--
+　┃　┃　┣ Set Power supply synchronization<BR>
+-->
+　┃　┃　┣ Film Characteristic ID<BR>
+　┃　┃　┣ Power Supply Voltage<BR>
+　┃　┃　┣ Recognize position on 8x10(20x25)<BR>
+　┃　┃　┣ Recognize position on 10x12(25x30)<BR>
+　┃　┃　┣ Recognize position on 10x14/11x14(26x36/28x35)<BR>  <!--[5500 V1.5] 11x14 add 20131029 YSK kotani-->
+　┃　┃　┣ Warning at system start<BR>
+　┃　┃　┣ U-UTL U-0<BR>  <!-- 5500 V2.4  両トレイ同サイズ時の操作対応-->
+　┃　┃　┗ Notification of the count 0 <BR>  <!-- 5500 V2.4  両トレイ同サイズ時の操作対応-->
+　┃　┣ <A HREF="JavaScript:ok('tree31');" onclick="sepDefault();fr2blank()">+Initialize</A><BR>
+<DIV ID="tree31" style="display:none;">
+　┃　┃　┣ <A HREF="enSave.htm" onclick="dispblank()" target="execute">Save Data</A><BR>
+　┃　┃　┣ <A HREF="enManIni.htm" onclick="dispblank()" target="execute">Initialize</A><BR>
+　┃　┃　┗ <A HREF="enSevIni.htm" onclick="dispblank()" target="execute">Recover</A><BR>
+</DIV> 
+　┃　┗ <A HREF="JavaScript:ok('tree22');" onclick="sepDefault();fr2blank()">+Log data</A><BR>
+<DIV ID="tree22" style="display:none;">
+　┃　　　 ┣ <A HREF="/VLOG1/?vlogMode=0" onclick="frmove();dispblank()" target="execute">Display Error Log</A><BR>
+　┃　　　 ┣ <A HREF="enClrErr.htm" onclick="sepDefault();dispblank()" target="execute">Clear Error Log</A><BR>
+　┃　　　 ┣ <A HREF="/VLOG1/?vlogMode=1" onclick="frmove();dispblank()" target="execute">Display DICOM Log</A><BR>
+<!---
+　┃　　　 ┗ <A HREF="enLogMD.htm" onclick="frmove();dispblank()" target="execute">Logging Mode</A><BR>
+--->
+　┃　　　 ┗ <A HREF="/LOGMD/?LoggingMode=1" onclick="frmove();dispblank()" target="execute">Logging Mode</A><BR>
+</DIV> 
+</DIV> 
+　┣ <A HREF="enIndTrn.htm" onclick="sepDefault();dispblank()" target="execute">+Transfer Indv. Data</A><BR> 
+
+　┣ <A HREF="JavaScript:ok('tree3');" onclick="sepDefault();fr2blank()">+Client Configuration</A><BR> 
+<DIV ID="tree3" style="display:;">
+　┃　┣ <A HREF="/EDITAE/?editMode=2" onclick="dispblank()" target="execute">Add Client</A><BR>
+　┃　┣ <A HREF="/EDITAE/?editMode=0" onclick="dispblank()" target="execute">Delete Client</A><BR>
+　┃　┣ <A HREF="/EDITAE/?editMode=1" onclick="dispblank()" target="execute">Change Client Name</A><BR>
+　┃　┣ <A HREF="enCltIfo.htm" onclick="dispblank()" target="execute">Read CLTInfo</A><BR>
+　┃　┣ <A HREF="JavaScript:ok('tree30');" onclick="sepDefault();fr2blank()">+Clients</A><BR>
+<DIV ID="tree30" style="display:;">
+　┃　┃　┣ <A HREF="/CLCFG/?AE=default" onclick="dispblank()" target="execute">default</A><BR>
+　┃　┃　┣ <A HREF="/CLCFG/?AE=FCR-CSL" onclick="dispblank()" target="execute">FCR-CSL</A><BR>
+　┃　┃　┣ <A HREF="/CLCFG/?AE=WatchDRYPIXLink" onclick="dispblank()" target="execute">WatchDRYPIXLink</A><BR>
+　┃　┃　┣ <A HREF="/CLCFG/?AE=QC-TEST" onclick="dispblank()" target="execute">QC-TEST</A><BR>
+　┃　┃　┣ <A HREF="/CLCFG/?AE=MammoQCTest" onclick="dispblank()" target="execute">MammoQCTest</A><BR>
+　┃　┃　┣ <A HREF="/CLCFG/?AE=AEP04" onclick="dispblank()" target="execute">AEP04</A><BR>
+　┃　┃　┣ <A HREF="/CLCFG/?AE=AEP03" onclick="dispblank()" target="execute">AEP03</A><BR>
+　┃　┃　┣ <A HREF="/CLCFG/?AE=AEP08" onclick="dispblank()" target="execute">AEP08</A><BR>
+　┃　┃　┣ <A HREF="/CLCFG/?AE=AEP09" onclick="dispblank()" target="execute">AEP09</A><BR>
+　┃　┃　┗ <A HREF="/CLCFG/?AE=AEP10" onclick="dispblank()" target="execute">AEP10</A><BR>
+
+</DIV>
+　┃　┣ <A HREF="/MCOM1/?procMode=0" onclick="sepChange('412');dispblank()" target="execute">Common</A><BR>
+　┃　┗ <A HREF="ensar.htm" onclick="sepDefault();dispblank()" target="execute">Sarmaker</A><BR>
+</DIV> 
+　┣ <A HREF="JavaScript:ok('tree4');" onclick="sepDefault();fr2blank()">+File Transfer</A><BR>
+<DIV ID="tree4" style="display:;">
+　┃　┣ <A HREF="enOthTrn.htm" onclick="sepDefault();dispblank()" target="execute">Single file </A><BR>
+　┃　┣ <A HREF="enTrnAna.htm" onclick="sepDefault();dispblank()" target="execute">Analysis Data</A><BR>
+　┃　┣ <A HREF="enTrnG2.htm" onclick="sepDefault();dispblank()" target="execute">G-curve Data</A><BR>
+<!--
+　┃　┣ <A HREF="enTrnScn.htm" onclick="sepDefault();dispblank()" target="execute">Scanner Data</A><BR>
+-->
+　┃　┗ <A HREF="enTrnOp.htm" onclick="sepDefault();dispblank()" target="execute">Operation Data</A><BR>
+</DIV> 
+　┣ <A HREF="JavaScript:ok('tree5');" onclick="sepDefault();fr2blank()">+Upgrading</A><BR>  
+<DIV ID="tree5" style="display:;">
+　┃　┣ <A HREF="enFulIst.htm" onclick="sepDefault();dispblank()" target="execute">Full Install</A><BR>
+<!-- 2017/11/09 FFS Kitahara PLUS2 MS142-161 Start -->
+<!--
+//　┃　┣ <A HREF="enVerUP.htm" onclick="sepDefault();dispblank()" target="execute">Upgrading</A><BR>
+//　┃　┗ <A HREF="enFpgaUP.htm" onclick="sepDefault();dispblank()" target="execute">FPGA Version UP</A><BR>
+-->
+　┃　┗ <A HREF="enVerUP.htm" onclick="sepDefault();dispblank()" target="execute">Upgrading</A><BR>
+<!-- 2017/11/09 FFS Kitahara PLUS2 MS142-161 End -->
+</DIV> 
+　┣ <A HREF="JavaScript:ok('tree6');" onclick="sepDefault();fr2blank()">+Output Film</A><BR> 
+<DIV ID="tree6" style="display:;">
+　┃　┣ <A HREF="en24pt.htm"  onclick="sepDefault();dispblank()" target="execute">24-Steps</A><BR>
+　┃　┣ <A HREF="en17pt.htm"  onclick="sepDefault();dispblank()" target="execute">17-Steps</A><BR>
+　┃　┣ <A HREF="enClean.htm" onclick="sepDefault();dispblank()" target="execute">Cleaning Film</A><BR>
+　┃　┣ <A HREF="enFlat.htm"  onclick="sepDefault();dispblank()" target="execute">Flat pattern</A><BR>
+　┃　┣ <A HREF="enGFlat.htm" onclick="sepDefault();dispblank()" target="execute">Grid</A><BR>
+　┃　┣ <A HREF="enUniPtn.htm" onclick="sepDefault();dispblank()" target="execute">Uniformity</A><BR>
+　┃　┣ <A HREF="enLowDen.htm" onclick="sepDefault();dispblank()" target="execute">Low Density Check Pattern</A><BR>
+　┃　┣ <A HREF="enShaPtn.htm" onclick="sepDefault();dispblank()" target="execute">Sharpness Pattern</A><BR>
+　┃　┣ <A HREF="enShaPt2.htm" onclick="sepDefault();dispblank()" target="execute">Sharpness Pattern [x2]</A><BR>
+　┃　┣ <A HREF="enScnPtn.htm" onclick="sepDefault();dispblank()" target="execute">Scanner Diag. Pattern</A><BR>
+　┃　┣ <A HREF="enSpReso.htm" onclick="sepDefault();dispblank()" target="execute">Special Resolution</A><BR>
+　┃　┗ <A HREF="/VARIABLE/?function=1" onclick="sepDefault();dispblank()" target="execute">SMPTE</A><BR>
+</DIV> 
+
+　┣ <A HREF="JavaScript:ok('tree7');" onclick="sepDefault();fr2blank()">+F.D.C.</A><BR> 
+<DIV ID="tree7" style="display:;">
+<!--
+　┃　┣ <A HREF="enAuFDC.htm" onclick="sepDefault();dispblank()" target="execute">Auto F.D.C.</A><BR>
+-->
+　┃　┣ <A HREF="/VARIABLE/?function=3" onclick="sepDefault();dispblank()" target="execute">Auto F.D.C.</A><BR>
+　┃　┣ <A HREF="enChkDen.htm" onclick="sepDefault();jump()" target="execute">Check Density</A><BR>
+　┃　┣ <A HREF="en24MS.htm" onclick="sepDefault();dispblank()" target="execute">24-Steps</A><BR>
+　┃　┣ <A HREF="en24Den.htm" onclick="sepDefault();jump()" target="execute">Display 24-Steps</A><BR>
+　┃　┣ <A HREF="enMnuFDC.htm" onclick="sepDefault();jump()" target="execute">Manual F.D.C.</A><BR>
+　┃　┣ <A HREF="enCalib.htm" onclick="sepDefault();jump()" target="execute">Set Collect.T.</A><BR>
+　┃　┣ <A HREF="enInCb.htm" onclick="sepDefault();dispblank()" target="execute">Clear Collect.T.</A><BR>
+　┃　┣ <A HREF="JavaScript:ok('tree23');" onclick="sepDefault();fr2blank()">+Uniformity</A><BR> 
+<DIV ID="tree23" style="display:;">
+　┃　┃　┣ <A HREF="enUniClr.htm" onclick="sepDefault();dispblank()" target="execute">Clear</A><BR>
+　┃　┃　┗ <A HREF="enUniIpt.htm" onclick="sepDefault();dispblank()" target="execute">Manual Input</A><BR>
+</DIV> 
+　┃　┣ <A HREF="enDens.htm" onclick="sepDefault();dispblank()" target="execute">Check Internal densitometer</A><BR>
+　┃　┗ <A HREF="enDenMon.htm" onclick="sepDefault();dispblank()" target="execute">DM Sensor Monitor</A><BR>
+</DIV> 
+　┣ <A HREF="JavaScript:ok('tree24');" onclick="sepDefault();fr2blank()">+Check Scanner</A><BR> 
+<DIV ID="tree24" style="display:;">
+<!-- 
+　┃　┣ <A HREF="enSideM.htm" onclick="sepDefault();dispblank()" target="execute">Adjusting Main Scan (Position)</A><BR>
+　┃　┣ <A HREF="enScaWid.htm" onclick="sepDefault();dispblank()" target="execute">Adjusting Main Scan (Length)</A><BR>
+-->
+　┃　┣ <A HREF="enScaWid.htm" onclick="sepDefault();dispblank()" target="execute">Adjusting Main Scanner</A><BR>
+<!-- 
+　┃　┣ <A HREF="enFlmCha.htm" onclick="sepDefault();dispblank()" target="execute">Film Characteristic ID</A><BR>
+-->
+　┃　┣ <A HREF="enEdgMon.htm" onclick="sepDefault();dispblank()" target="execute">Edge Sensor Monitor</A><BR>
+　┃　┣ <A HREF="enScnClr.htm" onclick="sepDefault();dispblank()" target="execute">Reset Scanner Data</A><BR>
+　┃　┣ <A HREF="enPolygo.htm" onclick="sepDefault();dispblank()" target="execute">Polygonal Motor</A><BR>
+　┃　┣ <A HREF="enLDCtrl.htm" onclick="sepDefault();dispblank()" target="execute">LD</A><BR>
+　┃　┣ <A HREF="enIniTst.htm" onclick="sepDefault();dispblank()" target="execute">Initial Check</A><BR>
+<!-- MS130-127 Edge対応 V10.9 2022/03/16 ADSOL R.Motohashi -->
+　┃　┗ <A HREF="enPrnTst.htm" onclick="sepDefault();dispblank()" target="execute">Prn Board Test</A><BR>
+</DIV> 
+　┣ <A HREF="JavaScript:ok('tree8');" onclick="sepDefault();fr2blank()">+Heat- Developer</A><BR> 
+<DIV ID="tree8" style="display:;">
+　┃　┣ <A HREF="enTmpDis.htm" onclick="sepDefault();dispblank()" target="execute">Temperature</A><BR>
+　┃　┣ <A HREF="enHeat.htm"onclick="sepDefault();dispblank()" target="execute">Heating</A><BR>
+　┃　┣ <A HREF="enFanmv.htm"onclick="sepDefault();dispblank()" target="execute">Fan Operation</A><BR>
+　┃　┣ <A HREF="enTmpCon.htm"onclick="sepDefault();dispblank()" target="execute">Temp. Control</A><BR>
+<!-- 
+　┃　┣ <A HREF="enSetHat.htm"onclick="sepDefault();dispblank()" target="execute">Set Heater Cond. Temp.</A><BR>
+　┃　┗ <A HREF="enSetVol.htm"onclick="sepDefault();dispblank()" target="execute">Power Supply Voltage</A><BR>
+-->
+　┃　┣ <A HREF="enSetHat.htm"onclick="sepDefault();dispblank()" target="execute">Set Heater Temp. (on each unit)</A><BR>
+　┃　┗ <A HREF="/VARIABLE/?function=2"onclick="sepDefault();dispblank()" target="execute">Set Heater Temp. (on both HG1/HG2)</A><BR>
+</DIV> 
+　┗ <A HREF="JavaScript:ok('tree10');" onclick="sepDefault();fr2blank()">+Check Mechanism</A><BR> 
+<DIV ID="tree10" style="display:;">
+　　 　┣ <A HREF="enUnitmv.htm" onclick="sepDefault();dispblank()" target="execute">Film Removing</A><BR>
+　　 　┣ <A HREF="enMotoOp.htm" onclick="sepDefault();dispblank()" target="execute">Motor Ope.</A><BR>
+　　 　┣ <A HREF="enSubScan.htm" onclick="sepDefault();dispblank()" target="execute">Adjusting Sub Scanner</A><BR>
+　　 　┣ <A HREF="enGrip.htm" onclick="sepDefault();dispblank()" target="execute">Grip</A><BR>
+　　 　┣ <A HREF="enOthAct.htm" onclick="sepDefault();dispblank()" target="execute">Other Actuators</A><BR>
+　　 　┣ <A HREF="enSenMon.htm" onclick="sepDefault();dispblank()" target="execute">Sensor Monitor</A><BR>
+　　 　┣ <A HREF="enConvey.htm" onclick="sepDefault();dispblank()" target="execute">Convey</A><BR>
+　　 　┣ <A HREF="enBarcde.htm" onclick="sepDefault();dispblank()" target="execute">Barcode Reader</A><BR>
+　　 　┗ <A HREF="enIntChk.htm" onclick="sepDefault();dispblank()" target="execute">Inter Lock Check</A><BR>
+</DIV> 
+</DIV>
+<!-- MS130-127 Edge対応 V10.9 2022/03/16 ADSOL R.Motohashi -->
+</DIV>
+</FONT>
+</TABLE>
+
+<HR SIZE="5" WIDTH="98%%">
+
+</CENTER>
+</body></html>

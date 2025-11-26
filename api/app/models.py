@@ -86,6 +86,7 @@ class Incident(Base):
     description = Column(Text)
     status = Column(String, default="open")  # open, in_progress, resolved
     priority = Column(String, default="medium")  # low, medium, high, critical
+    incident_type = Column(String, default="general")  # general, solicitud_insumos, solicitud_servicio
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     resolved_at = Column(DateTime(timezone=True))
@@ -287,6 +288,7 @@ class TonerRequest(Base):
     request_date = Column(DateTime(timezone=True), server_default=func.now())
     status = Column(String, default="pending")  # pending, approved, ordered, delivered, cancelled
     priority = Column(String, default="normal")  # low, normal, high, urgent
+    supply_type = Column(String, default="insumos")  # insumos, servicio
     
     # Tóners solicitados
     toner_black_requested = Column(Boolean, default=False)
@@ -827,3 +829,79 @@ class PrinterIPHistory(Base):
     
     # Relationships
     printer = relationship("Printer", back_populates="ip_history")
+
+class MedicalPrinterCounter(Base):
+    """
+    Historial de contadores de impresoras médicas (DRYPIX)
+    Almacena snapshots diarios de los contadores de bandejas
+    """
+    __tablename__ = "medical_printer_counters"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    printer_id = Column(Integer, ForeignKey("printers.id", ondelete="CASCADE"), nullable=False, index=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    
+    # Datos resumidos para consultas rápidas
+    total_printed = Column(Integer, default=0)           # Total de copias impresas
+    total_available = Column(Integer, default=0)         # Total de copias disponibles
+    total_trays_loaded = Column(Integer, default=0)      # Número de bandejas cargadas
+    is_online = Column(Boolean, default=True)            # Estado de la impresora
+    
+    # Datos completos en formato JSON (incluye detalle por bandeja)
+    raw_data = Column(Text)  # JSON con estructura completa: {trays: {...}, summary: {...}}
+    
+    # Metadatos
+    collection_method = Column(String(20), default='automatic')  # automatic, manual, api
+    notes = Column(Text)
+    
+    # Relationships
+    printer = relationship("Printer")
+    
+    # Índice compuesto para consultas eficientes por impresora y fecha
+    __table_args__ = (
+        # Permite múltiples registros por día para tracking detallado
+    )
+
+class MedicalPrinterRefill(Base):
+    """
+    Registro de recargas de cartuchos en impresoras médicas
+    Cada cartucho contiene 100 placas para impresión
+    """
+    __tablename__ = "medical_printer_refills"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    printer_id = Column(Integer, ForeignKey("printers.id", ondelete="CASCADE"), nullable=False, index=True)
+    refill_date = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    
+    # Información del cartucho
+    tray_name = Column(String(50), nullable=False)       # Nombre de la bandeja (TRAY A, TRAY B, etc)
+    cartridge_quantity = Column(Integer, default=1)       # Cantidad de cartuchos cargados
+    plates_per_cartridge = Column(Integer, default=100)   # Placas por cartucho (default 100)
+    total_plates_added = Column(Integer, nullable=False)  # Total de placas agregadas
+    
+    # Contadores antes de la recarga
+    counter_before_refill = Column(Integer, default=0)    # Contador de impresos antes de recargar
+    available_before_refill = Column(Integer, default=0)  # Disponibles antes de recargar
+    
+    # Contadores después de la recarga
+    counter_after_refill = Column(Integer)                # Contador después (puede llenarse después)
+    available_after_refill = Column(Integer)              # Disponibles después
+    
+    # Información del pedido/incidente relacionado
+    incident_id = Column(Integer, ForeignKey("incidents.id"), nullable=True)
+    toner_request_id = Column(Integer, ForeignKey("toner_requests.id"), nullable=True)
+    
+    # Información adicional
+    batch_number = Column(String(100))                    # Número de lote del cartucho
+    expiry_date = Column(DateTime(timezone=True))         # Fecha de vencimiento
+    supplier = Column(String(200))                        # Proveedor del insumo
+    cost = Column(Float, default=0.0)                     # Costo del cartucho
+    
+    # Usuario y notas
+    loaded_by = Column(String(100))                       # Usuario que cargó el cartucho
+    notes = Column(Text)                                  # Notas adicionales
+    
+    # Relationships
+    printer = relationship("Printer")
+    incident = relationship("Incident")
+    toner_request = relationship("TonerRequest")

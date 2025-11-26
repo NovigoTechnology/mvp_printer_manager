@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 import json
 
 from ..db import SessionLocal
-from ..models import Printer, UsageReport, CounterSchedule
+from ..models import Printer, UsageReport, CounterSchedule, MedicalPrinterCounter
 from ..services.snmp import SNMPService
+from ..services.medical_printer_service import DrypixScraper
 from ..services.exchange_rate_service import update_exchange_rates_task
 
 def poll_all_printers():
@@ -80,6 +81,77 @@ def cleanup_old_reports():
     finally:
         db.close()
 
+def poll_medical_printers():
+    """Poll all medical printers (DRYPIX) and save counter snapshots"""
+    db = SessionLocal()
+    try:
+        # Get all active DRYPIX printers
+        medical_printers = db.query(Printer).filter(
+            Printer.status == "active",
+            Printer.model.ilike("%DRYPIX%")
+        ).all()
+        
+        if not medical_printers:
+            print("No active medical printers found")
+            return
+        
+        print(f"Polling {len(medical_printers)} medical printers...")
+        success_count = 0
+        error_count = 0
+        
+        for printer in medical_printers:
+            try:
+                # Check if we already have a record for today
+                today = datetime.utcnow().date()
+                existing_record = db.query(MedicalPrinterCounter).filter(
+                    MedicalPrinterCounter.printer_id == printer.id,
+                    MedicalPrinterCounter.timestamp >= datetime.combine(today, datetime.min.time()),
+                    MedicalPrinterCounter.timestamp < datetime.combine(today + timedelta(days=1), datetime.min.time())
+                ).first()
+                
+                if existing_record:
+                    print(f"Counter snapshot for medical printer {printer.id} ({printer.ip}) already exists for today")
+                    continue
+                
+                # Poll the medical printer
+                print(f"Polling medical printer {printer.id} ({printer.ip})")
+                scraper = DrypixScraper(printer.ip, 20051)
+                result = scraper.get_counters()
+                
+                if result:
+                    # Save counter snapshot
+                    counter_record = MedicalPrinterCounter(
+                        printer_id=printer.id,
+                        timestamp=datetime.utcnow(),
+                        total_printed=result['summary']['total_printed'],
+                        total_available=result['summary']['total_available'],
+                        total_trays_loaded=result['summary']['total_trays_loaded'],
+                        is_online=result['is_online'],
+                        raw_data=json.dumps(result),
+                        collection_method='automatic'
+                    )
+                    
+                    db.add(counter_record)
+                    db.commit()
+                    success_count += 1
+                    print(f"Successfully saved counter snapshot for medical printer {printer.id}")
+                else:
+                    error_count += 1
+                    print(f"Failed to get counters from medical printer {printer.id}")
+                
+            except Exception as e:
+                error_count += 1
+                print(f"Error polling medical printer {printer.id} ({printer.ip}): {str(e)}")
+                db.rollback()
+                continue
+        
+        print(f"Medical printer polling completed: {success_count} successful, {error_count} errors")
+                
+    except Exception as e:
+        print(f"Error in poll_medical_printers: {str(e)}")
+    finally:
+        db.close()
+
 def start_scheduler(scheduler: AsyncIOScheduler):
     """Configure and start the scheduled tasks"""
     
@@ -125,11 +197,23 @@ def start_scheduler(scheduler: AsyncIOScheduler):
         replace_existing=True
     )
     
+    # Poll medical printers daily at 7 AM
+    scheduler.add_job(
+        poll_medical_printers,
+        'cron',
+        hour=7,
+        minute=0,
+        id='poll_medical_printers',
+        name='Poll medical printers (DRYPIX) for daily counters',
+        replace_existing=True
+    )
+    
     print("Scheduled tasks configured:")
     print("- Poll printers: every 30 minutes")
     print("- Cleanup old reports: daily at 2:00 AM")
     print("- Check scheduled counters: every 5 minutes")
     print("- Update exchange rates: daily at 9:00 AM")
+    print("- Poll medical printers: daily at 7:00 AM")
 
 def check_scheduled_counters():
     """Check for scheduled counter jobs that need to be executed"""

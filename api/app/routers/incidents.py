@@ -14,12 +14,14 @@ class IncidentCreate(BaseModel):
     title: str
     description: Optional[str] = None
     priority: str = "medium"
+    incident_type: str = "general"  # general, solicitud_insumos, solicitud_servicio
 
 class IncidentUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     status: Optional[str] = None
     priority: Optional[str] = None
+    incident_type: Optional[str] = None
 
 class IncidentResponse(BaseModel):
     id: int
@@ -28,6 +30,7 @@ class IncidentResponse(BaseModel):
     description: Optional[str]
     status: str
     priority: str
+    incident_type: str
     created_at: datetime
     updated_at: Optional[datetime]
     resolved_at: Optional[datetime]
@@ -62,6 +65,7 @@ def list_incidents(
             "description": incident.description,
             "status": incident.status,
             "priority": incident.priority,
+            "incident_type": incident.incident_type if hasattr(incident, 'incident_type') else "general",
             "created_at": incident.created_at,
             "updated_at": incident.updated_at,
             "resolved_at": incident.resolved_at,

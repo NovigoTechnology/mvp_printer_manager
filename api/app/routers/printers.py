@@ -10,6 +10,7 @@ import socket
 from ..db import get_db
 from ..models import Printer, UsageReport, PrinterSupply, StockItem, LeaseContract, ContractPrinter
 from ..services.snmp import SNMPService
+from ..services.medical_printer_service import MedicalPrinterService, is_medical_printer
 
 router = APIRouter()
 
@@ -388,40 +389,83 @@ def delete_printer(printer_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{printer_id}/poll")
 def poll_printer(printer_id: int, db: Session = Depends(get_db)):
-    """Force SNMP poll for a specific printer"""
+    """Force SNMP poll for a specific printer (or web scraping for medical printers)"""
     printer = db.query(Printer).filter(Printer.id == printer_id).first()
     if not printer:
         raise HTTPException(status_code=404, detail="Printer not found")
     
     try:
-        snmp_service = SNMPService()
-        data = snmp_service.poll_printer(printer.ip, printer.snmp_profile)
-        
-        # Create usage report
-        usage_report = UsageReport(
-            printer_id=printer.id,
-            date=datetime.utcnow(),
-            pages_printed_mono=data.get('pages_printed_mono', 0),
-            pages_printed_color=data.get('pages_printed_color', 0),
-            toner_level_black=data.get('toner_level_black'),
-            toner_level_cyan=data.get('toner_level_cyan'),
-            toner_level_magenta=data.get('toner_level_magenta'),
-            toner_level_yellow=data.get('toner_level_yellow'),
-            paper_level=data.get('paper_level'),
-            status=data.get('status', 'unknown')
-        )
-        
-        db.add(usage_report)
-        db.commit()
-        
-        return {"message": "Printer polled successfully", "data": data}
+        # Determinar si es impresora médica o estándar
+        if is_medical_printer(printer):
+            # Usar web scraping para impresoras médicas
+            medical_service = MedicalPrinterService()
+            data = medical_service.poll_printer(printer)
+            
+            if data is None:
+                raise HTTPException(
+                    status_code=500, 
+                    detail="Failed to poll medical printer - check connection and credentials"
+                )
+            
+            # Crear reporte de uso adaptado para impresoras médicas
+            # Las impresoras médicas usan "films" en lugar de "pages"
+            usage_report = UsageReport(
+                printer_id=printer.id,
+                date=datetime.utcnow(),
+                pages_printed_mono=data.get('pages_printed', 0),  # Films = pages para compatibilidad
+                pages_printed_color=0,  # DRYPIX no tiene color
+                toner_level_black=None,  # No aplica para DRYPIX
+                toner_level_cyan=None,
+                toner_level_magenta=None,
+                toner_level_yellow=None,
+                paper_level=data.get('summary', {}).get('total_available', 0),  # Films disponibles
+                status=data.get('status', 'online')
+            )
+            
+            db.add(usage_report)
+            db.commit()
+            
+            return {
+                "message": "Medical printer polled successfully", 
+                "data": data,
+                "printer_type": "medical"
+            }
+        else:
+            # Impresora estándar - usar SNMP
+            snmp_service = SNMPService()
+            data = snmp_service.poll_printer(printer.ip, printer.snmp_profile)
+            
+            # Create usage report
+            usage_report = UsageReport(
+                printer_id=printer.id,
+                date=datetime.utcnow(),
+                pages_printed_mono=data.get('pages_printed_mono', 0),
+                pages_printed_color=data.get('pages_printed_color', 0),
+                toner_level_black=data.get('toner_level_black'),
+                toner_level_cyan=data.get('toner_level_cyan'),
+                toner_level_magenta=data.get('toner_level_magenta'),
+                toner_level_yellow=data.get('toner_level_yellow'),
+                paper_level=data.get('paper_level'),
+                status=data.get('status', 'unknown')
+            )
+            
+            db.add(usage_report)
+            db.commit()
+            
+            return {
+                "message": "Printer polled successfully", 
+                "data": data,
+                "printer_type": "standard"
+            }
     
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to poll printer: {str(e)}")
 
 @router.get("/{printer_id}/status")
 def get_printer_status(printer_id: int, db: Session = Depends(get_db)):
-    """Get latest status of a printer"""
+    """Get latest status of a printer (supports both standard and medical printers)"""
     printer = db.query(Printer).filter(Printer.id == printer_id).first()
     if not printer:
         raise HTTPException(status_code=404, detail="Printer not found")
@@ -433,22 +477,84 @@ def get_printer_status(printer_id: int, db: Session = Depends(get_db)):
     if not latest_report:
         return {"message": "No status data available"}
     
-    return {
+    # Determinar si es impresora médica
+    is_medical = is_medical_printer(printer)
+    
+    response = {
         "printer_id": printer.id,
+        "printer_type": "medical" if is_medical else "standard",
+        "model": printer.model,
         "status": latest_report.status,
         "last_update": latest_report.created_at,
-        "toner_levels": {
-            "black": latest_report.toner_level_black,
-            "cyan": latest_report.toner_level_cyan,
-            "magenta": latest_report.toner_level_magenta,
-            "yellow": latest_report.toner_level_yellow
-        },
-        "paper_level": latest_report.paper_level,
-        "pages_printed": {
-            "mono": latest_report.pages_printed_mono,
-            "color": latest_report.pages_printed_color
-        }
     }
+    
+    if is_medical:
+        # Para impresoras médicas (DRYPIX, etc.)
+        response.update({
+            "films_available": latest_report.paper_level,  # Films disponibles
+            "films_printed": latest_report.pages_printed_mono,  # Films impresos
+            "message": "Medical printer - films data"
+        })
+    else:
+        # Para impresoras estándar
+        response.update({
+            "toner_levels": {
+                "black": latest_report.toner_level_black,
+                "cyan": latest_report.toner_level_cyan,
+                "magenta": latest_report.toner_level_magenta,
+                "yellow": latest_report.toner_level_yellow
+            },
+            "paper_level": latest_report.paper_level,
+            "pages_printed": {
+                "mono": latest_report.pages_printed_mono,
+                "color": latest_report.pages_printed_color
+            }
+        })
+    
+    return response
+
+@router.get("/{printer_id}/medical-details")
+def get_medical_printer_details(printer_id: int, db: Session = Depends(get_db)):
+    """Get detailed information for medical printers (tray details, films, etc.)"""
+    printer = db.query(Printer).filter(Printer.id == printer_id).first()
+    if not printer:
+        raise HTTPException(status_code=404, detail="Printer not found")
+    
+    if not is_medical_printer(printer):
+        raise HTTPException(
+            status_code=400, 
+            detail="This endpoint is only for medical printers. Use /status for standard printers."
+        )
+    
+    try:
+        # Obtener datos en tiempo real
+        medical_service = MedicalPrinterService()
+        data = medical_service.poll_printer(printer)
+        
+        if data is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to retrieve medical printer data"
+            )
+        
+        return {
+            "printer_id": printer.id,
+            "model": printer.model,
+            "ip_address": printer.ip_address,
+            "timestamp": data.get('timestamp'),
+            "tray_capacity": data.get('tray_capacity', 100),
+            "trays": data.get('trays', {}),
+            "summary": data.get('summary', {}),
+            "status": data.get('status', 'unknown')
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving medical printer details: {str(e)}"
+        )
 
 @router.get("/inventory/stats")
 def get_inventory_stats(db: Session = Depends(get_db)):

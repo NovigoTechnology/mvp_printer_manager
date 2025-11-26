@@ -13,6 +13,11 @@ from pydantic import BaseModel
 from ..db import get_db
 from ..models import Printer, MonthlyCounter
 from ..services.snmp import SNMPService
+from ..services.medical_printer_service import (
+    MedicalPrinterService,
+    is_medical_printer,
+    get_medical_printer_type
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -43,21 +48,29 @@ class PrinterCounterData(BaseModel):
     action_taken: Optional[str] = None  # 'created', 'updated', 'skipped'
     ping_check: Optional[bool] = None  # True if ping successful, False if failed
 
-def ping_printer(ip: str, timeout: float = 0.5) -> Dict[str, Any]:
+def ping_printer(ip: str, timeout: float = 0.5, ports: List[int] = None) -> Dict[str, Any]:
     """
     Verifica conectividad de la impresora antes de intentar SNMP
     Optimizado para ser rápido y evitar timeouts largos
+    
+    Args:
+        ip: Dirección IP de la impresora
+        timeout: Timeout en segundos para cada intento
+        ports: Lista de puertos a probar (None usa puertos por defecto)
     """
     start_time = datetime.now()
     
-    # Puertos de impresoras en orden de prioridad para conexión rápida
-    printer_ports = [
-        80,   # HTTP - Muy común en impresoras modernas
-        9100, # Raw printing (HP JetDirect)
-        161,  # SNMP - El que necesitamos eventualmente
-        515,  # LPR (Line Printer Remote)
-        631,  # IPP (Internet Printing Protocol)
-    ]
+    # Puertos de impresoras en orden de prioridad
+    if ports is None:
+        printer_ports = [
+            80,   # HTTP - Muy común en impresoras modernas
+            9100, # Raw printing (HP JetDirect)
+            161,  # SNMP - El que necesitamos eventualmente
+            515,  # LPR (Line Printer Remote)
+            631,  # IPP (Internet Printing Protocol)
+        ]
+    else:
+        printer_ports = ports
     
     # Probar cada puerto con timeout rápido
     for port in printer_ports:
@@ -109,20 +122,39 @@ def process_single_printer_threaded(printer_dict: Dict, year: int = None, month:
         
         logger.info(f"[Thread] Processing printer {printer_dict['id']}: {printer_dict['brand']} {printer_dict['model']} ({printer_dict['ip']})")
         
-        # Verificar conectividad antes de SNMP (timeout optimizado para paralelización)
-        ping_result = ping_printer(printer_dict['ip'], timeout=0.3)
-        printer_result.ping_check = ping_result['success']
+        # Verificar si es una impresora médica (no usa SNMP)
+        is_drypix = 'DRYPIX' in printer_dict.get('model', '').upper()
         
-        if not ping_result['success']:
-            printer_result.error_message = f"Sin conectividad: {ping_result['error']}"
-            printer_result.response_time = ping_result['response_time']
-            logger.warning(f"[Thread] No connectivity for printer {printer_dict['id']} - {ping_result['error']}")
-            return printer_result
+        if is_drypix:
+            # Para DRYPIX, saltar ping estándar y verificar puerto 20051
+            logger.info(f"[Thread] Detected medical printer (DRYPIX) - checking HTTP connectivity on port 20051")
+            ping_result = ping_printer(printer_dict['ip'], timeout=1.0, ports=[20051, 80])
+            printer_result.ping_check = ping_result['success']
+            
+            if not ping_result['success']:
+                printer_result.error_message = f"Sin conectividad HTTP: {ping_result['error']}"
+                printer_result.response_time = ping_result['response_time']
+                logger.warning(f"[Thread] No HTTP connectivity for DRYPIX printer {printer_dict['id']}")
+                return printer_result
+            
+            logger.info(f"[Thread] DRYPIX connectivity OK on port {ping_result['port_responsive']}")
+            medical_result = get_medical_printer_counters(printer_dict)
+            snmp_result = medical_result
+        else:
+            # Para impresoras estándar, verificar conectividad SNMP
+            ping_result = ping_printer(printer_dict['ip'], timeout=0.3)
+            printer_result.ping_check = ping_result['success']
+            
+            if not ping_result['success']:
+                printer_result.error_message = f"Sin conectividad: {ping_result['error']}"
+                printer_result.response_time = ping_result['response_time']
+                logger.warning(f"[Thread] No connectivity for printer {printer_dict['id']} - {ping_result['error']}")
+                return printer_result
+            
+            logger.info(f"[Thread] Connectivity OK for {printer_dict['ip']} (port {ping_result['port_responsive']}, {ping_result['response_time']:.3f}s)")
+            # Obtener contadores vía SNMP para impresoras estándar
+            snmp_result = get_printer_counters_via_snmp(printer_dict['ip'], printer_dict['snmp_profile'])
         
-        logger.info(f"[Thread] Connectivity OK for {printer_dict['ip']} (port {ping_result['port_responsive']}, {ping_result['response_time']:.3f}s)")
-        
-        # Obtener contadores vía SNMP (usar función estándar por ahora)
-        snmp_result = get_printer_counters_via_snmp(printer_dict['ip'], printer_dict['snmp_profile'])
         printer_result.response_time = snmp_result['response_time']
         
         if snmp_result['success']:
@@ -163,6 +195,75 @@ def process_single_printer_threaded(printer_dict: Dict, year: int = None, month:
     finally:
         # Cerrar la sesión de base de datos del hilo
         db.close()
+
+def get_medical_printer_counters(printer_dict: Dict) -> Dict[str, Any]:
+    """
+    Obtiene los contadores de una impresora médica (DRYPIX) via HTTP/Web Scraping
+    
+    Args:
+        printer_dict: Diccionario con datos de la impresora
+        
+    Returns:
+        Dict con estructura similar a get_printer_counters_via_snmp para compatibilidad
+    """
+    try:
+        start_time = datetime.now()
+        
+        # Importar dinámicamente para evitar dependencias circulares
+        from ..services.medical_printer_service import DrypixScraper
+        
+        logger.info(f"Connecting to DRYPIX printer at {printer_dict['ip']}")
+        
+        # Usar puerto 20051 por defecto para DRYPIX
+        port = 20051
+        scraper = DrypixScraper(printer_dict['ip'], port)
+        
+        # Obtener contadores
+        result = scraper.get_counters()
+        
+        end_time = datetime.now()
+        response_time = (end_time - start_time).total_seconds()
+        
+        if result:
+            # Los contadores DRYPIX son "films" (placas) impresos
+            # Mapear a la estructura estándar
+            total_printed = result.get('summary', {}).get('total_printed', 0)
+            
+            logger.info(f"DRYPIX counters retrieved: {total_printed} films printed")
+            
+            return {
+                'success': True,
+                'counters': {
+                    'bw_counter': total_printed,  # Usar total_printed como BW
+                    'color_counter': 0,  # DRYPIX no tiene color
+                    'total_counter': total_printed,
+                    'profile_used': 'drypix_http'
+                },
+                'response_time': response_time,
+                'error': None,
+                'medical_data': result  # Guardar datos adicionales
+            }
+        else:
+            logger.error(f"Failed to get DRYPIX counters - authentication or connection issue")
+            return {
+                'success': False,
+                'counters': None,
+                'response_time': response_time,
+                'error': 'No se pudieron obtener contadores - verifique credenciales y conectividad HTTP'
+            }
+            
+    except Exception as e:
+        end_time = datetime.now()
+        response_time = (end_time - start_time).total_seconds()
+        error_msg = f"Error connecting to medical printer: {str(e)}"
+        logger.error(error_msg)
+        
+        return {
+            'success': False,
+            'counters': None,
+            'response_time': response_time,
+            'error': error_msg
+        }
 
 def get_printer_counters_via_snmp(printer_ip: str, printer_profile: str = None) -> Dict[str, Any]:
     """
@@ -643,10 +744,21 @@ def collect_single_printer_counter(
             logger.warning(f"No connectivity for printer {printer.id}: {ping_result['error']}")
             return result
         
-        logger.info(f"Connectivity OK for {printer.ip}, proceeding with SNMP...")
+        logger.info(f"Connectivity OK for {printer.ip}, proceeding with counter collection...")
         
-        # Obtener contadores vía SNMP (solo si hay conectividad)
-        snmp_result = get_printer_counters_via_snmp(printer.ip, printer.snmp_profile)
+        # Verificar si es una impresora médica (no usa SNMP)
+        if 'DRYPIX' in printer.model.upper():
+            logger.info(f"Detected medical printer (DRYPIX) - using HTTP scraping")
+            printer_dict = {
+                'id': printer.id,
+                'ip': printer.ip,
+                'model': printer.model,
+                'brand': printer.brand
+            }
+            snmp_result = get_medical_printer_counters(printer_dict)
+        else:
+            # Obtener contadores vía SNMP (solo si hay conectividad)
+            snmp_result = get_printer_counters_via_snmp(printer.ip, printer.snmp_profile)
         
         # Actualizar el objeto result con datos de SNMP
         result.success = snmp_result['success']

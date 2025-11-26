@@ -1,0 +1,202 @@
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<title>LD</title>
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Cache-Control" content="no-cache">
+<meta http-equiv="Expires" content="Thu, 01 Dec 1994 16:00:00 GMT">
+<script type="text/javascript">
+<!--
+function testLDFix(){
+    var iLDcnt;
+
+    if (document.form_setLDPow.LDcnt[0].checked)
+    {
+        iLDcnt = 1;
+    }
+    else
+    {
+        iLDcnt = 0;
+    }
+    parent.tree.location.href="encmdexe.htm"
+    /* MS130-127 Edgeå¯¾å¿ V10.9 2022/03/16 ADSOL R.Motohashi Start */
+	setTimeout( function() {
+	    parent.result.location.href=(location.protocol
+	                                 +'//'
+	                                 +location.host
+	                                 +'/USER'
+	                                 +'/command=UtlRequest&arg1=16'
+	                                 +'&arg2=0'
+	                                 +'&arg3=0'
+	                                 +'&arg4='+iLDcnt
+	                                 +'&arg5='+document.form_setLDPow.ldpow.value
+	                                 +'&arg6=0');
+	},100 );
+	/* MS130-127 Edgeå¯¾å¿ V10.9 2022/03/16 ADSOL R.Motohashi End */
+}
+// -->
+<!--
+function testLDManu(){
+    var iLDcnt;
+    var iLDvalh;
+    var iLDvwnn;
+    if (document.form_setLDPow.LDcnt[0].checked)
+    {
+        iLDcnt = 1;
+    }
+    else
+    {
+        iLDcnt = 0;
+    }
+	if (document.form_setLDPow.ldpowManu.value < 0)
+	{
+		alert("Please input over zero.");location.reload();
+		return;
+	}
+	if (16383 < document.form_setLDPow.ldpowManu.value)
+  {
+    alert("Please input under 16383.");location.reload();
+		return;
+	}
+    iLDvalb = document.form_setLDPow.ldpowManu.value - 10000;
+    if (iLDvalb < 0)
+    {
+      iLDvalh = 0;
+      iLDvalb = document.form_setLDPow.ldpowManu.value
+    } else {
+      iLDvalh = 1;
+    }
+    parent.tree.location.href="encmdexe.htm"
+    /* MS130-127 Edgeå¯¾å¿ V10.9 2022/03/16 ADSOL R.Motohashi Start */
+	setTimeout( function() {
+	    parent.result.location.href=(location.protocol
+	                                 +'//'
+	                                 +location.host
+	                                 +'/USER'
+	                                 +'/command=UtlRequest&arg1=16'
+	                                 +'&arg2=0'
+	                                 +'&arg3=1'
+	                                 +'&arg4='+iLDcnt
+	                                 +'&arg5='+iLDvalh
+	                                 +'&arg6='+iLDvalb);
+	},100 );
+	/* MS130-127 Edgeå¯¾å¿ V10.9 2022/03/16 ADSOL R.Motohashi End */
+}
+// -->
+<!--
+function hideLD1(){
+	document.all('selectLD1').style.display='block';
+	document.all('selectLD2').style.display='none';
+  document.all('selectLD3').style.display='block';
+	document.all('selectLD4').style.display='none';
+}
+// -->
+<!--
+function hideLD2(){
+	document.all('selectLD1').style.display='none';
+	document.all('selectLD2').style.display='block';
+	document.all('selectLD3').style.display='none';
+	document.all('selectLD4').style.display='block';
+}
+// -->
+// å³ã»çãä¸­ã¯ãªãã¯æå¶
+<!--
+function ieNonMen(){           // cancel event
+  event.cancelBubble = true
+  event.returnValue = false;
+  return false;
+}
+function clkCtrlIE(){
+   if(event.button == 2){     //   Right
+      ieNonMen();
+      //alert("This operation ishimpossible.");
+   }
+   if(event.button == 4){     //   Center
+      ieNonMen();
+      //alert("This operation is impossible.");
+   }
+}
+
+if(document.all){      // iExploror,FSIE
+   document.onmousedown = clkCtrlIE ;
+}
+// -->
+</script>
+</head>
+<body oncontextmenu="return false">
+<BR>
+<center>
+<TABLE WIDTH="100%" CELLSPACING="0" CELLPADDING="1">
+	<TR>
+		<TD>
+			<FONT SIZE="4" FACE="Times,Times New Roman">
+				<B>Check Scanner : LD</B>
+			</FONT>
+		</TD>
+	</TR>
+</TABLE>
+</center>
+
+<br>
+<hr SIZE='1' COLOR='#00FFFF'>
+<br>
+
+<center>
+<div ALIGN='CENTER'>
+	<form name="form_setLDPow">
+		<table WIDTH='55%'>
+			<tr>
+        <td>
+					Data Type
+				</td>
+				<td>
+					<input type='radio' Name='copySelect' value='0' onclick='hideLD1();' checked>Fixed data
+					<input type='radio' Name='copySelect' value='1' onclick='hideLD2();' >Free data
+				</td>
+			</tr>
+			<tr>
+				<td>
+          ON/OFF
+        </td>
+				<td>
+  				<input type='radio' Name='LDcnt' value='1' checked>ON
+					<input type='radio' Name='LDcnt' value='0' >OFF
+				</td>
+				<td>
+				</td>
+			</tr>
+			<tr id='selectLD1' style='display:block;'>
+				<td>
+          Set LD Power
+        </td>
+				<td>
+					<select name='ldpow'>
+					  <option value='2' >Low
+            <option value='1' >Middle
+					  <option value='0' >High
+          </select>
+				</td>
+			</tr>
+			<tr id='selectLD2' style='display:none;'>
+				<td>
+          LD Power (0-16383)
+        </td>
+				<td>
+					<input type='text' Name='ldpowManu' VALUE="" SIZE="8" maxlength="5">
+				</td>
+  		</tr>
+			<tr>
+				<td colspan='2'>
+			</td>
+			</tr>
+     </table>
+<br>
+<br>
+<DIV ID='selectLD3' style='display:block;'>
+	<input type="button" value="Execute" onclick="this.disabled = true;testLDFix()">
+</DIV>
+<DIV ID='selectLD4' style='display:none;'>
+	<input type="button" value="Execute" onclick="this.disabled = true;testLDManu()">
+</center>
+</body>
+</html>

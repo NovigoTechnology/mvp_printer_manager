@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { Printer, InventoryStats } from '../../types/printer'
 import { PrinterIcon } from '../../components/icons'
+import { TonerHistoryTab } from './TonerHistoryTab'
+import './styles.css'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
 
@@ -71,177 +73,24 @@ interface TonerRequest {
   updated_at?: string
 }
 
-// Componente para mostrar historial de pedidos de tóner
-function TonerHistoryTab({ printerId }: { printerId: number }) {
-  const [tonerHistory, setTonerHistory] = useState<TonerRequest[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const fetchTonerHistory = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/api/printers/${printerId}/toner-history`)
-        if (response.ok) {
-          const history = await response.json()
-          setTonerHistory(history)
-        }
-      } catch (error) {
-        console.error('Error fetching toner history:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchTonerHistory()
-  }, [printerId])
-
-  const getStatusColor = (status: string) => {
-    const colors = {
-      'pending': 'bg-yellow-100 text-yellow-800',
-      'approved': 'bg-green-100 text-green-800',
-      'ordered': 'bg-blue-100 text-blue-800',
-      'delivered': 'bg-purple-100 text-purple-800',
-      'cancelled': 'bg-red-100 text-red-800'
-    }
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800'
-  }
-
-  const getPriorityColor = (priority: string) => {
-    const colors = {
-      'low': 'bg-green-100 text-green-800',
-      'normal': 'bg-blue-100 text-blue-800',
-      'high': 'bg-orange-100 text-orange-800',
-      'urgent': 'bg-red-100 text-red-800'
-    }
-    return colors[priority as keyof typeof colors] || 'bg-gray-100 text-gray-800'
-  }
-
-  const formatTonerRequested = (request: TonerRequest) => {
-    const toners = []
-    if (request.toner_black_requested) {
-      const qty = request.toner_black_quantity || 1
-      toners.push(`Negro x${qty} (${request.toner_black_code || 'N/A'})`)
-    }
-    if (request.toner_cyan_requested) {
-      const qty = request.toner_cyan_quantity || 1
-      toners.push(`Cian x${qty} (${request.toner_cyan_code || 'N/A'})`)
-    }
-    if (request.toner_magenta_requested) {
-      const qty = request.toner_magenta_quantity || 1
-      toners.push(`Magenta x${qty} (${request.toner_magenta_code || 'N/A'})`)
-    }
-    if (request.toner_yellow_requested) {
-      const qty = request.toner_yellow_quantity || 1
-      toners.push(`Amarillo x${qty} (${request.toner_yellow_code || 'N/A'})`)
-    }
-    
-    return toners.length > 0 ? toners.join(', ') : 'Ninguno'
-  }
-
-  if (loading) {
+// Componente para el icono de ordenamiento
+const SortIcon = ({ field, sortField, sortDirection }: { field: string; sortField: string; sortDirection: string }) => {
+  if (sortField !== field) {
     return (
-      <div className="flex justify-center items-center py-8">
-        <div className="text-gray-500">Cargando historial de solicitudes...</div>
-      </div>
+      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+      </svg>
     )
   }
-
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h4 className="text-lg font-semibold text-gray-900">Historial de Solicitudes de Servicio/Insumos</h4>
-        <a
-          href="/supply-requests"
-          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
-        >
-          Nuevo Pedido de Servicio/Insumos
-        </a>
-      </div>
-
-      {tonerHistory.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-gray-400 text-lg mb-2">Sin solicitudes registradas</div>
-          <p className="text-gray-500">No hay solicitudes registradas para este equipo</p>
-        </div>
-      ) : (
-        <div className="space-y-4 max-h-96 overflow-y-auto">
-          {tonerHistory.map((request) => (
-            <div key={request.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <div className="text-sm font-semibold text-gray-900 mb-1">
-                    Solicitud #{request.id} - {new Date(request.request_date).toLocaleDateString()}
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    <strong>Solicitado por:</strong> {request.requested_by}
-                    {request.department && <span> - {request.department}</span>}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
-                    {request.status.toUpperCase()}
-                  </span>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(request.priority)}`}>
-                    {request.priority.toUpperCase()}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-2 text-sm">
-                <div>
-                  <strong>Tóners solicitados:</strong> {formatTonerRequested(request)}
-                </div>
-
-                {request.other_supplies_requested && (
-                  <div>
-                    <strong>Otros insumos:</strong> {request.other_supplies_requested}
-                  </div>
-                )}
-
-                {request.justification && (
-                  <div>
-                    <strong>Justificación:</strong> {request.justification}
-                  </div>
-                )}
-
-                {request.notes && (
-                  <div>
-                    <strong>Notas:</strong> {request.notes}
-                  </div>
-                )}
-
-                {/* Fechas de seguimiento */}
-                <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
-                  {request.approved_date && (
-                    <div><strong>Aprobado:</strong> {new Date(request.approved_date).toLocaleString()}</div>
-                  )}
-                  {request.ordered_date && (
-                    <div><strong>Ordenado:</strong> {new Date(request.ordered_date).toLocaleString()}</div>
-                  )}
-                  {request.delivered_date && (
-                    <div><strong>Entregado:</strong> {new Date(request.delivered_date).toLocaleString()}</div>
-                  )}
-                  {request.cancelled_date && (
-                    <div><strong>Cancelado:</strong> {new Date(request.cancelled_date).toLocaleString()}</div>
-                  )}
-                </div>
-
-                {request.approved_by && (
-                  <div className="text-xs text-gray-500">
-                    <strong>Aprobado por:</strong> {request.approved_by}
-                  </div>
-                )}
-
-                {request.rejection_reason && (
-                  <div className="text-xs text-red-600">
-                    <strong>Razón de rechazo:</strong> {request.rejection_reason}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+  
+  return sortDirection === 'asc' ? (
+    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+    </svg>
+  ) : (
+    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+    </svg>
   )
 }
 
@@ -430,6 +279,23 @@ export default function Inventory() {
 
     return () => clearTimeout(timeoutId)
   }, [searchTerm, statusFilter, conditionFilter, supplierFilter])
+
+  // Manejo del scroll hint
+  useEffect(() => {
+    const scrollContainer = document.querySelector('.overflow-x-auto')
+    if (!scrollContainer) return
+
+    const handleScroll = () => {
+      if (scrollContainer.scrollLeft > 10) {
+        scrollContainer.classList.add('scrolled')
+      } else {
+        scrollContainer.classList.remove('scrolled')
+      }
+    }
+
+    scrollContainer.addEventListener('scroll', handleScroll)
+    return () => scrollContainer.removeEventListener('scroll', handleScroll)
+  }, [])
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -709,27 +575,6 @@ export default function Inventory() {
     }))
   }
 
-  // Componente para el icono de ordenamiento
-  const SortIcon = ({ field }: { field: string }) => {
-    if (sortField !== field) {
-      return (
-        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-        </svg>
-      )
-    }
-    
-    return sortDirection === 'asc' ? (
-      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-      </svg>
-    ) : (
-      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-      </svg>
-    )
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -742,8 +587,8 @@ export default function Inventory() {
   }
 
   return (
-    <div className="max-w-full mx-auto py-6 sm:px-6 lg:px-8">
-      <div className="px-4 py-6 sm:px-0">
+    <div className="w-full mx-auto py-6 px-4 sm:px-6 lg:px-8">
+      <div className="sm:px-0">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Printer Inventory</h1>
@@ -1061,66 +906,71 @@ export default function Inventory() {
             </div>
           </div>
 
-          <table className="min-w-full divide-y divide-gray-200">
+          <div className="overflow-x-auto shadow-scroll relative">
+            {/* Hint de scroll */}
+            <div className="scroll-hint"></div>
+            
+            <table className="min-w-full divide-y divide-gray-200 inventory-table"
+>
             <thead className="bg-gray-50">
               <tr>
                 {visibleColumns.printerInfo && (
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none w-80"
                     onClick={() => handleSort('printerInfo')}
                   >
                     <div className="flex items-center space-x-1">
                       <span>Printer Info</span>
-                      <SortIcon field="printerInfo" />
+                      <SortIcon field="printerInfo" sortField={sortField} sortDirection={sortDirection} />
                     </div>
                   </th>
                 )}
                 {visibleColumns.location && (
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none w-56"
                     onClick={() => handleSort('location')}
                   >
                     <div className="flex items-center space-x-1">
                       <span>Location</span>
-                      <SortIcon field="location" />
+                      <SortIcon field="location" sortField={sortField} sortDirection={sortDirection} />
                     </div>
                   </th>
                 )}
                 {visibleColumns.status && (
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none w-32"
                     onClick={() => handleSort('status')}
                   >
                     <div className="flex items-center space-x-1">
                       <span>Status</span>
-                      <SortIcon field="status" />
+                      <SortIcon field="status" sortField={sortField} sortDirection={sortDirection} />
                     </div>
                   </th>
                 )}
                 {visibleColumns.proveedor && (
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none w-40"
                     onClick={() => handleSort('proveedor')}
                   >
                     <div className="flex items-center space-x-1">
                       <span>Proveedor</span>
-                      <SortIcon field="proveedor" />
+                      <SortIcon field="proveedor" sortField={sortField} sortDirection={sortDirection} />
                     </div>
                   </th>
                 )}
                 {visibleColumns.warranty && (
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none w-36"
                     onClick={() => handleSort('warranty')}
                   >
                     <div className="flex items-center space-x-1">
                       <span>Warranty</span>
-                      <SortIcon field="warranty" />
+                      <SortIcon field="warranty" sortField={sortField} sortDirection={sortDirection} />
                     </div>
                   </th>
                 )}
                 {visibleColumns.acciones && (
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-28">
                     Acciones
                   </th>
                 )}
@@ -1130,14 +980,14 @@ export default function Inventory() {
               {getSortedPrinters().map((printer) => (
                 <tr key={printer.id} className="hover:bg-gray-50">
                   {visibleColumns.printerInfo && (
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-3 printer-info-cell">
                       <div className="flex items-center">
-                        <PrinterIcon brand={printer.brand} size={24} className="mr-3 flex-shrink-0" />
-                        <div>
+                        <PrinterIcon brand={printer.brand} size={20} className="mr-2 flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium text-gray-900">
                             {printer.brand} {printer.model}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-xs text-gray-500">
                             {printer.serial_number && `S/N: ${printer.serial_number}`}
                             {printer.asset_tag && ` • Asset: ${printer.asset_tag}`}
                             {printer.printer_type && ` • ${
@@ -1146,46 +996,46 @@ export default function Inventory() {
                               printer.printer_type === 'scanner' ? 'Scanner' : printer.printer_type
                             }`}
                           </div>
-                          <div className="text-sm text-gray-500">IP: {printer.ip}</div>
+                          <div className="text-xs text-gray-500">IP: {printer.ip}</div>
                         </div>
                       </div>
                     </td>
                   )}
                   {visibleColumns.location && (
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-3 location-cell">
                       <div className="text-sm text-gray-900">{printer.location || 'N/A'}</div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-xs text-gray-500">
                         {printer.department && `Dept: ${printer.department}`}
                         {printer.floor && ` • Floor: ${printer.floor}`}
                       </div>
                     </td>
                   )}
                   {visibleColumns.status && (
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-3">
                       <div className="flex flex-col space-y-1">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(printer.status)}`}>
+                        <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(printer.status)}`}>
                           {printer.status}
                         </span>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getConditionColor(printer.condition)}`}>
+                        <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium ${getConditionColor(printer.condition)}`}>
                           {printer.condition}
                         </span>
                       </div>
                     </td>
                   )}
                   {visibleColumns.proveedor && (
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getOwnershipColor(printer.ownership_type)}`}>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium ${getOwnershipColor(printer.ownership_type)}`}>
                         {printer.ownership_type}
                       </span>
                       {printer.supplier && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          Supplier: {printer.supplier}
+                        <div className="text-xs text-gray-500 mt-1 truncate" title={printer.supplier}>
+                          {printer.supplier}
                         </div>
                       )}
                     </td>
                   )}
                   {visibleColumns.warranty && (
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-4 py-3 text-sm text-gray-900">
                       {printer.warranty_expiry ? (
                         <div>
                           <div>{new Date(printer.warranty_expiry).toLocaleDateString()}</div>
@@ -1199,8 +1049,8 @@ export default function Inventory() {
                     </td>
                   )}
                   {visibleColumns.acciones && (
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center justify-center space-x-2">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center space-x-1">
                         <button
                           onClick={() => setSelectedPrinter(printer)}
                           className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-all duration-200"
@@ -1979,6 +1829,7 @@ export default function Inventory() {
                             <option value="inkjet">Inyección de Tinta</option>
                             <option value="dot_matrix">Matriz de Puntos</option>
                             <option value="thermal">Térmica</option>
+                            <option value="dicom">DICOM</option>
                           </select>
                         </div>
                         <div>
@@ -2706,6 +2557,7 @@ export default function Inventory() {
                                 <option value="inkjet">Inyección de Tinta</option>
                                 <option value="led">LED</option>
                                 <option value="thermal">Térmica</option>
+                                <option value="dicom">DICOM</option>
                               </select>
                             </div>
                             <div>
@@ -3276,6 +3128,7 @@ export default function Inventory() {
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   )

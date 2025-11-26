@@ -1,0 +1,34 @@
+{
+  "printer_ip": "10.1.10.20",
+  "printer_port": 20051,
+  "model": "DRYPIX SMART",
+  "timestamp": "2025-11-20T19:12:09.430811",
+  "tray_capacity": 100,
+  "trays": {
+    "Tray1": {
+      "available": 99,
+      "printed": 1
+    },
+    "Tray2": {
+      "available": 0,
+      "printed": 0
+    },
+    "Tray3": {
+      "available": 0,
+      "printed": 0
+    },
+    "Tray4": {
+      "available": 0,
+      "printed": 0
+    },
+    "Tray5": {
+      "available": 0,
+      "printed": 0
+    }
+  },
+  "summary": {
+    "total_available": 99,
+    "total_printed": 1,
+    "total_trays_loaded": 1
+  }
+}

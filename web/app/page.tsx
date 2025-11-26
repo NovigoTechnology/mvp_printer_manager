@@ -24,6 +24,17 @@ interface MonthlyUsage {
   total_pages: number
 }
 
+interface RecentActivity {
+  id: number
+  type: 'incident' | 'supply_request' | 'service_request'
+  title: string
+  printer_name: string
+  status: string
+  priority?: string
+  supply_type?: string
+  created_at: string
+}
+
 // Loading Skeleton Component
 function DashboardSkeleton() {
   return (
@@ -131,10 +142,53 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [timeRange, setTimeRange] = useState<'month' | 'year'>('year')
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([])
+  const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
     fetchData()
+    fetchRecentActivities()
   }, [])
+
+  const fetchRecentActivities = async () => {
+    try {
+      // Obtener todos los incidentes recientes
+      const incidentsResponse = await fetch(`${API_BASE}/incidents/`)
+      const incidents = await incidentsResponse.json()
+      
+      // Mapear incidentes según su incident_type
+      const activities: RecentActivity[] = incidents.slice(0, 10).map((inc: any) => {
+        let type: 'incident' | 'supply_request' | 'service_request' = 'incident'
+        
+        // Determinar el tipo basado en incident_type
+        if (inc.incident_type === 'solicitud_insumos') {
+          type = 'supply_request'
+        } else if (inc.incident_type === 'solicitud_servicio') {
+          type = 'service_request'
+        } else {
+          type = 'incident'
+        }
+        
+        return {
+          id: inc.id,
+          type: type,
+          title: inc.title,
+          printer_name: inc.printer ? `${inc.printer.brand} ${inc.printer.model}` : `Printer #${inc.printer_id}`,
+          status: inc.status,
+          priority: inc.priority,
+          supply_type: inc.incident_type === 'solicitud_servicio' ? 'servicio' : (inc.incident_type === 'solicitud_insumos' ? 'insumos' : undefined),
+          created_at: inc.created_at
+        }
+      })
+      
+      // Ordenar por fecha más reciente
+      activities.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      
+      setRecentActivities(activities.slice(0, 10))
+    } catch (error) {
+      console.error('Error fetching recent activities:', error)
+    }
+  }
 
   const fetchData = async () => {
     try {
@@ -192,6 +246,60 @@ export default function Dashboard() {
   const colorPercentage = stats.monthly_pages.total > 0
     ? Math.round((stats.monthly_pages.color / stats.monthly_pages.total) * 100)
     : 0
+
+  // Filter activities by search term
+  const filteredActivities = recentActivities.filter(activity =>
+    activity.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    activity.printer_name.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  // Helper functions for activity styling
+  const getActivityBorderColor = (type: string, status?: string, priority?: string) => {
+    if (type === 'incident') {
+      if (priority === 'high') return 'border-red-500'
+      if (priority === 'medium') return 'border-yellow-500'
+      return 'border-blue-500'
+    }
+    if (type === 'service_request') {
+      return status === 'completed' ? 'border-green-500' : 'border-purple-500'
+    }
+    return status === 'completed' ? 'border-green-500' : 'border-orange-500'
+  }
+
+  const getActivityBgColor = (type: string, status?: string, priority?: string) => {
+    if (type === 'incident') {
+      if (priority === 'high') return 'bg-red-50'
+      if (priority === 'medium') return 'bg-yellow-50'
+      return 'bg-blue-50'
+    }
+    if (type === 'service_request') {
+      return status === 'completed' ? 'bg-green-50' : 'bg-purple-50'
+    }
+    return status === 'completed' ? 'bg-green-50' : 'bg-orange-50'
+  }
+
+  const getActivityTextColor = (type: string, status?: string, priority?: string) => {
+    if (type === 'incident') {
+      if (priority === 'high') return 'text-red-700'
+      if (priority === 'medium') return 'text-yellow-700'
+      return 'text-blue-700'
+    }
+    if (type === 'service_request') {
+      return status === 'completed' ? 'text-green-700' : 'text-purple-700'
+    }
+    return status === 'completed' ? 'text-green-700' : 'text-orange-700'
+  }
+
+  const getActivityLabel = (type: string) => {
+    if (type === 'incident') return 'Incidente'
+    if (type === 'service_request') return 'Solicitud Servicio'
+    return 'Pedido Insumos'
+  }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('es-AR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+  }
 
   // Transform monthly data for gradient bars and filter by time range
   let chartData
@@ -437,13 +545,17 @@ export default function Dashboard() {
 
       {/* Bottom Section */}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        {/* Projects Status */}
+        {/* Recent Activities (Incidents & Supply Requests) */}
         <div className="rounded-xl bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-700">Projects Status</h3>
-            <button aria-label="More options" className="text-gray-400 hover:text-gray-600">
+            <h3 className="text-lg font-semibold text-gray-700">Actividad Reciente</h3>
+            <button 
+              onClick={() => window.location.href = '/incidents'}
+              className="text-gray-400 hover:text-gray-600"
+              aria-label="Ver todos"
+            >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
           </div>
@@ -452,7 +564,9 @@ export default function Dashboard() {
           <div className="relative mb-4">
             <input
               type="text"
-              placeholder="Search here..."
+              placeholder="Buscar..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full rounded-lg border border-gray-200 py-2 pl-10 pr-4 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <svg className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -462,68 +576,51 @@ export default function Dashboard() {
           </div>
 
           <div className="space-y-4">
-            {/* Project 1 - Blue */}
-            <div className="flex items-start gap-4 rounded-lg border-l-4 border-blue-500 bg-gray-50 p-4">
-              <div className="flex-1">
-                <h4 className="mb-1 font-semibold text-gray-900">Web Design</h4>
-                <p className="mb-2 text-xs text-gray-500">Design Learn Management System</p>
-                <span className="inline-block rounded-md bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-                  UI/UX Design
-                </span>
+            {filteredActivities.length > 0 ? (
+              filteredActivities.map((activity) => (
+                <div 
+                  key={`${activity.type}-${activity.id}`}
+                  className={`flex items-start gap-4 rounded-lg border-l-4 ${getActivityBorderColor(activity.type, activity.status, activity.priority)} bg-gray-50 p-4 hover:shadow-sm transition-shadow cursor-pointer`}
+                  onClick={() => window.location.href = activity.type === 'incident' ? '/incidents' : '/supply-requests'}
+                >
+                  <div className="flex-1">
+                    <h4 className="mb-1 font-semibold text-gray-900">{activity.title}</h4>
+                    <p className="mb-2 text-xs text-gray-500">{activity.printer_name}</p>
+                    <div className="flex gap-2">
+                      <span className={`inline-block rounded-md ${getActivityBgColor(activity.type, activity.status, activity.priority)} px-2.5 py-0.5 text-xs font-medium ${getActivityTextColor(activity.type, activity.status, activity.priority)}`}>
+                        {getActivityLabel(activity.type)}
+                      </span>
+                      {activity.status && (
+                        <span className="inline-block rounded-md bg-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-700 capitalize">
+                          {activity.status}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-bold text-gray-900">#{activity.id}</div>
+                    <div className="text-[10px] text-gray-400">{formatDate(activity.created_at)}</div>
+                  </div>
+                  <button 
+                    aria-label="Ver detalles" 
+                    className="text-gray-400 hover:text-gray-600"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      window.location.href = activity.type === 'incident' ? `/incidents` : `/supply-requests`
+                    }}
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </button>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p className="text-sm">No hay actividad reciente</p>
               </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-gray-900">%{activePercentage}</div>
-                <div className="text-[10px] text-gray-400">June 08, 2021</div>
-              </div>
-              <button aria-label="Settings" className="text-gray-400 hover:text-gray-600">
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Project 2 - Pink */}
-            <div className="flex items-start gap-4 rounded-lg border-l-4 border-pink-500 bg-gray-50 p-4">
-              <div className="flex-1">
-                <h4 className="mb-1 font-semibold text-gray-900">Mobile App</h4>
-                <p className="mb-2 text-xs text-gray-500">Ecommerce Application</p>
-                <span className="inline-block rounded-md bg-pink-100 px-2.5 py-0.5 text-xs font-medium text-pink-700">
-                  Ecommerce
-                </span>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-gray-900">%{Math.round((stats.monthly_pages.color / stats.monthly_pages.total) * 100)}</div>
-                <div className="text-[10px] text-gray-400">May 01, 2021</div>
-              </div>
-              <button aria-label="Settings" className="text-gray-400 hover:text-gray-600">
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Project 3 - Orange */}
-            <div className="flex items-start gap-4 rounded-lg border-l-4 border-orange-500 bg-gray-50 p-4">
-              <div className="flex-1">
-                <h4 className="mb-1 font-semibold text-gray-900">Design System</h4>
-                <p className="mb-2 text-xs text-gray-500">Create LMS design system on figma</p>
-                <span className="inline-block rounded-md bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-700">
-                  Figma
-                </span>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-gray-900">%87</div>
-                <div className="text-[10px] text-gray-400">September 16, 2021</div>
-              </div>
-              <button aria-label="Settings" className="text-gray-400 hover:text-gray-600">
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </button>
-            </div>
+            )}
           </div>
         </div>
 

@@ -32,6 +32,7 @@ class TonerRequestCreate(BaseModel):
     department: Optional[str] = None
     cost_center: Optional[str] = None
     priority: str = "normal"
+    supply_type: str = "insumos"  # insumos, servicio
 
 class TonerRequestUpdate(BaseModel):
     status: Optional[str] = None
@@ -46,6 +47,7 @@ class TonerRequestResponse(BaseModel):
     request_date: datetime
     status: str
     priority: str
+    supply_type: str
     toner_black_requested: bool
     toner_black_quantity: int
     toner_cyan_requested: bool
@@ -122,6 +124,7 @@ def create_toner_request(request: TonerRequestCreate, db: Session = Depends(get_
     # Crear el pedido
     db_request = TonerRequest(
         printer_id=request.printer_id,
+        supply_type=request.supply_type,
         toner_black_requested=request.toner_black_requested,
         toner_black_quantity=request.toner_black_quantity,
         toner_cyan_requested=request.toner_cyan_requested,
@@ -156,8 +159,8 @@ def create_toner_request(request: TonerRequestCreate, db: Session = Depends(get_
     if request.other_supplies_requested:
         supplies_list.append(f"Otros: {request.other_supplies_requested}")
     
-    incident_title = f"Solicitud de Insumos - {printer.brand} {printer.model}"
-    incident_description = f"""Solicitud de insumos/servicio generada automáticamente.
+    incident_title = f"Solicitud de {'Servicio' if request.supply_type == 'servicio' else 'Insumos'} - {printer.brand} {printer.model}"
+    incident_description = f"""Solicitud de {request.supply_type} generada automáticamente.
 
 Impresora: {printer.brand} {printer.model} (Asset: {printer.asset_tag})
 Ubicación: {printer.location or 'No especificada'}
@@ -170,13 +173,17 @@ Insumos solicitados:
 Justificación: {request.justification or 'No especificada'}
 Notas adicionales: {request.notes or 'Ninguna'}"""
     
+    # Determinar el tipo de incidente basado en supply_type
+    incident_type = "solicitud_insumos" if request.supply_type == 'insumos' else "solicitud_servicio"
+    
     # Crear el incidente relacionado
     incident = Incident(
         printer_id=request.printer_id,
         title=incident_title,
         description=incident_description,
         status="open",
-        priority=request.priority if request.priority in ["low", "medium", "high", "critical"] else "medium"
+        priority=request.priority if request.priority in ["low", "medium", "high", "critical"] else "medium",
+        incident_type=incident_type
     )
     
     db.add(incident)

@@ -1,0 +1,59 @@
+<html><head><title>Setting 1</title><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Cache-Control" content="no-cache"><meta http-equiv="Expires" content="Thu, 01 Dec 1994 16:00:00 GMT"><meta http-equiv="content-type" content="text/html; charset=UTF-8"><script type="text/javascript">
+<!--
+
+function checkStrCode(str, minrange, maxrange) {
+    var len = str.length;
+    while (len--) {
+        var num = str.substr(len, 1).charCodeAt(0);
+        if (num < minrange || num > maxrange) {
+            alert("指定文字を入力してください。");location.reload();
+            return false;
+            break;
+        }
+    }
+    return true;
+}
+function checkStrHalf(str){
+    if (str == "") {
+       alert("文字列を入力してください。");location.reload();
+       return false;
+    }
+    if (!checkStrCode(str, 0, 127)) {
+       alert("入力文字を再確認してください。");location.reload();
+       return false;
+    }
+    return true;
+}
+function ieNonMen(){
+  event.cancelBubble = true
+  event.returnValue = false;
+  return false;
+}
+function clkCtrlIE(){
+   if(event.button == 2){
+      ieNonMen();
+   }
+   if(event.button == 4){
+      ieNonMen();
+   }
+}
+
+if(document.all){
+   document.onmousedown = clkCtrlIE ;
+}
+
+// -->
+</script>
+</head><body oncontextmenu="return false">
+<br>
+<hr size="1" color="#00ffff">
+<br>
+
+<br>
+<hr size="1" color="#00ffff">
+<br>
+
+<br>
+<hr size="1" color="#00ffff">
+<br>
+</body></html>

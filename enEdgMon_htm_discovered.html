@@ -1,0 +1,115 @@
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<title>Edge Sensor Monitor</title>
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Cache-Control" content="no-cache">
+<meta http-equiv="Expires" content="Thu, 01 Dec 1994 16:00:00 GMT">
+<script type="text/javascript">
+<!--=
+function EdgeSensorMonitor(){
+    parent.tree.location.href="encmdexe.htm"
+    /* MS130-127 Edgeå¯¾å¿ V10.9 2022/03/16 ADSOL R.Motohashi Start */
+    setTimeout( function() {
+        if(document.form_EdgeSensorMonitor.Mode.value == 1) {
+           parent.result.location.href=(location.protocol
+                                        +'//'
+                                        +location.host
+                                        +'/USER'
+                                        +'/command=UtlRequest&arg1=19'
+                                        +'&arg2='+document.form_EdgeSensorMonitor.Operation.value
+                                        +'&arg3=1'
+                                        );
+        }
+        if(document.form_EdgeSensorMonitor.Mode.value == 0) {
+           parent.result.location.href=(location.protocol
+                                        +'//'
+                                        +location.host
+                                        +'/USER'
+                                        +'/command=PrintRequest&arg1=28'
+                                        +'&arg2=1'
+                                        +'&arg3=1'
+                                        +'&arg4=1'
+                                        );
+        }
+    },100 );
+    /* MS130-127 Edgeå¯¾å¿ V10.9 2022/03/16 ADSOL R.Motohashi End */
+}
+// -->
+// å³ã»çãä¸­ã¯ãªãã¯æå¶
+<!--
+function ieNonMen(){           // cancel event
+  event.cancelBubble = true
+  event.returnValue = false;
+  return false;
+}
+function clkCtrlIE(){
+   if(event.button == 2){     //   Right
+      ieNonMen();
+      //alert("This operation is impossible.");
+   }
+   if(event.button == 4){     //   Center
+      ieNonMen();
+      //alert("This operation is impossible.");
+   }
+}
+
+if(document.all){      // iExploror,FSIE
+   document.onmousedown = clkCtrlIE ;
+}
+// -->
+</script>
+</head>
+<body oncontextmenu="return false">
+<BR>
+<center>
+<TABLE WIDTH="100%" CELLSPACING="0" CELLPADDING="1">
+	<TR>
+		<TD>
+			<NONT SIZE="4" FACE="Times,Times New Roman">
+				<B>Check Scanner : Edge Sensor Monitor</B>
+			</FONT>
+		</TD>
+	</TR>
+</TABLE>
+</center>
+
+<br>
+<hr size="1" color="#00ffff">
+<br>
+
+<center>
+
+<form target="result" name="form_EdgeSensorMonitor">
+	<TABLE WIDTH="45%" class=yan>
+	<TR>
+		<TD>
+			Operation
+		</TD>
+		<TD>
+			<select name="Operation">Operation
+				<option value="1">Start
+				<option value="2">Stop
+			</select>
+		</TD>
+	</TR>
+	<TR>
+		<TD>
+			Mode
+		</TD>
+		<TD>
+			<select name="Mode">Mode
+				<option value="0">Printing
+				<option value="1">Idle
+			</select>
+		</TD>
+	</TR>
+	</TABLE>
+<br>
+<br>
+	<input type="button" value="Execute" onclick="this.disabled = true;EdgeSensorMonitor()">
+</form>
+</center>
+<br>
+</body>
+</html>

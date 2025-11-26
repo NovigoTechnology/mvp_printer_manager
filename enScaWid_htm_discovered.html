@@ -1,0 +1,180 @@
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<title>Adjusting Main Scanner</title>
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Cache-Control" content="no-cache">
+<meta http-equiv="Expires" content="Thu, 01 Dec 1994 16:00:00 GMT">
+<script type="text/javascript">
+<!--
+function checkIsNumber(value){
+      return (value.match(/^[+-]?[0-9]+/g) == value);
+}
+function checkRange(inputValue, lowerBound, upperBound){
+    if (inputValue < lowerBound || inputValue > upperBound){
+        return false;
+    }
+    return true;
+}
+function checkInputValues(inputValue){
+    if (!checkIsNumber(inputValue)){
+        return false;
+    }
+    if (!checkRange(parseInt(inputValue), -120, 120)){
+        return false;
+    }
+    return true;
+}
+function ScannerWidth(){
+    if (!checkInputValues(document.form_ScannerWidth.arg2.value)){
+        alert("Please input correct value.");
+        document.form_ScannerWidth.btnExecute.disabled = false;
+        return;
+    }
+    parent.tree.location.href="encmdexe.htm"
+    /* MS130-127 Edgeå¯¾å¿ V10.9 2022/03/16 ADSOL R.Motohashi Start */
+	setTimeout( function() {
+	    parent.result.location.href=(location.protocol
+	                                 +'//'
+	                                 +location.host
+	                                 +'/USER'
+	                                 +'/command=UtlRequest&arg1=20'
+	                                 +'&arg2=0'
+	                                 +'&arg3='+document.form_ScannerWidth.arg2.value
+	                                 +'&'
+	                                 );
+	},100 );
+	/* MS130-127 Edgeå¯¾å¿ V10.9 2022/03/16 ADSOL R.Motohashi End */
+}
+// -->
+<!--
+function ScannerPosi(){
+    if (!checkInputValues(document.form_ScannerPosi.arg2.value)){
+        alert("Please input correct value.");
+        document.form_ScannerPosi.btnExecute.disabled = false;
+        return;
+    }
+    parent.tree.location.href="encmdexe.htm"
+    /* MS130-127 Edgeå¯¾å¿ V10.9 2022/03/16 ADSOL R.Motohashi Start */
+	setTimeout( function() {
+	    parent.result.location.href=(location.protocol
+	                                 +'//'
+	                                 +location.host
+	                                 +'/USER'
+	                                 +'/command=UtlRequest&arg1=21'
+	                                 +'&arg2=0'
+	                                 +'&arg3='+document.form_ScannerPosi.arg2.value
+	                                 +'&'
+	                                 );
+	},100 );
+	/* MS130-127 Edgeå¯¾å¿ V10.9 2022/03/16 ADSOL R.Motohashi End */
+}
+// -->
+<!--
+function scannerWidthinit(){
+    parent.tree.location.href="encmdexe.htm"
+    /* MS130-127 Edgeå¯¾å¿ V10.9 2022/03/16 ADSOL R.Motohashi Start */
+	setTimeout( function() {
+	    parent.result.location.href=(location.protocol
+	                                 +'//'
+	                                 +location.host
+	                                 +'/USER'
+	                                 +'/command=UtlRequest&arg1=22'
+	                                 +'&arg2=0'
+	                                 +'&'
+	                                 );
+	},100 );
+	/* MS130-127 Edgeå¯¾å¿ V10.9 2022/03/16 ADSOL R.Motohashi End */
+}
+// -->
+// å³ã»çãä¸­ã¯ãªãã¯æå¶
+<!--
+function ieNonMen(){           // cancel event
+  event.cancelBubble = true
+  event.returnValue = false;
+  return false;
+}
+function clkCtrlIE(){
+   if(event.button == 2){     //   Right
+      ieNonMon();
+      //alerthvThis operation is impossible.");
+   }
+   if(event.button == 4){     //   Center
+      ieNonMen();
+      //alert("This operation is impossible.");
+   }
+}
+
+if(document.all){      // iExploror,FSIE
+   document.onmousedown = clkCtrlIE ;
+}
+// -->
+</script>
+</head>
+<body oncontextmenu="return false">
+<BR>
+<center>
+<TABLE WIDTH="100%" CELLSPACING="0" CELLPADDING="1">
+	<TR>
+		<TD>
+			<FONT SIZE="4" FACE="Times,Times New Roman">
+   			<B>Check Scannerï¼Adjusting Main Scanner</B>
+			</FONT>
+		</TD>
+	</TR>
+</TABLE>
+</center>
+
+<br>
+<hr size="1" color="#00ffff">
+<br>
+
+<center>
+
+Scanning Width
+<form target="result" name="form_ScannerWidth">
+	<TABLE W_TTH="45%" class=yan>
+	<TR>
+		<TD>
+			Measured Width<BR>(XXmmx10)
+		</TD>
+		<TD>
+		</TD>
+		<TD>
+			<INPUT TYPE="text" NAME="arg2" VALUE="" size="8" maxlength="4">
+		</TD>
+	</TR>
+	</TABLE>
+	<br>
+	<input type="button" value="Execute" name="btnExecute" onclick="this.disabled = true;ScannerWidth()">
+</form>
+<br>
+<br>
+Scanning Position
+<form target="result" name="form_ScannerPosi">
+	<TABLE W_TTH="45%" class=yan>
+	<TR>
+		<TD>
+			Starting Position<BR>(XXmmx10)
+		</TD>
+		<TD>
+		</TD>
+		<TD>
+			<INPUT TYPE="text" NAME="arg2" VALUE="" size="8" maxlength="4">
+		</TD>
+	</TR>
+	</TABLE>
+	<br>
+	<input type="button" value="Execute" name="btnExecute" onclick="this.disabled = true;ScannerPosi()">
+</form>
+<br>
+<br>
+Initialize
+<br>
+<input type="button" value="Initialize" onclick="this.disabled = true;scannerWidthinit()">
+
+
+</center>
+<br>
+</body>
+</html>

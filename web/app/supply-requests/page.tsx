@@ -576,17 +576,15 @@ export default function SupplyRequestsCompactPage() {
       return pendingRequests
     }
 
-    // Filtrar solicitudes de la impresora seleccionada
+    // Filtrar solicitudes de la impresora seleccionada usando asset_tag
     const printerRequests = allRequests.filter(request => 
-      request.printer_brand === selectedPrinter.brand && 
-      request.printer_model === selectedPrinter.model &&
+      request.printer_asset_tag === selectedPrinter.asset_tag &&
       request.status === 'pending'
     )
 
     // Filtrar solicitudes de otras impresoras (solo pendientes)
     const otherRequests = pendingRequests.filter(request => 
-      !(request.printer_brand === selectedPrinter.brand && 
-        request.printer_model === selectedPrinter.model)
+      request.printer_asset_tag !== selectedPrinter.asset_tag
     )
 
     // Combinar: primero las de la impresora seleccionada, luego las otras
@@ -1033,8 +1031,7 @@ export default function SupplyRequestsCompactPage() {
                 {selectedPrinter && (
                   <span className="ml-2 text-blue-600">
                     ({getOrderedRequests().filter(r => 
-                      r.printer_brand === selectedPrinter.brand && 
-                      r.printer_model === selectedPrinter.model
+                      r.printer_asset_tag === selectedPrinter.asset_tag
                     ).length} del equipo seleccionado)
                   </span>
                 )}
@@ -1050,8 +1047,7 @@ export default function SupplyRequestsCompactPage() {
                   {getOrderedRequests().map((request) => {
                     const isNewRequest = lastAddedRequestId === request.id
                     const isSelectedPrinterRequest = selectedPrinter && 
-                      request.printer_brand === selectedPrinter.brand && 
-                      request.printer_model === selectedPrinter.model
+                      request.printer_asset_tag === selectedPrinter.asset_tag
                     return (
                       <div 
                         key={request.id} 
@@ -1094,17 +1090,20 @@ export default function SupplyRequestsCompactPage() {
                            request.status === 'approved' ? 'Aprobado' : 'Rechazado'}
                         </span>
                       </div>
-                      <div className="text-sm text-gray-600 mb-1">
-                        <strong>Impresora:</strong> {request.printer_brand} {request.printer_model}
-                      </div>
-                      <div className="text-sm text-gray-600 mb-1">
-                        <strong>Tipo:</strong> {request.other_supplies_requested && request.other_supplies_requested.includes('SERVICIO:') ? 'Servicio' : 'Insumos'}
-                      </div>
-                      <div className="text-sm text-gray-600 mb-1">
-                        <strong>Solicitado por:</strong> {request.requested_by}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {new Date(request.created_at).toLocaleDateString('es-ES')}
+                      <div className="text-xs text-gray-600 space-y-1">
+                        <div><strong>Impresora:</strong> {request.printer_brand} {request.printer_model}</div>
+                        <div className="flex gap-3">
+                          <span><strong>Inv:</strong> {request.printer_asset_tag || 'N/A'}</span>
+                          <span><strong>S/N:</strong> {request.printer_serial_number || 'N/A'}</span>
+                        </div>
+                        {request.printer_location && (
+                          <div><strong>Ubicación:</strong> {request.printer_location}</div>
+                        )}
+                        <div><strong>Tipo:</strong> {request.supply_type === 'servicio' ? 'Servicio' : 'Insumos'}</div>
+                        <div><strong>Solicitado por:</strong> {request.requested_by}</div>
+                        <div className="text-gray-500">
+                          {new Date(request.created_at).toLocaleDateString('es-ES')}
+                        </div>
                       </div>
                     </div>
                     )
