@@ -73,6 +73,9 @@ export default function Counters() {
   const [selectedMonth, setSelectedMonth] = useState(0) // 0 = todos los meses
   const [selectedPrinter, setSelectedPrinter] = useState(0) // 0 = todas las impresoras
   const [selectedSupplier, setSelectedSupplier] = useState('') // '' = todos los proveedores
+  const [selectedDate, setSelectedDate] = useState('') // Filtro por fecha específica
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(20)
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingCounter, setEditingCounter] = useState<MonthlyCounter | null>(null)
   const [viewMode, setViewMode] = useState<'form' | 'table'>('form')
@@ -887,6 +890,14 @@ export default function Counters() {
       }
     }
     
+    // Filter by specific date
+    if (selectedDate) {
+      const counterDate = new Date(counter.recorded_at).toISOString().split('T')[0]
+      if (counterDate !== selectedDate) {
+        return false
+      }
+    }
+    
     return true
   })
 
@@ -975,6 +986,18 @@ export default function Counters() {
       return 0
     })
   }, [filteredCounters, sortField, sortDirection, printers])
+
+  // Paginación
+  const totalItems = sortedAndFilteredCounters.length
+  const totalPages = Math.ceil(totalItems / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedCounters = sortedAndFilteredCounters.slice(startIndex, endIndex)
+
+  // Reset a página 1 cuando cambian los filtros
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [selectedYear, selectedMonth, selectedPrinter, selectedSupplier, selectedDate])
 
   const calculatePagesDifference = (current: number, previous: number) => {
     return Math.max(0, current - previous)
@@ -1105,6 +1128,28 @@ export default function Counters() {
                 </div>
               )}
 
+              {/* Date Filter */}
+              {viewMode === 'form' && (
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">Fecha específica</label>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="rounded-md border-gray-300 shadow-sm text-sm py-1.5 px-3 focus:border-blue-500 focus:ring-blue-500"
+                  />
+                  {selectedDate && (
+                    <button
+                      onClick={() => setSelectedDate('')}
+                      className="text-sm text-red-600 hover:text-red-800 font-medium"
+                      title="Limpiar filtro de fecha"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Spacer */}
               <div className="flex-1"></div>
 
@@ -1229,7 +1274,7 @@ export default function Counters() {
                   </tr>
                 </thead>
               <tbody>
-                {sortedAndFilteredCounters.map((counter) => (
+                {paginatedCounters.map((counter) => (
                   <tr key={counter.id}>
                     <td>
                       <div>
@@ -1344,6 +1389,99 @@ export default function Counters() {
                 ))}
               </tbody>
             </table>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="border-t bg-white px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="text-sm text-gray-700">
+                      Mostrando <span className="font-medium">{startIndex + 1}</span> a{' '}
+                      <span className="font-medium">{Math.min(endIndex, totalItems)}</span> de{' '}
+                      <span className="font-medium">{totalItems}</span> registros
+                    </div>
+                    <select
+                      value={itemsPerPage}
+                      onChange={(e) => {
+                        setItemsPerPage(Number(e.target.value))
+                        setCurrentPage(1)
+                      }}
+                      className="rounded-md border-gray-300 shadow-sm text-sm py-1.5 px-3 focus:border-blue-500 focus:ring-blue-500"
+                    >
+                      <option value={10}>10 por página</option>
+                      <option value={20}>20 por página</option>
+                      <option value={50}>50 por página</option>
+                      <option value={100}>100 por página</option>
+                    </select>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1 text-sm rounded-md border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Primera página"
+                    >
+                      «
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1 text-sm rounded-md border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Página anterior"
+                    >
+                      ‹
+                    </button>
+                    
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum
+                        if (totalPages <= 5) {
+                          pageNum = i + 1
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i
+                        } else {
+                          pageNum = currentPage - 2 + i
+                        }
+                        
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={`px-3 py-1 text-sm rounded-md border ${
+                              currentPage === pageNum
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'border-gray-300 bg-white hover:bg-gray-50'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1 text-sm rounded-md border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Página siguiente"
+                    >
+                      ›
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1 text-sm rounded-md border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Última página"
+                    >
+                      »
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Summary totals */}
             {sortedAndFilteredCounters.length > 0 && (

@@ -82,9 +82,10 @@ export default function IncidentsPage() {
     try {
       const response = await fetch(`${API_BASE}/technicians/`)
       const data = await response.json()
-      setTechnicians(data)
+      setTechnicians(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error fetching technicians:', error)
+      setTechnicians([])
     }
   }
 
@@ -92,9 +93,10 @@ export default function IncidentsPage() {
     try {
       const response = await fetch(`${API_BASE}/users/`)
       const data = await response.json()
-      setSystemUsers(data)
+      setSystemUsers(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error fetching system users:', error)
+      setSystemUsers([])
     }
   }
 
@@ -678,7 +680,7 @@ function EditModal({ incident, technicians, systemUsers, onClose, onSuccess }: a
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">Sin asignar</option>
-                  {technicians.map((tech: any) => (
+                  {Array.isArray(technicians) && technicians.map((tech: any) => (
                     <option key={tech.id} value={tech.id}>
                       {tech.name} {tech.specialty ? `(${tech.specialty})` : ''}
                     </option>
@@ -695,7 +697,7 @@ function EditModal({ incident, technicians, systemUsers, onClose, onSuccess }: a
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Anónimo</option>
-                {systemUsers.map((user: any) => (
+                {Array.isArray(systemUsers) && systemUsers.map((user: any) => (
                   <option key={user.id} value={user.id}>
                     {user.name} {user.department ? `- ${user.department}` : ''}
                   </option>
@@ -804,7 +806,7 @@ function ResolveModal({ incident, technicians, onClose, onSuccess }: any) {
                 title="Técnico que resolvió el incidente"
               >
                 <option value="">Seleccionar técnico...</option>
-                {technicians.map((tech: any) => (
+                {Array.isArray(technicians) && technicians.map((tech: any) => (
                   <option key={tech.id} value={tech.id}>
                     {tech.name} {tech.specialty ? `(${tech.specialty})` : ''}
                   </option>
@@ -921,7 +923,7 @@ function StatusModal({ incident, technicians, onClose, onSuccess }: any) {
                 title="Asignar técnico"
               >
                 <option value="">Sin asignar</option>
-                {technicians.map((tech: any) => (
+                {Array.isArray(technicians) && technicians.map((tech: any) => (
                   <option key={tech.id} value={tech.id}>
                     {tech.name} {tech.specialty ? `(${tech.specialty})` : ''}
                   </option>
