@@ -270,7 +270,9 @@ def start_scheduler(scheduler: AsyncIOScheduler):
         minute=0,  # A la hora en punto
         id='poll_medical_printers_hourly',
         name='Hourly medical printer snapshots with auto cartridge detection',
-        replace_existing=True
+        replace_existing=True,
+        misfire_grace_time=300,  # Ejecutar si se perdió por hasta 5 minutos
+        coalesce=True  # Combinar ejecuciones perdidas en una sola
     )
     
     # Cleanup old snapshots daily at 3 AM

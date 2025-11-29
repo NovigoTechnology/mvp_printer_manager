@@ -69,6 +69,7 @@ export default function MedicalPrinters() {
   const [printers, setPrinters] = useState<MedicalPrinter[]>([])
   const [printerStatuses, setPrinterStatuses] = useState<Map<number, PrinterStatus>>(new Map())
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [refreshInterval, setRefreshInterval] = useState(30) // segundos
   const [selectedPrinter, setSelectedPrinter] = useState<number | null>(null)
@@ -79,6 +80,8 @@ export default function MedicalPrinters() {
   const [historyPrinter, setHistoryPrinter] = useState<MedicalPrinter | null>(null)
   const [printHistory, setPrintHistory] = useState<any[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
+  const [historyPage, setHistoryPage] = useState(1)
+  const [historyItemsPerPage, setHistoryItemsPerPage] = useState(20)
   const [showRefillModal, setShowRefillModal] = useState(false)
   const [refillPrinter, setRefillPrinter] = useState<MedicalPrinter | null>(null)
   const [refillTray, setRefillTray] = useState<string>('')
@@ -145,15 +148,22 @@ export default function MedicalPrinters() {
   }
 
   const refreshAllCounters = async () => {
-    for (const printer of printers) {
-      await fetchPrinterCounters(printer.id)
+    setRefreshing(true)
+    try {
+      // Actualizar todos los contadores en paralelo
+      await Promise.all(printers.map(printer => fetchPrinterCounters(printer.id)))
+    } catch (error) {
+      console.error('Error refreshing counters:', error)
+    } finally {
+      setRefreshing(false)
     }
   }
 
   const fetchPrintHistory = async (printerId: number) => {
     setLoadingHistory(true)
     try {
-      const response = await fetch(`${API_BASE}/medical-printers/${printerId}/print-history`)
+      // Solicitar TODOS los registros individuales sin agrupar (limit=1000, grouped=false)
+      const response = await fetch(`${API_BASE}/medical-printers/${printerId}/print-history?days=365&limit=1000&grouped=false`)
       if (response.ok) {
         const data = await response.json()
         setPrintHistory(data)
@@ -417,10 +427,20 @@ export default function MedicalPrinters() {
         <div className="flex items-center gap-2">
           <button
             onClick={refreshAllCounters}
-            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            disabled={refreshing}
+            className={`p-2 rounded-lg transition-colors ${
+              refreshing 
+                ? 'text-gray-400 bg-gray-100 cursor-not-allowed' 
+                : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'
+            }`}
             title="Actualizar todo"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg 
+              className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
@@ -458,6 +478,7 @@ export default function MedicalPrinters() {
                         onClick={() => {
                           setHistoryPrinter(printer)
                           setShowHistoryModal(true)
+                          setHistoryPage(1)
                           fetchPrintHistory(printer.id)
                         }}
                         className="text-gray-400 hover:text-blue-600 transition-colors"
@@ -599,23 +620,45 @@ export default function MedicalPrinters() {
 
               {/* Footer con acciones */}
               <div className="bg-gray-50 px-4 py-3 flex justify-between items-center border-t border-gray-100">
-                <div className="flex gap-3">
+                <div className="flex gap-2">
                   <button
                     onClick={() => {
                       setViewingPrinter(printer)
                       setActiveTab('basic')
                     }}
-                    className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
                   >
-                    Ver Detalles
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    Detalles
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHistoryPrinter(printer)
+                      setShowHistoryModal(true)
+                      setHistoryPage(1)
+                      fetchPrintHistory(printer.id)
+                    }}
+                    className="text-xs px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-1"
+                    title="Ver historial de impresión"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Historial
                   </button>
                   <a
                     href={`http://${printer.ip}:20051/USER/Login.htm`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                    className="text-xs px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-1"
                   >
-                    Abrir Panel
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    Panel
                   </a>
                 </div>
               </div>
@@ -1037,22 +1080,31 @@ export default function MedicalPrinters() {
               ) : printHistory.length > 0 ? (
                 <div className="space-y-4">
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                    <h3 className="text-sm font-semibold text-blue-900 mb-2">📊 Resumen de Actividad</h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-blue-900">📊 Resumen de Actividad</h3>
+                      <span className="text-xs bg-blue-200 text-blue-800 px-2 py-1 rounded-full font-medium">
+                        {printHistory.length} registro{printHistory.length !== 1 ? 's' : ''} encontrado{printHistory.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
                     <div className="grid grid-cols-3 gap-4 text-sm">
                       <div>
-                        <span className="text-blue-700">Total de días:</span>
-                        <span className="ml-2 font-semibold text-blue-900">{printHistory.length}</span>
+                        <span className="text-blue-700">Período:</span>
+                        <span className="ml-2 font-semibold text-blue-900">
+                          {printHistory.length > 1 
+                            ? `${printHistory.length} días` 
+                            : 'Hoy'}
+                        </span>
                       </div>
                       <div>
                         <span className="text-blue-700">Total impreso:</span>
                         <span className="ml-2 font-semibold text-blue-900">
-                          {printHistory.reduce((sum, day) => sum + day.total_printed, 0)}
+                          {printHistory.reduce((sum, day) => sum + day.total_printed, 0).toLocaleString()}
                         </span>
                       </div>
                       <div>
                         <span className="text-blue-700">Promedio diario:</span>
                         <span className="ml-2 font-semibold text-blue-900">
-                          {Math.round(printHistory.reduce((sum, day) => sum + day.total_printed, 0) / printHistory.length)}
+                          {Math.round(printHistory.reduce((sum, day) => sum + day.total_printed, 0) / printHistory.length).toLocaleString()}
                         </span>
                       </div>
                     </div>
@@ -1069,9 +1121,53 @@ export default function MedicalPrinters() {
                         </div>
                         <div className="ml-3">
                           <p className="text-sm text-blue-700">
-                            <span className="font-medium">Mostrando solo datos de hoy.</span> El sistema guardará automáticamente snapshots diarios a las 7:00 AM. El historial completo estará disponible después de algunos días.
+                            <span className="font-medium">Mostrando solo datos de hoy.</span> El sistema guarda snapshots diarios automáticamente a las 7:00 AM. El historial completo estará disponible después de algunos días.
                           </p>
                         </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {printHistory.length > 30 && (
+                    <div className="mb-4 bg-green-50 border-l-4 border-green-400 p-4">
+                      <div className="flex">
+                        <div className="flex-shrink-0">
+                          <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm text-green-700">
+                            <span className="font-medium">Historial completo cargado.</span> Se están mostrando todos los {printHistory.length} registros históricos disponibles.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Paginación */}
+                  {printHistory.length > 0 && (
+                    <div className="mb-4 flex justify-between items-center bg-white p-3 rounded-lg border border-gray-200">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-700">Mostrar:</span>
+                        <select
+                          value={historyItemsPerPage}
+                          onChange={(e) => {
+                            setHistoryItemsPerPage(Number(e.target.value))
+                            setHistoryPage(1)
+                          }}
+                          className="border border-gray-300 rounded px-2 py-1 text-sm"
+                          title="Registros por página"
+                        >
+                          <option value={10}>10</option>
+                          <option value={20}>20</option>
+                          <option value={50}>50</option>
+                          <option value={100}>100</option>
+                        </select>
+                        <span className="text-sm text-gray-700">registros por página</span>
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        Total: <span className="font-semibold">{printHistory.length}</span> registros
                       </div>
                     </div>
                   )}
@@ -1081,10 +1177,7 @@ export default function MedicalPrinters() {
                       <thead className="bg-gray-50">
                         <tr>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Fecha
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Día
+                            Fecha y Hora
                           </th>
                           <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Total Impreso
@@ -1101,27 +1194,29 @@ export default function MedicalPrinters() {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {printHistory.map((day, index) => {
-                          const date = new Date(day.timestamp)
-                          const dayName = date.toLocaleDateString('es-AR', { weekday: 'long' })
+                        {printHistory
+                          .slice((historyPage - 1) * historyItemsPerPage, historyPage * historyItemsPerPage)
+                          .map((record, index) => {
+                          const date = new Date(record.timestamp)
+                          const dayName = date.toLocaleDateString('es-AR', { weekday: 'short' })
                           const dateStr = date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                          const hasCartridgeChange = day.cartridge_change_detected === true
+                          const timeStr = date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                          const hasCartridgeChange = record.cartridge_change_detected === true
                           
                           return (
-                            <tr key={index} className={`hover:bg-gray-50 ${hasCartridgeChange ? 'bg-yellow-50 border-l-4 border-yellow-500' : ''}`}>
+                            <tr key={record.id || index} className={`hover:bg-gray-50 ${hasCartridgeChange ? 'bg-yellow-50 border-l-4 border-yellow-500' : ''}`}>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                <div className="flex items-center gap-2">
-                                  {hasCartridgeChange && (
-                                    <span className="text-yellow-600" title="Cambio de cartucho detectado">
-                                      🔄
-                                    </span>
-                                  )}
-                                  {dateStr}
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
                                 <div className="flex flex-col">
-                                  <span>{dayName}</span>
+                                  <div className="flex items-center gap-2">
+                                    {hasCartridgeChange && (
+                                      <span className="text-yellow-600" title="Cambio de cartucho detectado">
+                                        🔄
+                                      </span>
+                                    )}
+                                    <span>{dateStr}</span>
+                                    <span className="text-xs text-gray-500 capitalize">({dayName})</span>
+                                  </div>
+                                  <span className="text-xs text-gray-500 mt-1">{timeStr}</span>
                                   {hasCartridgeChange && (
                                     <span className="text-xs font-semibold text-yellow-700 mt-1">
                                       Se cambió cartucho
@@ -1131,25 +1226,25 @@ export default function MedicalPrinters() {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
                                 <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-800">
-                                  {day.total_printed}
+                                  {record.total_printed}
                                 </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
                                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${
                                   hasCartridgeChange ? 'bg-yellow-100 text-yellow-800 ring-2 ring-yellow-500' : 'bg-green-100 text-green-800'
                                 }`}>
-                                  {day.total_available}
+                                  {record.total_available}
                                   {hasCartridgeChange && ' ⬆'}
                                 </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900">
-                                {day.total_trays_loaded}
+                                {record.total_trays_loaded}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                  day.is_online ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                  record.is_online ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                                 }`}>
-                                  {day.is_online ? '● Online' : '● Offline'}
+                                  {record.is_online ? '● Online' : '● Offline'}
                                 </span>
                               </td>
                             </tr>
@@ -1158,6 +1253,29 @@ export default function MedicalPrinters() {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Controles de paginación */}
+                  {printHistory.length > historyItemsPerPage && (
+                    <div className="mt-4 flex justify-center items-center gap-2">
+                      <button
+                        onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                        disabled={historyPage === 1}
+                        className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      >
+                        Anterior
+                      </button>
+                      <span className="text-sm text-gray-600">
+                        Página {historyPage} de {Math.ceil(printHistory.length / historyItemsPerPage)}
+                      </span>
+                      <button
+                        onClick={() => setHistoryPage(p => Math.min(Math.ceil(printHistory.length / historyItemsPerPage), p + 1))}
+                        disabled={historyPage >= Math.ceil(printHistory.length / historyItemsPerPage)}
+                        className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      >
+                        Siguiente
+                      </button>
+                    </div>
+                  )}
 
                   {/* Gráfico simple de barras */}
                   <div className="mt-6 bg-gray-50 rounded-lg p-4">

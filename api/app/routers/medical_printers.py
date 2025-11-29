@@ -95,25 +95,8 @@ async def get_medical_printer_counters(printer_id: int, db: Session = Depends(ge
                 is_online=result['is_online']
             )
             
-            # Guardar snapshot en la base de datos para historial
-            try:
-                counter_record = MedicalPrinterCounter(
-                    printer_id=printer.id,
-                    timestamp=datetime.now(),
-                    total_printed=result['summary']['total_printed'],
-                    total_available=result['summary']['total_available'],
-                    total_trays_loaded=result['summary']['total_trays_loaded'],
-                    is_online=result['is_online'],
-                    raw_data=json.dumps(result),
-                    collection_method='api'
-                )
-                db.add(counter_record)
-                db.commit()
-                logger.info(f"Saved counter snapshot for printer {printer_id}")
-            except Exception as save_error:
-                logger.error(f"Error saving counter snapshot: {save_error}")
-                # No falla la petición si falla el guardado del historial
-                db.rollback()
+            # NO guardamos snapshot aquí - solo la tarea programada debe guardar en historial
+            # Las consultas manuales solo muestran el estado actual sin persistir
             
             return MedicalPrinterStatus(
                 printer_id=printer.id,
@@ -244,9 +227,17 @@ async def test_medical_printer_connection(printer_id: int, db: Session = Depends
         }
 
 @router.get("/{printer_id}/print-history")
-async def get_print_history(printer_id: int, days: int = 30, db: Session = Depends(get_db)):
+async def get_print_history(
+    printer_id: int, 
+    days: int = 365, 
+    limit: int = 1000, 
+    grouped: bool = False,
+    db: Session = Depends(get_db)
+):
     """
-    Obtiene el historial de impresión día a día de una impresora médica
+    Obtiene el historial de impresión de una impresora médica
+    - grouped=True: Un registro por día (último del día)
+    - grouped=False: Todos los registros individuales
     """
     try:
         # Verificar que la impresora existe
@@ -255,58 +246,48 @@ async def get_print_history(printer_id: int, days: int = 30, db: Session = Depen
         if not printer:
             raise HTTPException(status_code=404, detail="Printer not found")
         
-        logger.info(f"Fetching print history for medical printer {printer_id}")
+        logger.info(f"Fetching print history for medical printer {printer_id}, days={days}, limit={limit}, grouped={grouped}")
         
         # Calcular fecha de inicio
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
         
-        # Obtener registros de contadores desde la tabla histórica
+        # Obtener TODOS los registros de contadores desde la tabla histórica
         counters = db.query(MedicalPrinterCounter).filter(
             MedicalPrinterCounter.printer_id == printer_id,
             MedicalPrinterCounter.timestamp >= start_date
-        ).order_by(desc(MedicalPrinterCounter.timestamp)).all()
+        ).order_by(desc(MedicalPrinterCounter.timestamp)).limit(limit).all()
+        
+        logger.info(f"Found {len(counters)} total counter records for printer {printer_id}")
         
         if not counters:
-            # Si no hay historial, intentar obtener datos actuales
-            try:
-                scraper = DrypixScraper(printer.ip)
-                result = scraper.get_counters()
-                
-                if result:
-                    current_date = datetime.now()
-                    # Guardar también en la base de datos
-                    try:
-                        counter_record = MedicalPrinterCounter(
-                            printer_id=printer.id,
-                            timestamp=current_date,
-                            total_printed=result['summary']['total_printed'],
-                            total_available=result['summary']['total_available'],
-                            total_trays_loaded=result['summary']['total_trays_loaded'],
-                            is_online=result['is_online'],
-                            raw_data=json.dumps(result),
-                            collection_method='manual'
-                        )
-                        db.add(counter_record)
-                        db.commit()
-                    except Exception as save_error:
-                        logger.error(f"Error saving counter: {save_error}")
-                        db.rollback()
-                    
-                    return [{
-                        "date": current_date.date().isoformat(),
-                        "timestamp": current_date.isoformat(),
-                        "total_printed": result['summary']['total_printed'],
-                        "total_available": result['summary']['total_available'],
-                        "total_trays_loaded": result['summary']['total_trays_loaded'],
-                        "is_online": result['is_online']
-                    }]
-            except Exception as scraper_error:
-                logger.error(f"Error fetching current data: {scraper_error}")
-            
+            # Si no hay historial, devolver lista vacía
+            # NO consultamos ni guardamos datos actuales - solo mostramos el historial guardado
+            logger.info(f"No historical data found for printer {printer_id}")
             return []
         
-        # Agrupar por día y tomar el último registro de cada día
+        # Si NO se solicita agrupación, devolver todos los registros individuales
+        if not grouped:
+            history_list = []
+            for counter in counters:
+                history_list.append({
+                    'id': counter.id,
+                    'date': counter.timestamp.date().isoformat(),
+                    'timestamp': counter.timestamp.isoformat(),
+                    'total_printed': counter.total_printed,
+                    'total_available': counter.total_available,
+                    'total_trays_loaded': counter.total_trays_loaded,
+                    'is_online': counter.is_online,
+                    'collection_method': counter.collection_method if hasattr(counter, 'collection_method') else 'scheduled',
+                    'cartridge_change_detected': counter.cartridge_change_detected if hasattr(counter, 'cartridge_change_detected') else False,
+                    'tray_number_changed': counter.tray_number_changed if hasattr(counter, 'tray_number_changed') else None,
+                    'films_added': counter.films_added if hasattr(counter, 'films_added') else 0
+                })
+            
+            logger.info(f"Returning {len(history_list)} individual records for printer {printer_id}")
+            return history_list
+        
+        # Si se solicita agrupación, agrupar por día y tomar el último registro de cada día
         daily_history = {}
         for counter in counters:
             date_key = counter.timestamp.date().isoformat()
@@ -327,6 +308,8 @@ async def get_print_history(printer_id: int, days: int = 30, db: Session = Depen
         
         # Convertir a lista y ordenar por fecha descendente
         history_list = sorted(daily_history.values(), key=lambda x: x['date'], reverse=True)
+        
+        logger.info(f"Returning {len(history_list)} days of history for printer {printer_id}")
         
         return history_list
         
@@ -856,3 +839,33 @@ async def create_manual_snapshot(
             status_code=500,
             detail=f"Error al crear snapshot: {str(e)}"
         )
+
+# Configuración de tareas programadas
+class ScheduleConfig(BaseModel):
+    daily_schedule_hour: int = 7
+    daily_schedule_minute: int = 0
+    hourly_enabled: bool = True
+    hourly_interval: int = 1
+    cleanup_hour: int = 3
+    retention_days: int = 30
+    cartridge_detection_threshold: int = 20
+
+# Variable global para almacenar la configuración (en producción usar base de datos)
+_schedule_config = ScheduleConfig()
+
+@router.get("/schedule-config", response_model=ScheduleConfig)
+async def get_schedule_config():
+    """Obtener configuración actual de tareas programadas"""
+    return _schedule_config
+
+@router.put("/schedule-config", response_model=ScheduleConfig)
+async def update_schedule_config(config: ScheduleConfig):
+    """Actualizar configuración de tareas programadas"""
+    global _schedule_config
+    _schedule_config = config
+    
+    # TODO: Aquí se debería actualizar el scheduler dinámicamente
+    # o guardar en base de datos y aplicar en próximo reinicio
+    
+    logger.info(f"Schedule configuration updated: {config.dict()}")
+    return _schedule_config

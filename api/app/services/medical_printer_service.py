@@ -5,8 +5,12 @@ que no soportan SNMP y requieren web scraping
 import requests
 from bs4 import BeautifulSoup
 import re
+import socket
+import asyncio
+import concurrent.futures
 from datetime import datetime
 from typing import Dict, Optional, List
+from ipaddress import IPv4Address, IPv4Network
 
 
 class MedicalPrinterService:
@@ -41,6 +45,162 @@ class MedicalPrinterService:
         """Obtiene contadores del DRYPIX SMART"""
         scraper = DrypixScraper(printer.ip_address, printer.port or 20051)
         return scraper.get_counters()
+    
+    @staticmethod
+    def discover_medical_printer(ip: str, port: int = 20051, timeout: int = 3) -> Optional[Dict]:
+        """
+        Intenta descubrir una impresora médica en la IP especificada
+        
+        Args:
+            ip: Dirección IP a verificar
+            port: Puerto de la interfaz web (default: 20051 para DRYPIX)
+            timeout: Timeout en segundos para la conexión
+            
+        Returns:
+            Dict con información de la impresora si se detecta, None si no
+        """
+        try:
+            # Intentar acceder a la página de login DRYPIX
+            login_url = f"http://{ip}:{port}/USER/Login.htm"
+            
+            response = requests.get(login_url, timeout=timeout)
+            
+            if response.status_code == 200:
+                content = response.text.upper()
+                
+                # Verificar si es una interfaz DRYPIX
+                if "DRYPIX" in content or "FUJIFILM" in content:
+                    # Intentar autenticación para obtener más información
+                    scraper = DrypixScraper(ip, port)
+                    if scraper.authenticate():
+                        # Obtener contadores para confirmar
+                        counters = scraper.get_counters()
+                        
+                        if counters:
+                            return {
+                                "ip": ip,
+                                "port": port,
+                                "type": "medical",
+                                "model": "FUJI DRYPIX SMART",
+                                "brand": "FUJIFILM",
+                                "is_medical": True,
+                                "connection_method": "web_interface",
+                                "status": counters.get("status", "online"),
+                                "trays_info": counters.get("summary", {}),
+                                "authenticated": True
+                            }
+                    
+                    # Si no pudo autenticar pero detectó DRYPIX
+                    return {
+                        "ip": ip,
+                        "port": port,
+                        "type": "medical",
+                        "model": "FUJI DRYPIX SMART",
+                        "brand": "FUJIFILM",
+                        "is_medical": True,
+                        "connection_method": "web_interface",
+                        "authenticated": False,
+                        "note": "Detectado pero no se pudo autenticar"
+                    }
+                
+                # Verificar otros tipos de impresoras médicas
+                if "FCR" in content or "CR" in content:
+                    return {
+                        "ip": ip,
+                        "port": port,
+                        "type": "medical",
+                        "model": "Computed Radiography",
+                        "brand": "Unknown",
+                        "is_medical": True,
+                        "connection_method": "web_interface",
+                        "note": "FCR/CR detectado - requiere implementación específica"
+                    }
+                    
+        except requests.Timeout:
+            pass  # Timeout normal, no es impresora médica
+        except requests.ConnectionError:
+            pass  # No hay servicio en este puerto
+        except Exception as e:
+            # Error inesperado - registrar pero no fallar
+            print(f"Error al descubrir impresora médica en {ip}:{port} - {str(e)}")
+        
+        return None
+    
+    @staticmethod
+    def discover_medical_printers_in_range(
+        ip_range: str, 
+        port: int = 20051, 
+        timeout: int = 2,
+        max_workers: int = 50
+    ) -> List[Dict]:
+        """
+        Escanea un rango de IPs buscando impresoras médicas
+        
+        Args:
+            ip_range: Rango de IPs en formato CIDR (ej: "10.1.10.0/24") 
+                     o rango (ej: "10.1.10.1-10.1.10.50")
+            port: Puerto a escanear (default: 20051)
+            timeout: Timeout por IP en segundos
+            max_workers: Número de workers paralelos
+            
+        Returns:
+            Lista de impresoras médicas descubiertas
+        """
+        discovered = []
+        
+        # Parsear rango de IPs
+        ip_list = []
+        try:
+            if '-' in ip_range:
+                # Formato: 10.1.10.1-10.1.10.50
+                start_ip, end_ip = ip_range.split('-')
+                start = IPv4Address(start_ip.strip())
+                end = IPv4Address(end_ip.strip())
+                
+                current = start
+                while current <= end:
+                    ip_list.append(str(current))
+                    current += 1
+                    
+            elif '/' in ip_range:
+                # Formato CIDR: 10.1.10.0/24
+                network = IPv4Network(ip_range, strict=False)
+                ip_list = [str(ip) for ip in network.hosts()]
+                
+            else:
+                # IP individual
+                ip_list = [ip_range.strip()]
+                
+        except Exception as e:
+            print(f"Error parseando rango de IPs: {str(e)}")
+            return []
+        
+        print(f"🔍 Escaneando {len(ip_list)} IPs en busca de impresoras médicas en puerto {port}...")
+        
+        # Escanear en paralelo
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_ip = {
+                executor.submit(
+                    MedicalPrinterService.discover_medical_printer, 
+                    ip, 
+                    port, 
+                    timeout
+                ): ip 
+                for ip in ip_list
+            }
+            
+            for future in concurrent.futures.as_completed(future_to_ip):
+                ip = future_to_ip[future]
+                try:
+                    result = future.result()
+                    if result:
+                        discovered.append(result)
+                        print(f"✅ Impresora médica encontrada en {ip}:{port} - {result.get('model')}")
+                except Exception as e:
+                    print(f"❌ Error escaneando {ip}: {str(e)}")
+        
+        print(f"🎯 Descubrimiento completado: {len(discovered)} impresoras médicas encontradas")
+        return discovered
 
 
 class DrypixScraper:

@@ -3,6 +3,7 @@
 import './globals.css'
 import { Inter } from 'next/font/google'
 import { useState } from 'react'
+import { usePathname } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
 
@@ -14,6 +15,20 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const pathname = usePathname()
+  
+  // Don't show sidebar/header on login page
+  const isLoginPage = pathname === '/login'
+
+  if (isLoginPage) {
+    return (
+      <html lang="en" className="scroll-smooth">
+        <body className={`${inter.className} antialiased`}>
+          {children}
+        </body>
+      </html>
+    )
+  }
 
   return (
     <html lang="en" className="scroll-smooth">

@@ -21,6 +21,9 @@ def poll_medical_printers_hourly():
     - Crear snapshots automáticos
     - Detectar cambios de cartucho
     """
+    print("=" * 80)
+    print(f"🕐 INICIANDO POLLING HORARIO - {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print("=" * 80)
     logger.info("🕐 Iniciando polling horario de impresoras médicas...")
     
     db: Session = SessionLocal()
@@ -29,6 +32,8 @@ def poll_medical_printers_hourly():
         medical_printers = db.query(Printer).filter(
             Printer.model.in_(['DRYPIX SMART', 'FCR', 'CR'])
         ).all()
+        
+        print(f"📋 Encontradas {len(medical_printers)} impresoras médicas")
         
         if not medical_printers:
             logger.info("No hay impresoras médicas registradas")
@@ -44,9 +49,9 @@ def poll_medical_printers_hourly():
                 
                 # Crear scraper DRYPIX
                 scraper = DrypixScraper(
-                    ip=printer.ip,
+                    ip_address=printer.ip,
                     port=20051,
-                    username='dryprinter',
+                    login='dryprinter',
                     password='fujifilm'
                 )
                 
@@ -57,10 +62,15 @@ def poll_medical_printers_hourly():
                     logger.warning(f"No se pudieron obtener contadores de printer {printer.id}")
                     continue
                 
-                # Crear snapshot para cada bandeja
-                for tray in counters['trays']:
-                    tray_number = tray['tray_number']
-                    films_available = tray['available']
+                # Crear snapshot para cada bandeja (trays es un diccionario {Tray1: {available, printed}, ...})
+                for tray_key, tray_data in counters['trays'].items():
+                    # Extraer el número de bandeja de la key (Tray1 -> 1)
+                    tray_number = int(tray_key.replace('Tray', ''))
+                    films_available = tray_data['available']
+                    
+                    # Solo crear snapshot si la bandeja tiene films disponibles o impresos
+                    if films_available == 0 and tray_data['printed'] == 0:
+                        continue
                     
                     # Crear snapshot y detectar cambios automáticamente
                     snapshot = CartridgeDetectionService.create_snapshot(
@@ -79,10 +89,13 @@ def poll_medical_printers_hourly():
                 logger.error(f"Error polling printer {printer.id}: {str(e)}")
                 continue
         
+        print(f"✅ POLLING HORARIO COMPLETADO: {total_snapshots} snapshots, {total_changes} cambios detectados")
+        print("=" * 80)
         logger.info(f"✅ Polling horario completado: {total_snapshots} snapshots creados, "
                    f"{total_changes} cambios de cartucho detectados")
         
     except Exception as e:
+        print(f"❌ ERROR EN POLLING HORARIO: {str(e)}")
         logger.error(f"Error en polling horario: {str(e)}")
     finally:
         db.close()

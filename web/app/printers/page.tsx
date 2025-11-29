@@ -61,6 +61,9 @@ interface DiscoveredDevice {
   device_info?: any
   response_time?: number
   is_printer: boolean
+  is_medical?: boolean  // Nueva propiedad para impresoras médicas
+  connection_method?: string  // "snmp", "web_interface", "combined"
+  port?: number  // Puerto de conexión
   ping_response?: boolean
   error?: string
 }
@@ -70,6 +73,8 @@ interface DiscoveryRequest {
   ip_list?: string[]
   timeout: number
   max_workers: number
+  include_medical?: boolean  // Nueva opción para incluir impresoras médicas
+  medical_port?: number  // Puerto para descubrimiento médico
 }
 
 interface DiscoveryConfig {
@@ -109,7 +114,9 @@ export default function Printers() {
   ])
   const [discoverySettings, setDiscoverySettings] = useState({
     timeout: 5,
-    max_workers: 10
+    max_workers: 10,
+    include_medical: true,  // Habilitar búsqueda de impresoras médicas por defecto
+    medical_port: 20051  // Puerto DRYPIX por defecto
   })
 
   // Estados para progreso detallado del descubrimiento
@@ -360,7 +367,7 @@ export default function Printers() {
   const resetDiscovery = () => {
     setDiscoveredDevices([])
     setIpRanges([{ id: '1', value: '' }])
-    setDiscoverySettings({ timeout: 5, max_workers: 10 })
+    setDiscoverySettings({ timeout: 5, max_workers: 10, include_medical: true, medical_port: 20051 })
   }
 
   const loadConfiguration = (config: DiscoveryConfig, replace: boolean = false) => {
@@ -634,7 +641,9 @@ export default function Printers() {
           const request: DiscoveryRequest = {
             ip_list: responsiveIPsInRange, // Solo las IPs que respondieron al ping
             timeout: discoverySettings.timeout,
-            max_workers: discoverySettings.max_workers
+            max_workers: discoverySettings.max_workers,
+            include_medical: discoverySettings.include_medical,  // Incluir búsqueda de médicas
+            medical_port: discoverySettings.medical_port  // Puerto para DRYPIX
           }
 
           const response = await fetch(`${API_BASE}/printers/discover`, {
@@ -643,7 +652,7 @@ export default function Printers() {
             body: JSON.stringify(request)
           })
 
-          console.log(`📡 Respuesta SNMP recibida para ${rangeValue}, status: ${response.status}`)
+          console.log(`📡 Respuesta SNMP${discoverySettings.include_medical ? '/Médica' : ''} recibida para ${rangeValue}, status: ${response.status}`)
 
           if (response.ok) {
             const devices = await response.json()
@@ -1988,6 +1997,31 @@ export default function Printers() {
                         max="50"
                       />
                     </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2 tracking-tight">
+                        <input
+                          type="checkbox"
+                          checked={discoverySettings.include_medical}
+                          onChange={(e) => setDiscoverySettings(prev => ({ ...prev, include_medical: e.target.checked }))}
+                          className="mr-2"
+                        />
+                        Incluir Médicas
+                      </label>
+                      <p className="text-xs text-gray-500 mt-1">DRYPIX, FCR, CR</p>
+                    </div>
+                    {discoverySettings.include_medical && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2 tracking-tight">Puerto Médico</label>
+                        <input
+                          type="number"
+                          value={discoverySettings.medical_port}
+                          onChange={(e) => setDiscoverySettings(prev => ({ ...prev, medical_port: parseInt(e.target.value) }))}
+                          className="w-24 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                          min="1"
+                          max="65535"
+                        />
+                      </div>
+                    )}
                     <button
                       onClick={startDiscovery}
                       disabled={discovering}
@@ -2242,9 +2276,10 @@ export default function Printers() {
                               const isExisting = device.device_info?.existing_in_db || false
                               const pingOk = device.ping_response !== false
                               const snmpOk = device.snmp_profile && device.snmp_profile !== 'No disponible'
+                              const isMedical = device.is_medical || false
                               
                               return (
-                                <tr key={index} className={`${isExisting ? 'bg-yellow-50' : 'hover:bg-gray-50'}`}>
+                                <tr key={index} className={`${isExisting ? 'bg-yellow-50' : isMedical ? 'bg-green-50' : 'hover:bg-gray-50'}`}>
                                   <td className="px-4 py-4 whitespace-nowrap">
                                     <input
                                       type="checkbox"
@@ -2260,6 +2295,9 @@ export default function Printers() {
                                       {device.hostname && (
                                         <div className="text-sm text-gray-500">{device.hostname}</div>
                                       )}
+                                      {device.port && device.port !== 161 && (
+                                        <div className="text-xs text-gray-500">Puerto: {device.port}</div>
+                                      )}
                                     </div>
                                   </td>
                                   <td className="px-4 py-4 whitespace-nowrap">
@@ -2267,9 +2305,11 @@ export default function Printers() {
                                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                                         isExisting 
                                           ? 'bg-yellow-100 text-yellow-800' 
-                                          : 'bg-green-100 text-green-800'
+                                          : isMedical
+                                          ? 'bg-green-100 text-green-800'
+                                          : 'bg-blue-100 text-blue-800'
                                       }`}>
-                                        {isExisting ? 'Ya agregada' : 'Nueva'}
+                                        {isExisting ? 'Ya agregada' : isMedical ? '🏥 Médica' : 'Nueva'}
                                       </span>
                                       {device.response_time && (
                                         <span className="text-xs text-gray-500">
@@ -2312,13 +2352,19 @@ export default function Printers() {
                                       }`}>
                                         🏓 {pingOk ? 'Ping OK' : 'Sin Ping'}
                                       </span>
-                                      <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${
-                                        snmpOk 
-                                          ? 'bg-blue-100 text-blue-800' 
-                                          : 'bg-gray-100 text-gray-800'
-                                      }`}>
-                                        📡 {snmpOk ? 'SNMP OK' : 'Sin SNMP'}
-                                      </span>
+                                      {isMedical ? (
+                                        <span className="inline-flex items-center px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
+                                          🌐 Web OK
+                                        </span>
+                                      ) : (
+                                        <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${
+                                          snmpOk 
+                                            ? 'bg-blue-100 text-blue-800' 
+                                            : 'bg-gray-100 text-gray-800'
+                                        }`}>
+                                          📡 {snmpOk ? 'SNMP OK' : 'Sin SNMP'}
+                                        </span>
+                                      )}
                                     </div>
                                   </td>
                                   <td className="px-4 py-4 whitespace-nowrap">
