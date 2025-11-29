@@ -53,6 +53,7 @@ printer-fleet-manager/
 │   │   ├── billing/         # Facturación
 │   │   ├── incidents/       # Incidentes
 │   │   ├── stock/           # Inventario
+│   │   ├── medical-printers/# Impresoras médicas
 │   │   └── exchange-rates/  # Tasas de cambio
 │   ├── components/          # Componentes reutilizables
 │   ├── types/               # Tipos TypeScript
@@ -67,18 +68,22 @@ printer-fleet-manager/
 │   └── README.md
 │
 ├── 📂 scripts/               # Scripts de utilidad
-│   ├── migration_add_ip_history.py
-│   ├── setup_exchange_rate_sources.py
+│   ├── migration_*.py       # Scripts de migración
+│   ├── setup_*.py           # Scripts de configuración
 │   └── README.md
 │
-├── 📂 docs/                  # Documentación
+├── 📂 docs/                  # Documentación técnica
 │   ├── DESIGN_SYSTEM.md
 │   ├── PRODUCTION_DEPLOYMENT.md
-│   └── CLEANUP_SUMMARY.md
+│   ├── MEDICAL_PRINTER_FLOW.md
+│   ├── DESCUBRIMIENTO_IMPRESORAS_MEDICAS.md
+│   └── ...más documentación
 │
-├── 📂 development/           # Herramientas de desarrollo
-│   ├── scripts/             # Scripts de testing
-│   └── tests/               # Tests adicionales
+├── 📂 archive/               # Archivos de desarrollo (no en git)
+│   ├── html_samples/        # Muestras HTML de DRYPIX
+│   ├── test_scripts/        # Scripts de prueba
+│   ├── exploration_scripts/ # Scripts de exploración
+│   └── README.md
 │
 ├── docker-compose.yml       # Desarrollo local
 ├── .env.example            # Variables de entorno ejemplo

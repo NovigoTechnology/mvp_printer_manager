@@ -10,7 +10,12 @@ import socket
 from ..db import get_db
 from ..models import Printer, UsageReport, PrinterSupply, StockItem, LeaseContract, ContractPrinter
 from ..services.snmp import SNMPService
-from ..services.medical_printer_service import MedicalPrinterService, is_medical_printer
+from ..services.medical_printer_service import (
+    MedicalPrinterService, 
+    is_medical_printer,
+    discover_medical_printers,
+    discover_medical_printers_in_range
+)
 
 router = APIRouter()
 
@@ -955,7 +960,7 @@ def ping_icmp(ip: str, timeout: int = 1) -> bool:
     """Verifica si un host responde a ping TCP en varios puertos comunes"""
     try:
         # Lista de puertos comunes para probar conectividad
-        common_ports = [80, 443, 161, 9100, 515, 631]  # HTTP, HTTPS, SNMP, IPP, LPR, CUPS
+        common_ports = [80, 443, 161, 9100, 515, 631, 20051]  # HTTP, HTTPS, SNMP, IPP, LPR, CUPS, DRYPIX
         
         for port in common_ports:
             try:
@@ -986,9 +991,7 @@ class DiscoveredDevice(BaseModel):
     device_info: Optional[Dict[str, Any]] = None
     response_time: Optional[float] = None
     is_printer: bool = False
-    is_medical: bool = False  # Nueva bandera para impresoras médicas
-    connection_method: Optional[str] = None  # "snmp", "web_interface", "combined"
-    port: Optional[int] = None  # Puerto de conexión (161 para SNMP, 20051 para DRYPIX, etc.)
+    is_medical: bool = False  # Nuevo campo para identificar impresoras médicas
     ping_response: Optional[bool] = None
     error: Optional[str] = None
 
@@ -997,8 +1000,7 @@ class DiscoveryRequest(BaseModel):
     ip_list: Optional[List[str]] = None  # Lista específica de IPs para verificar (para la fase 2 del descubrimiento)
     timeout: int = 3  # Timeout en segundos para cada IP
     max_workers: int = 50  # Número máximo de threads concurrentes
-    include_medical: bool = True  # Si debe buscar impresoras médicas también
-    medical_port: int = 20051  # Puerto para escaneo de impresoras médicas
+    include_medical: bool = True  # Si debe incluir descubrimiento de impresoras médicas
 
 def ping_host(ip: str, timeout: int = 1) -> bool:
     """Verifica si un host responde a ping TCP en puerto 161 (SNMP)"""
@@ -1011,7 +1013,7 @@ def ping_host(ip: str, timeout: int = 1) -> bool:
     except:
         return False
 
-def discover_single_device(ip: str, timeout: int = 3, include_medical: bool = True, medical_port: int = 20051) -> DiscoveredDevice:
+def discover_single_device(ip: str, timeout: int = 3) -> DiscoveredDevice:
     """Descubre un dispositivo individual en la IP especificada"""
     import time
     start_time = time.time()
@@ -1022,39 +1024,10 @@ def discover_single_device(ip: str, timeout: int = 3, include_medical: bool = Tr
         # Verificar respuesta a ping ICMP primero
         device.ping_response = ping_icmp(ip, timeout=1)
         
-        # PRIORIDAD 1: Intentar descubrir impresora médica primero (si está habilitado)
-        if include_medical:
-            from app.services.medical_printer_service import MedicalPrinterService
-            
-            medical_info = MedicalPrinterService.discover_medical_printer(ip, medical_port, timeout)
-            
-            if medical_info:
-                end_time = time.time()
-                device.response_time = round(end_time - start_time, 2)
-                device.is_printer = True
-                device.is_medical = True
-                device.brand = medical_info.get('brand')
-                device.model = medical_info.get('model')
-                device.connection_method = medical_info.get('connection_method', 'web_interface')
-                device.port = medical_info.get('port', medical_port)
-                device.device_info = {
-                    'success': True,
-                    'method': 'Medical Web Interface',
-                    'type': medical_info.get('type'),
-                    'brand': medical_info.get('brand'),
-                    'model': medical_info.get('model'),
-                    'status': medical_info.get('status'),
-                    'authenticated': medical_info.get('authenticated', False),
-                    'trays_info': medical_info.get('trays_info'),
-                    'note': medical_info.get('note')
-                }
-                return device
-        
-        # PRIORIDAD 2: Si no es médica, intentar SNMP
         # Verificar conexión SNMP directamente
         snmp_service = SNMPService()
         if not snmp_service.test_connection(ip):
-            device.error = "No responde a SNMP ni es impresora médica"
+            device.error = "No responde a SNMP"
             return device
         
         # Obtener hostname si es posible
@@ -1084,8 +1057,6 @@ def discover_single_device(ip: str, timeout: int = 3, include_medical: bool = Tr
             device.serial_number = combined_info.get('serial_number')
             device.is_color = combined_info.get('is_color', False)
             device.snmp_profile = 'combined'  # Nuevo perfil para método combinado
-            device.connection_method = 'snmp'
-            device.port = 161
             device.device_info = {
                 'success': True,
                 'method': combined_info.get('method', 'SNMP+HTTP'),
@@ -1171,6 +1142,7 @@ def ping_single_ip(ip: str, timeout: int = 1) -> bool:
     priority_ports = [
         80,   # HTTP - El más común en impresoras modernas (rápido)
         9100, # Raw printing (HP JetDirect) - Muy común (rápido)
+        20051,# DRYPIX - Impresoras médicas FUJI (importante)
         515,  # LPR (Line Printer Remote) - Impresoras más antiguas
         631,  # IPP (Internet Printing Protocol) - Estándar moderno
         443,  # HTTPS - Impresoras empresariales (más lento)
@@ -1303,14 +1275,12 @@ def discover_printers(request: DiscoveryRequest, db: Session = Depends(get_db)):
     if request.ip_list is not None:
         # Modo 2: Lista específica de IPs (descubrimiento optimizado fase 2)
         ip_list = request.ip_list
-        discovery_type = "SNMP/Médica optimizado" if request.include_medical else "SNMP optimizado"
-        print(f"🔌 Iniciando descubrimiento {discovery_type} en {len(ip_list)} IPs que respondieron al ping...")
+        print(f"🔌 Iniciando descubrimiento SNMP optimizado en {len(ip_list)} IPs que respondieron al ping...")
     elif request.ip_range is not None:
         # Modo 1: Parsear rango de IPs (descubrimiento tradicional)
         try:
             ip_list = parse_ip_range(request.ip_range)
-            discovery_type = "completo (SNMP + Médicas)" if request.include_medical else "tradicional (SNMP)"
-            print(f"🔍 Iniciando descubrimiento {discovery_type} en {len(ip_list)} IPs del rango {request.ip_range}...")
+            print(f"🔍 Iniciando descubrimiento tradicional en {len(ip_list)} IPs del rango {request.ip_range}...")
         except HTTPException:
             raise
         except Exception as e:
@@ -1334,15 +1304,9 @@ def discover_printers(request: DiscoveryRequest, db: Session = Depends(get_db)):
     discovered_devices = []
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=request.max_workers) as executor:
-        # Crear tasks para cada IP pasando los parámetros de discovery médico
+        # Crear tasks para cada IP
         future_to_ip = {
-            executor.submit(
-                discover_single_device, 
-                ip, 
-                request.timeout, 
-                request.include_medical, 
-                request.medical_port
-            ): ip 
+            executor.submit(discover_single_device, ip, request.timeout): ip 
             for ip in ip_list
         }
         
@@ -1363,16 +1327,68 @@ def discover_printers(request: DiscoveryRequest, db: Session = Depends(get_db)):
     # Ordenar por IP
     discovered_devices.sort(key=lambda x: ipaddress.IPv4Address(x.ip))
     
-    # Estadísticas de descubrimiento
-    total_discovered = len([d for d in discovered_devices if d.is_printer])
-    medical_discovered = len([d for d in discovered_devices if d.is_medical])
-    snmp_discovered = total_discovered - medical_discovered
-    
-    print(f"✅ Descubrimiento completado:")
-    print(f"   📊 Total dispositivos: {len(discovered_devices)}")
-    print(f"   🖨️  Impresoras encontradas: {total_discovered}")
-    print(f"   🏥 Impresoras médicas: {medical_discovered}")
-    print(f"   📡 Impresoras SNMP: {snmp_discovered}")
+    # DESCUBRIMIENTO DE IMPRESORAS MÉDICAS (si está habilitado)
+    if request.include_medical:
+        print("🏥 Iniciando descubrimiento de impresoras médicas...")
+        
+        # Usar las mismas IPs que se escanearon para SNMP
+        medical_devices = discover_medical_printers(
+            ip_list=ip_list,
+            port=20051,  # Puerto estándar DRYPIX
+            timeout=request.timeout,
+            max_workers=min(20, request.max_workers)  # Limitar workers para web scraping
+        )
+        
+        # Integrar dispositivos médicos encontrados
+        for medical_info in medical_devices:
+            medical_ip = medical_info['ip']
+            
+            # Verificar si ya existe un dispositivo descubierto para esta IP
+            existing_device = next((d for d in discovered_devices if d.ip == medical_ip), None)
+            
+            if existing_device:
+                # Actualizar dispositivo existente con información médica
+                existing_device.is_printer = True
+                existing_device.is_medical = True
+                existing_device.brand = medical_info.get('brand', existing_device.brand)
+                existing_device.model = medical_info.get('model', existing_device.model)
+                existing_device.serial_number = medical_info.get('serial_number', existing_device.serial_number)  # ⭐ Agregado
+                existing_device.snmp_profile = 'medical_web'
+                existing_device.device_info = existing_device.device_info or {}
+                existing_device.device_info.update({
+                    'medical_type': medical_info.get('type'),
+                    'protocol': medical_info.get('protocol'),
+                    'port': medical_info.get('port'),
+                    'authenticated': medical_info.get('authenticated', False),
+                    'counters_available': medical_info.get('counters_available', False),
+                    'trays': medical_info.get('trays')
+                })
+            else:
+                # Crear nuevo dispositivo médico
+                medical_device = DiscoveredDevice(
+                    ip=medical_ip,
+                    brand=medical_info.get('brand'),
+                    model=medical_info.get('model'),
+                    serial_number=medical_info.get('serial_number'),  # ⭐ Agregado
+                    is_printer=True,
+                    is_medical=True,
+                    snmp_profile='medical_web',
+                    device_info={
+                        'medical_type': medical_info.get('type'),
+                        'protocol': medical_info.get('protocol'),
+                        'port': medical_info.get('port'),
+                        'authenticated': medical_info.get('authenticated', False),
+                        'counters_available': medical_info.get('counters_available', False),
+                        'trays': medical_info.get('trays')
+                    }
+                )
+                discovered_devices.append(medical_device)
+        
+        # Re-ordenar después de agregar dispositivos médicos
+        discovered_devices.sort(key=lambda x: ipaddress.IPv4Address(x.ip))
+        
+        medical_count = len([d for d in discovered_devices if d.is_medical])
+        print(f"🏥 Descubrimiento médico completado: {medical_count} dispositivos médicos encontrados")
     
     # Verificar si alguna de las IPs descubiertas ya existe en la base de datos
     for device in discovered_devices:
@@ -1388,64 +1404,88 @@ def discover_printers(request: DiscoveryRequest, db: Session = Depends(get_db)):
                     'model': existing_printer.model
                 }
     
-    print(f"Descubrimiento completado. Encontrados {len([d for d in discovered_devices if d.is_printer])} dispositivos de impresión")
+    total_printers = len([d for d in discovered_devices if d.is_printer])
+    medical_printers = len([d for d in discovered_devices if d.is_medical])
+    snmp_printers = total_printers - medical_printers
+    
+    print(f"Descubrimiento completado. Encontrados {total_printers} dispositivos de impresión "
+          f"({snmp_printers} SNMP, {medical_printers} médicas)")
     
     return discovered_devices
 
-
 @router.post("/discover/medical", response_model=List[DiscoveredDevice])
-def discover_medical_printers(
-    ip_range: str,
-    port: int = 20051,
-    timeout: int = 2,
-    max_workers: int = 50,
-    db: Session = Depends(get_db)
-):
+def discover_medical_printers_only(request: DiscoveryRequest, db: Session = Depends(get_db)):
     """
-    Descubre SOLO impresoras médicas (DRYPIX, FCR, CR, etc.) en un rango de IPs
+    Descubre SOLO impresoras médicas (DRYPIX, FCR, CR, DI-HL) mediante web scraping
     
-    Este endpoint está especializado para descubrimiento de impresoras médicas
-    que no soportan SNMP y usan interfaces web.
+    Este endpoint busca específicamente impresoras médicas que no soportan SNMP.
+    Es más rápido que el descubrimiento completo cuando solo se buscan dispositivos médicos.
     
     Parámetros:
-    - ip_range: Rango de IPs en formato CIDR (ej: "10.1.10.0/24") o rango (ej: "10.1.10.1-50")
-    - port: Puerto de la interfaz web (default: 20051 para DRYPIX)
-    - timeout: Timeout en segundos por IP (default: 2)
-    - max_workers: Threads paralelos (default: 50)
+    - ip_range: Rango de IPs en formato CIDR, rango o IP individual
+    - ip_list: Lista específica de IPs a verificar
+    - timeout: Timeout en segundos (por defecto 3)
+    - max_workers: Threads concurrentes (por defecto 50, se limitará a 20 para web)
     
-    Retorna:
-    - Lista de impresoras médicas descubiertas con información detallada
+    Returns:
+        Lista de dispositivos médicos descubiertos
     """
-    from app.services.medical_printer_service import MedicalPrinterService
+    import time
+    start_time = time.time()
     
-    print(f"🏥 Iniciando descubrimiento de impresoras médicas en {ip_range}...")
+    # Determinar lista de IPs a procesar
+    if request.ip_list is not None:
+        ip_list = request.ip_list
+        print(f"🏥 Descubrimiento médico en {len(ip_list)} IPs específicas...")
+    elif request.ip_range is not None:
+        try:
+            ip_list = parse_ip_range(request.ip_range)
+            print(f"🏥 Descubrimiento médico en rango {request.ip_range} ({len(ip_list)} IPs)...")
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error parseando rango de IPs: {str(e)}"
+            )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Debe especificar 'ip_range' o 'ip_list'"
+        )
     
-    # Usar el servicio de descubrimiento médico
-    medical_devices_raw = MedicalPrinterService.discover_medical_printers_in_range(
-        ip_range=ip_range,
-        port=port,
-        timeout=timeout,
-        max_workers=max_workers
+    if len(ip_list) > 1000:
+        raise HTTPException(
+            status_code=400,
+            detail="Lista de IPs demasiado grande (máximo 1000 IPs)"
+        )
+    
+    # Descubrir impresoras médicas
+    medical_devices_info = discover_medical_printers(
+        ip_list=ip_list,
+        port=20051,
+        timeout=request.timeout,
+        max_workers=min(20, request.max_workers)
     )
     
-    # Convertir a formato DiscoveredDevice
+    # Convertir a DiscoveredDevice
     discovered_devices = []
     
-    for med_device in medical_devices_raw:
+    for medical_info in medical_devices_info:
         device = DiscoveredDevice(
-            ip=med_device['ip'],
-            brand=med_device.get('brand'),
-            model=med_device.get('model'),
+            ip=medical_info['ip'],
+            brand=medical_info.get('brand'),
+            model=medical_info.get('model'),
+            serial_number=medical_info.get('serial_number'),  # ⭐ Agregado
             is_printer=True,
             is_medical=True,
-            connection_method=med_device.get('connection_method', 'web_interface'),
-            port=med_device.get('port', port),
+            snmp_profile='medical_web',
             device_info={
-                'type': med_device.get('type'),
-                'status': med_device.get('status'),
-                'authenticated': med_device.get('authenticated', False),
-                'trays_info': med_device.get('trays_info'),
-                'note': med_device.get('note')
+                'medical_type': medical_info.get('type'),
+                'protocol': medical_info.get('protocol'),
+                'port': medical_info.get('port'),
+                'authenticated': medical_info.get('authenticated', False),
+                'counters_available': medical_info.get('counters_available', False),
+                'trays': medical_info.get('trays'),
+                'discovery_method': 'web_scraping'
             }
         )
         
@@ -1455,17 +1495,22 @@ def discover_medical_printers(
             device.device_info['existing_in_db'] = True
             device.device_info['existing_printer'] = {
                 'id': existing_printer.id,
-                'name': existing_printer.name,
                 'asset_tag': existing_printer.asset_tag,
+                'brand': existing_printer.brand,
                 'model': existing_printer.model
             }
         
         discovered_devices.append(device)
     
-    print(f"✅ Descubrimiento médico completado: {len(discovered_devices)} impresoras encontradas")
+    # Ordenar por IP
+    discovered_devices.sort(key=lambda x: ipaddress.IPv4Address(x.ip))
+    
+    elapsed_time = time.time() - start_time
+    
+    print(f"🏥 Descubrimiento médico completado: {len(discovered_devices)} impresoras médicas encontradas "
+          f"en {elapsed_time:.2f}s")
     
     return discovered_devices
-
 
 @router.post("/discover/validate")
 def validate_discovered_printers(

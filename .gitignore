@@ -90,6 +90,28 @@ development/
 *page-minimal-test.*
 *page-full-backup.*
 
+# Archive folder
+archive/
+
+# HTML test files
+*_discovered.html
+*_htm_*.html
+counter.html
+setting*.html
+drypix*.html
+
+# Exploration and test scripts
+test_*.py
+*_test.py
+explore_*.py
+check_*.py
+get_*.py
+extract_*.py
+add_fuji_printer.py
+
+# JSON test data
+drypix_*.json
+
 # Documentation files (keep only README.md)
 *_FIXES.md
 *_SUCCESS.md
@@ -101,10 +123,6 @@ FINAL_*.md
 RECOMPIL*.md
 CONTRACT_*.md
 EQUIPMENT_*.md
-
-# Test files in root
-test_*.py
-*_test.py
 
 # TypeScript
 *.tsbuildinfo

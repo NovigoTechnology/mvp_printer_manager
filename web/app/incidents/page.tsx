@@ -208,6 +208,8 @@ export default function IncidentsPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Impresora</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Prioridad</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Generado por</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asignado a</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
               </tr>
@@ -219,11 +221,6 @@ export default function IncidentsPage() {
                   <td className="px-6 py-4 text-sm text-gray-900">
                     <div className="max-w-xs">
                       <div className="font-medium">{incident.title}</div>
-                      {incident.assigned_to_name && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          Asignado: {incident.assigned_to_name}
-                        </div>
-                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">
@@ -241,6 +238,12 @@ export default function IncidentsPage() {
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(incident.priority)}`}>
                       {getPriorityLabel(incident.priority)}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {incident.reported_by_name || <span className="text-gray-400">No asignado</span>}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {incident.assigned_to_name || <span className="text-gray-400">No asignado</span>}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(incident.created_at)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

@@ -61,9 +61,7 @@ interface DiscoveredDevice {
   device_info?: any
   response_time?: number
   is_printer: boolean
-  is_medical?: boolean  // Nueva propiedad para impresoras médicas
-  connection_method?: string  // "snmp", "web_interface", "combined"
-  port?: number  // Puerto de conexión
+  is_medical?: boolean  // Nuevo campo para impresoras médicas
   ping_response?: boolean
   error?: string
 }
@@ -73,8 +71,7 @@ interface DiscoveryRequest {
   ip_list?: string[]
   timeout: number
   max_workers: number
-  include_medical?: boolean  // Nueva opción para incluir impresoras médicas
-  medical_port?: number  // Puerto para descubrimiento médico
+  include_medical?: boolean  // Opción para incluir descubrimiento médico
 }
 
 interface DiscoveryConfig {
@@ -115,8 +112,7 @@ export default function Printers() {
   const [discoverySettings, setDiscoverySettings] = useState({
     timeout: 5,
     max_workers: 10,
-    include_medical: true,  // Habilitar búsqueda de impresoras médicas por defecto
-    medical_port: 20051  // Puerto DRYPIX por defecto
+    include_medical: true  // Incluir descubrimiento de impresoras médicas por defecto
   })
 
   // Estados para progreso detallado del descubrimiento
@@ -159,6 +155,36 @@ export default function Printers() {
   const [selectAllPrinters, setSelectAllPrinters] = useState(false)
   const [showBulkActionsModal, setShowBulkActionsModal] = useState(false)
   const [bulkActionInProgress, setBulkActionInProgress] = useState(false)
+
+  // Estados para columnas visibles y filtros
+  const [showColumnSelector, setShowColumnSelector] = useState(false)
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  const [visibleColumns, setVisibleColumns] = useState({
+    asset_tag: true,
+    brand: true,
+    model: true,
+    serial_number: true,
+    ip: true,
+    location: true,
+    status: true,
+    supplier: true,
+    warranty_expiry: true,
+    department: false,
+    floor: false,
+    building: false,
+    sector: false,
+    responsible_person: false,
+    purchase_date: false,
+    installation_date: false
+  })
+  const [filters, setFilters] = useState({
+    status: '',
+    location: '',
+    department: '',
+    supplier: '',
+    ownership_type: '',
+    condition: ''
+  })
 
   // States for discovery config management
   const [showConfigForm, setShowConfigForm] = useState(false)
@@ -367,7 +393,7 @@ export default function Printers() {
   const resetDiscovery = () => {
     setDiscoveredDevices([])
     setIpRanges([{ id: '1', value: '' }])
-    setDiscoverySettings({ timeout: 5, max_workers: 10, include_medical: true, medical_port: 20051 })
+    setDiscoverySettings({ timeout: 5, max_workers: 10, include_medical: true })
   }
 
   const loadConfiguration = (config: DiscoveryConfig, replace: boolean = false) => {
@@ -642,8 +668,7 @@ export default function Printers() {
             ip_list: responsiveIPsInRange, // Solo las IPs que respondieron al ping
             timeout: discoverySettings.timeout,
             max_workers: discoverySettings.max_workers,
-            include_medical: discoverySettings.include_medical,  // Incluir búsqueda de médicas
-            medical_port: discoverySettings.medical_port  // Puerto para DRYPIX
+            include_medical: discoverySettings.include_medical  // Incluir descubrimiento médico
           }
 
           const response = await fetch(`${API_BASE}/printers/discover`, {
@@ -652,7 +677,7 @@ export default function Printers() {
             body: JSON.stringify(request)
           })
 
-          console.log(`📡 Respuesta SNMP${discoverySettings.include_medical ? '/Médica' : ''} recibida para ${rangeValue}, status: ${response.status}`)
+          console.log(`📡 Respuesta SNMP recibida para ${rangeValue}, status: ${response.status}`)
 
           if (response.ok) {
             const devices = await response.json()
@@ -1271,7 +1296,16 @@ export default function Printers() {
     
     const matchesBrand = filterBrand === '' || printer.brand.toLowerCase() === filterBrand.toLowerCase()
     
-    return matchesSearch && matchesBrand
+    // Filtros avanzados
+    const matchesStatus = filters.status === '' || printer.status === filters.status
+    const matchesLocation = filters.location === '' || (printer.location && printer.location.toLowerCase().includes(filters.location.toLowerCase()))
+    const matchesDepartment = filters.department === '' || (printer.department && printer.department.toLowerCase().includes(filters.department.toLowerCase()))
+    const matchesSupplier = filters.supplier === '' || (printer.supplier && printer.supplier.toLowerCase().includes(filters.supplier.toLowerCase()))
+    const matchesOwnership = filters.ownership_type === '' || printer.ownership_type === filters.ownership_type
+    const matchesCondition = filters.condition === '' || printer.condition === filters.condition
+    
+    return matchesSearch && matchesBrand && matchesStatus && matchesLocation && 
+           matchesDepartment && matchesSupplier && matchesOwnership && matchesCondition
   })
 
   const uniqueBrands = Array.from(new Set(printers.map(p => p.brand))).sort()
@@ -1519,6 +1553,34 @@ export default function Printers() {
                   ))}
                 </select>
               </div>
+              <div className="flex gap-2">
+                {viewMode === 'table' && (
+                  <button
+                    onClick={() => setShowColumnSelector(!showColumnSelector)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                      showColumnSelector ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                    title="Seleccionar columnas"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                    </svg>
+                    Columnas
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                    showAdvancedFilters ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                  title="Filtros avanzados"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                  Filtros
+                </button>
+              </div>
               <div className="flex bg-gray-100 rounded-lg p-1">
                 <button
                   onClick={() => setViewMode('grid')}
@@ -1538,6 +1600,131 @@ export default function Printers() {
                 </button>
               </div>
             </div>
+            
+            {/* Column Selector */}
+            {showColumnSelector && viewMode === 'table' && (
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 animate-slideDown">
+                <h3 className="text-sm font-medium text-gray-900 mb-3">Seleccionar columnas visibles</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                  {Object.entries(visibleColumns).map(([key, value]) => (
+                    <label key={key} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-2 rounded">
+                      <input
+                        type="checkbox"
+                        checked={value}
+                        onChange={(e) => setVisibleColumns(prev => ({ ...prev, [key]: e.target.checked }))}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">
+                        {key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Advanced Filters */}
+            {showAdvancedFilters && (
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 animate-slideDown">
+                <h3 className="text-sm font-medium text-gray-900 mb-3">Filtros avanzados</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Estado</label>
+                    <select
+                      value={filters.status}
+                      onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      title="Filtrar por estado"
+                    >
+                      <option value="">Todos</option>
+                      <option value="active">Activo</option>
+                      <option value="inactive">Inactivo</option>
+                      <option value="maintenance">Mantenimiento</option>
+                      <option value="retired">Retirado</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Ubicación</label>
+                    <input
+                      type="text"
+                      value={filters.location}
+                      onChange={(e) => setFilters(prev => ({ ...prev, location: e.target.value }))}
+                      placeholder="Filtrar por ubicación"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Departamento</label>
+                    <input
+                      type="text"
+                      value={filters.department}
+                      onChange={(e) => setFilters(prev => ({ ...prev, department: e.target.value }))}
+                      placeholder="Filtrar por departamento"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Proveedor</label>
+                    <input
+                      type="text"
+                      value={filters.supplier}
+                      onChange={(e) => setFilters(prev => ({ ...prev, supplier: e.target.value }))}
+                      placeholder="Filtrar por proveedor"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Tipo de propiedad</label>
+                    <select
+                      value={filters.ownership_type}
+                      onChange={(e) => setFilters(prev => ({ ...prev, ownership_type: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      title="Filtrar por tipo de propiedad"
+                    >
+                      <option value="">Todos</option>
+                      <option value="owned">Propiedad</option>
+                      <option value="leased">Arrendado</option>
+                      <option value="rented">Alquilado</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Condición</label>
+                    <select
+                      value={filters.condition}
+                      onChange={(e) => setFilters(prev => ({ ...prev, condition: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      title="Filtrar por condición"
+                    >
+                      <option value="">Todas</option>
+                      <option value="excellent">Excelente</option>
+                      <option value="good">Bueno</option>
+                      <option value="fair">Regular</option>
+                      <option value="poor">Malo</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    onClick={() => setFilters({
+                      status: '',
+                      location: '',
+                      department: '',
+                      supplier: '',
+                      ownership_type: '',
+                      condition: ''
+                    })}
+                    className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium"
+                  >
+                    Limpiar filtros
+                  </button>
+                </div>
+              </div>
+            )}
             
             {/* Bulk Actions Bar */}
             {selectedPrinters.length > 0 && (
@@ -1710,11 +1897,54 @@ export default function Printers() {
                           title="Seleccionar todas las impresoras"
                         />
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Impresora</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Red</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Características</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ubicación</th>
+                      {visibleColumns.brand && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Marca</th>
+                      )}
+                      {visibleColumns.model && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Modelo</th>
+                      )}
+                      {visibleColumns.asset_tag && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asset Tag</th>
+                      )}
+                      {visibleColumns.serial_number && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Serie</th>
+                      )}
+                      {visibleColumns.ip && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP</th>
+                      )}
+                      {visibleColumns.location && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ubicación</th>
+                      )}
+                      {visibleColumns.status && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                      )}
+                      {visibleColumns.department && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Departamento</th>
+                      )}
+                      {visibleColumns.floor && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Piso</th>
+                      )}
+                      {visibleColumns.building && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Edificio</th>
+                      )}
+                      {visibleColumns.sector && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sector</th>
+                      )}
+                      {visibleColumns.supplier && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Proveedor</th>
+                      )}
+                      {visibleColumns.warranty_expiry && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Garantía</th>
+                      )}
+                      {visibleColumns.responsible_person && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Responsable</th>
+                      )}
+                      {visibleColumns.purchase_date && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">F. Compra</th>
+                      )}
+                      {visibleColumns.installation_date && (
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">F. Instalación</th>
+                      )}
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
                     </tr>
                   </thead>
@@ -1730,53 +1960,69 @@ export default function Printers() {
                             title="Seleccionar impresora"
                           />
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <PrinterIcon brand={printer.brand} size={28} className="mr-3 flex-shrink-0" />
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">
-                                {printer.brand} {printer.model}
-                              </div>
-                              {printer.serial_number && (
-                                <div className="text-sm text-gray-500">SN: {printer.serial_number}</div>
-                              )}
-                              {printer.asset_tag && (
-                                <div className="text-sm text-gray-500">Tag: {printer.asset_tag}</div>
-                              )}
+                        {visibleColumns.brand && (
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <PrinterIcon brand={printer.brand} size={24} className="mr-2" />
+                              <span className="text-sm font-medium text-gray-900">{printer.brand}</span>
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{printer.ip}</div>
-                          {printer.hostname && (
-                            <div className="text-sm text-gray-500">{printer.hostname}</div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex flex-wrap gap-1">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              printer.is_color ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
-                            }`}>
-                              {printer.is_color ? 'Color' : 'B&W'}
+                          </td>
+                        )}
+                        {visibleColumns.model && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{printer.model}</td>
+                        )}
+                        {visibleColumns.asset_tag && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{printer.asset_tag}</td>
+                        )}
+                        {visibleColumns.serial_number && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{printer.serial_number || '-'}</td>
+                        )}
+                        {visibleColumns.ip && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">{printer.ip}</td>
+                        )}
+                        {visibleColumns.location && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{printer.location || '-'}</td>
+                        )}
+                        {visibleColumns.status && (
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(printer.status)}`}>
+                              {printer.status}
                             </span>
-                            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                              {printer.printer_type}
-                            </span>
-                            {printer.duplex_capable && (
-                              <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                                Duplex
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(printer.status)}`}>
-                            {printer.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {printer.location || printer.sector || 'No especificada'}
-                        </td>
+                          </td>
+                        )}
+                        {visibleColumns.department && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{printer.department || '-'}</td>
+                        )}
+                        {visibleColumns.floor && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{printer.floor || '-'}</td>
+                        )}
+                        {visibleColumns.building && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{printer.building || '-'}</td>
+                        )}
+                        {visibleColumns.sector && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{printer.sector || '-'}</td>
+                        )}
+                        {visibleColumns.supplier && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{printer.supplier || '-'}</td>
+                        )}
+                        {visibleColumns.warranty_expiry && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {printer.warranty_expiry ? new Date(printer.warranty_expiry).toLocaleDateString() : '-'}
+                          </td>
+                        )}
+                        {visibleColumns.responsible_person && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{printer.responsible_person || '-'}</td>
+                        )}
+                        {visibleColumns.purchase_date && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {printer.purchase_date ? new Date(printer.purchase_date).toLocaleDateString() : '-'}
+                          </td>
+                        )}
+                        {visibleColumns.installation_date && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {printer.installation_date ? new Date(printer.installation_date).toLocaleDateString() : '-'}
+                          </td>
+                        )}
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex space-x-2">
                             <button 
@@ -1997,31 +2243,19 @@ export default function Printers() {
                         max="50"
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2 tracking-tight">
+                    <div className="flex items-center">
+                      <label className="flex items-center space-x-2 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={discoverySettings.include_medical}
                           onChange={(e) => setDiscoverySettings(prev => ({ ...prev, include_medical: e.target.checked }))}
-                          className="mr-2"
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                         />
-                        Incluir Médicas
+                        <span className="text-sm font-semibold text-gray-700 tracking-tight">
+                          🏥 Incluir médicas
+                        </span>
                       </label>
-                      <p className="text-xs text-gray-500 mt-1">DRYPIX, FCR, CR</p>
                     </div>
-                    {discoverySettings.include_medical && (
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2 tracking-tight">Puerto Médico</label>
-                        <input
-                          type="number"
-                          value={discoverySettings.medical_port}
-                          onChange={(e) => setDiscoverySettings(prev => ({ ...prev, medical_port: parseInt(e.target.value) }))}
-                          className="w-24 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                          min="1"
-                          max="65535"
-                        />
-                      </div>
-                    )}
                     <button
                       onClick={startDiscovery}
                       disabled={discovering}
@@ -2276,10 +2510,9 @@ export default function Printers() {
                               const isExisting = device.device_info?.existing_in_db || false
                               const pingOk = device.ping_response !== false
                               const snmpOk = device.snmp_profile && device.snmp_profile !== 'No disponible'
-                              const isMedical = device.is_medical || false
                               
                               return (
-                                <tr key={index} className={`${isExisting ? 'bg-yellow-50' : isMedical ? 'bg-green-50' : 'hover:bg-gray-50'}`}>
+                                <tr key={index} className={`${isExisting ? 'bg-yellow-50' : 'hover:bg-gray-50'}`}>
                                   <td className="px-4 py-4 whitespace-nowrap">
                                     <input
                                       type="checkbox"
@@ -2295,9 +2528,6 @@ export default function Printers() {
                                       {device.hostname && (
                                         <div className="text-sm text-gray-500">{device.hostname}</div>
                                       )}
-                                      {device.port && device.port !== 161 && (
-                                        <div className="text-xs text-gray-500">Puerto: {device.port}</div>
-                                      )}
                                     </div>
                                   </td>
                                   <td className="px-4 py-4 whitespace-nowrap">
@@ -2305,11 +2535,9 @@ export default function Printers() {
                                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                                         isExisting 
                                           ? 'bg-yellow-100 text-yellow-800' 
-                                          : isMedical
-                                          ? 'bg-green-100 text-green-800'
-                                          : 'bg-blue-100 text-blue-800'
+                                          : 'bg-green-100 text-green-800'
                                       }`}>
-                                        {isExisting ? 'Ya agregada' : isMedical ? '🏥 Médica' : 'Nueva'}
+                                        {isExisting ? 'Ya agregada' : 'Nueva'}
                                       </span>
                                       {device.response_time && (
                                         <span className="text-xs text-gray-500">
@@ -2321,7 +2549,14 @@ export default function Printers() {
                                   <td className="px-4 py-4 whitespace-nowrap">
                                     <div>
                                       {device.brand && (
-                                        <div className="text-sm font-medium text-gray-900">{device.brand}</div>
+                                        <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                                          {device.brand}
+                                          {device.is_medical && (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800" title="Impresora Médica">
+                                              🏥 Médica
+                                            </span>
+                                          )}
+                                        </div>
                                       )}
                                       {device.model && (
                                         <div className="text-sm text-gray-500">{device.model}</div>
@@ -2352,19 +2587,13 @@ export default function Printers() {
                                       }`}>
                                         🏓 {pingOk ? 'Ping OK' : 'Sin Ping'}
                                       </span>
-                                      {isMedical ? (
-                                        <span className="inline-flex items-center px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
-                                          🌐 Web OK
-                                        </span>
-                                      ) : (
-                                        <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${
-                                          snmpOk 
-                                            ? 'bg-blue-100 text-blue-800' 
-                                            : 'bg-gray-100 text-gray-800'
-                                        }`}>
-                                          📡 {snmpOk ? 'SNMP OK' : 'Sin SNMP'}
-                                        </span>
-                                      )}
+                                      <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${
+                                        snmpOk 
+                                          ? 'bg-blue-100 text-blue-800' 
+                                          : 'bg-gray-100 text-gray-800'
+                                      }`}>
+                                        📡 {snmpOk ? 'SNMP OK' : 'Sin SNMP'}
+                                      </span>
                                     </div>
                                   </td>
                                   <td className="px-4 py-4 whitespace-nowrap">
