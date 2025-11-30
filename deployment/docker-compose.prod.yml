@@ -8,6 +8,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-printer_fleet}
       POSTGRES_USER: ${POSTGRES_USER:-printer_admin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backups:/backups
