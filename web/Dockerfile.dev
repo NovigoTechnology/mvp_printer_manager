@@ -1,0 +1,15 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copiar archivos de configuración de paquetes
+COPY package.json package-lock.json* ./
+
+# Instalar dependencias
+RUN npm ci
+
+# El código se montará como volumen desde docker-compose
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev"]

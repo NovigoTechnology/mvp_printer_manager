@@ -89,6 +89,12 @@ class Incident(Base):
     status = Column(String, default="open")  # open, in_progress, resolved
     priority = Column(String, default="medium")  # low, medium, high, critical
     incident_type = Column(String, default="general")  # general, solicitud_insumos, solicitud_servicio
+    
+    # User tracking fields
+    reported_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    assigned_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    notes = Column(Text)
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     resolved_at = Column(DateTime(timezone=True))
@@ -96,6 +102,8 @@ class Incident(Base):
     # Relationships
     printer = relationship("Printer", back_populates="incidents")
     toner_requests = relationship("TonerRequest", back_populates="incident")
+    reported_by = relationship("User", foreign_keys=[reported_by_id])
+    assigned_to = relationship("User", foreign_keys=[assigned_to_id])
 
 class UsageReport(Base):
     __tablename__ = "usage_reports"

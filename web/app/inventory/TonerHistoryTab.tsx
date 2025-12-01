@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 
-import API_BASE from '@/app/main'
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
 
 interface TonerRequest {
   id: number

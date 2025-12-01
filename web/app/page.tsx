@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui'
-
-import API_BASE from '@/app/main'
+import { API_BASE } from '@/lib/config'
 
 interface SummaryStats {
   total_printers: number

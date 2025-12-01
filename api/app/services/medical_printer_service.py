@@ -83,6 +83,34 @@ class DrypixScraper:
             print(f"Error en autenticación DRYPIX: {e}")
             return False
     
+    def logout(self) -> bool:
+        """
+        Cierra la sesión en el modo de mantenimiento del DRYPIX
+        
+        Returns:
+            True si el logout fue exitoso
+        """
+        try:
+            logout_url = f"{self.base_url}/USER/chkout"
+            response = self.session.get(logout_url, timeout=5)
+            
+            # Cerrar la sesión de requests
+            self.session.close()
+            
+            if response.status_code == 200:
+                print(f"✅ Logout exitoso de DRYPIX en {self.base_url}")
+                return True
+            return False
+            
+        except Exception as e:
+            print(f"Error en logout DRYPIX: {e}")
+            # Intentar cerrar la sesión de todos modos
+            try:
+                self.session.close()
+            except:
+                pass
+            return False
+    
     def get_counters(self) -> Optional[Dict]:
         """
         Obtiene los contadores de bandejas del DRYPIX
@@ -126,7 +154,7 @@ class DrypixScraper:
                 total_available += available
                 total_printed += printed
             
-            return {
+            result = {
                 "timestamp": datetime.now().isoformat(),
                 "tray_capacity": self.TRAY_CAPACITY,
                 "trays": tray_details,
@@ -142,8 +170,17 @@ class DrypixScraper:
                 "is_online": True
             }
             
+            # Cerrar sesión antes de retornar
+            self.logout()
+            return result
+            
         except Exception as e:
             print(f"Error obteniendo contadores DRYPIX: {e}")
+            # Intentar hacer logout incluso si hay error
+            try:
+                self.logout()
+            except:
+                pass
             return None
     
     def _parse_counters(self, html: str) -> Optional[Dict[str, int]]:
@@ -242,14 +279,23 @@ class DrypixScraper:
                                 if len(serial) > 3 and serial not in ['VALUE', 'TEXT', 'INPUT']:
                                     info['serial_number'] = serial
                                     print(f"✅ Serial encontrado para {self.base_url}: {serial}")
+                                    # Cerrar sesión antes de retornar
+                                    self.logout()
                                     return info
                 except Exception as e:
                     continue
             
+            # Cerrar sesión antes de retornar
+            self.logout()
             return info if info else None
             
         except Exception as e:
             print(f"Error obteniendo información del dispositivo: {e}")
+            # Intentar hacer logout incluso si hay error
+            try:
+                self.logout()
+            except:
+                pass
             return None
 
 

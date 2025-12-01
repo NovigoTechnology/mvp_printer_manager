@@ -15,6 +15,9 @@ class IncidentCreate(BaseModel):
     description: Optional[str] = None
     priority: str = "medium"
     incident_type: str = "general"  # general, solicitud_insumos, solicitud_servicio
+    reported_by_id: Optional[int] = None
+    assigned_to_id: Optional[int] = None
+    notes: Optional[str] = None
 
 class IncidentUpdate(BaseModel):
     title: Optional[str] = None
@@ -22,6 +25,9 @@ class IncidentUpdate(BaseModel):
     status: Optional[str] = None
     priority: Optional[str] = None
     incident_type: Optional[str] = None
+    reported_by_id: Optional[int] = None
+    assigned_to_id: Optional[int] = None
+    notes: Optional[str] = None
 
 class IncidentResponse(BaseModel):
     id: int
@@ -31,6 +37,11 @@ class IncidentResponse(BaseModel):
     status: str
     priority: str
     incident_type: str
+    reported_by_id: Optional[int] = None
+    reported_by_name: Optional[str] = None
+    assigned_to_id: Optional[int] = None
+    assigned_to_name: Optional[str] = None
+    notes: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime]
     resolved_at: Optional[datetime]
@@ -58,6 +69,22 @@ def list_incidents(
     # Join with printer data using proper SQLAlchemy relationships
     result = []
     for incident in incidents:
+        # Get user info
+        reported_by_name = None
+        assigned_to_name = None
+        
+        if hasattr(incident, 'reported_by_id') and incident.reported_by_id:
+            from ..models import User
+            reported_user = db.query(User).filter(User.id == incident.reported_by_id).first()
+            if reported_user:
+                reported_by_name = reported_user.full_name or reported_user.username
+        
+        if hasattr(incident, 'assigned_to_id') and incident.assigned_to_id:
+            from ..models import User
+            assigned_user = db.query(User).filter(User.id == incident.assigned_to_id).first()
+            if assigned_user:
+                assigned_to_name = assigned_user.full_name or assigned_user.username
+        
         incident_dict = {
             "id": incident.id,
             "printer_id": incident.printer_id,
@@ -66,6 +93,11 @@ def list_incidents(
             "status": incident.status,
             "priority": incident.priority,
             "incident_type": incident.incident_type if hasattr(incident, 'incident_type') else "general",
+            "reported_by_id": incident.reported_by_id if hasattr(incident, 'reported_by_id') else None,
+            "reported_by_name": reported_by_name,
+            "assigned_to_id": incident.assigned_to_id if hasattr(incident, 'assigned_to_id') else None,
+            "assigned_to_name": assigned_to_name,
+            "notes": incident.notes if hasattr(incident, 'notes') else None,
             "created_at": incident.created_at,
             "updated_at": incident.updated_at,
             "resolved_at": incident.resolved_at,

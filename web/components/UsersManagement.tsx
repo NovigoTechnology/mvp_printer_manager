@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 
-import API_BASE from '@/app/main'
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
 
 interface User {
   id: number
@@ -47,6 +47,12 @@ export default function UsersManagement() {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('token')
+      if (!token) {
+        console.error('No token found')
+        window.location.href = '/login'
+        return
+      }
+      
       const response = await fetch(`${API_BASE}/auth/users`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -56,6 +62,10 @@ export default function UsersManagement() {
       if (response.ok) {
         const data = await response.json()
         setUsers(data)
+      } else if (response.status === 401) {
+        console.error('Token inválido o expirado')
+        localStorage.removeItem('token')
+        window.location.href = '/login'
       }
     } catch (error) {
       console.error('Error fetching users:', error)
@@ -85,10 +95,18 @@ export default function UsersManagement() {
         resetForm()
       } else {
         const error = await response.json()
-        alert(error.detail || 'Error al crear usuario')
+        if (response.status === 401) {
+          alert('No autorizado. Por favor, inicie sesión nuevamente.')
+          window.location.href = '/login'
+        } else if (response.status === 403) {
+          alert('No tiene permisos suficientes para crear usuarios. Se requiere rol de administrador.')
+        } else {
+          alert(error.detail || 'Error al crear usuario')
+        }
       }
     } catch (error) {
-      alert('Error al crear usuario')
+      console.error('Error creating user:', error)
+      alert('Error de conexión al crear usuario')
     }
   }
 

@@ -196,6 +196,26 @@ async def list_users(
         for u in users
     ]
 
+@router.get("/technicians")
+async def list_technicians(
+    db: Session = Depends(get_db)
+):
+    """List all users with technician role or admin role (for incident assignment)"""
+    technicians = db.query(User).filter(
+        User.is_active == True,
+        User.role.in_(["technician", "admin", "manager"])
+    ).all()
+    return [
+        {
+            "id": u.id,
+            "name": u.full_name or u.username,
+            "email": u.email,
+            "specialty": u.department,
+            "active": u.is_active
+        }
+        for u in technicians
+    ]
+
 @router.post("/users")
 async def create_user(
     user_data: UserCreate,
