@@ -63,6 +63,12 @@ echo ""
 echo "⏳ Esperando a que los servicios inicien (30 segundos)..."
 sleep 30
 
+# 8. Ejecutar migraciones de base de datos
+echo "🗃️  Ejecutando migraciones de base de datos..."
+docker compose exec -T api python migrations/add_user_tracking_to_incidents.py 2>/dev/null || echo "ℹ️  Migraciones ya aplicadas o no necesarias"
+echo "✅ Migraciones completadas"
+echo ""
+
 # 8. Verificar estado
 echo "📊 Estado de los servicios:"
 docker compose ps
