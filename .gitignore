@@ -80,12 +80,23 @@ logs
 *.temp
 *.bak
 *.bak2
+*.backup
+*~
+*.swp
+*.swo
 
 # Development and backup files
 development/
-*.backup
+*backup.*
 *_backup.*
 *-backup.*
+page.tsx.backup
+page_backup.tsx
+*.tsx.backup
+*.ts.backup
+*.py.backup
+*.js.backup
+*.json.backup
 *page-test.*
 *page-minimal-test.*
 *page-full-backup.*

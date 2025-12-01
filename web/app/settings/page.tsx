@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Select, Badge } from '@/components/ui'
 import UsersManagement from '@/components/UsersManagement'
 
-const API_BASE = 'http://localhost:8000'
+import API_BASE from '@/app/main'
 
 interface AppSettings {
   // General

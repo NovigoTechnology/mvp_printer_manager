@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Clock, MapPin, AlertCircle } from 'lucide-react'
+import API_BASE from '@/app/main'
 
 interface IPChangeRecord {
   id: number
@@ -41,7 +42,7 @@ export default function IPHistoryComponent({ printerId, onClose }: IPHistoryComp
       setLoading(true)
       setError(null)
       
-      const response = await fetch(`http://localhost:8000/printers/${printerId}/ip-history`)
+      const response = await fetch(`${API_BASE}/printers/${printerId}/ip-history`)
       
       if (!response.ok) {
         throw new Error('Error al obtener historial de IPs')

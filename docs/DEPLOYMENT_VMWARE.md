@@ -71,12 +71,7 @@ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o 
 
 # Configurar repositorio
 echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/nullecho \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-
+"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
 
 
@@ -122,10 +117,6 @@ cat > .env << 'EOF'
 POSTGRES_DB=printer_fleet_prod
 POSTGRES_USER=printer_admin
 POSTGRES_PASSWORD=TU_PASSWORD_SEGURA_AQUI_123!
-```
-```
-```
-```
 
 # API
 DATABASE_URL=postgresql://printer_admin:TU_PASSWORD_SEGURA_AQUI_123!@db:5432/printer_fleet_prod

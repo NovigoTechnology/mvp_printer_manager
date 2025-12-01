@@ -1,5 +1,3 @@
-# Despliegue en VMware con VS Code Remote-SSH
-
 **Guía completa paso a paso para desplegar Printer Fleet Manager en un servidor VMware usando VS Code Remote-SSH**
 
 ---

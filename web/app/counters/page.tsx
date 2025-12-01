@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 
-const API_BASE = 'http://localhost:8000'
+import API_BASE from '@/app/main'
 
 interface Printer {
   id: number

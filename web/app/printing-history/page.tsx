@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
+import API_BASE from '@/app/main'
 
 interface PrinterHistory {
   printer_id: number

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import API_BASE from '@/app/main';
 
 interface StockLocation {
   id: number;
@@ -136,8 +137,8 @@ function ProductModal({ isOpen, onClose, onSave, product, locations }: ProductMo
     
     try {
       const url = product 
-        ? `http://localhost:8000/stock/items/${product.id}`
-        : 'http://localhost:8000/stock/items/';
+        ? `${API_BASE}/stock/items/${product.id}`
+        : `${API_BASE}/stock/items/`;
       
       const method = product ? 'PUT' : 'POST';
       
@@ -412,7 +413,7 @@ function LocationModal({ isOpen, onClose, onSave }: LocationModalProps) {
     e.preventDefault();
     
     try {
-      const response = await fetch('http://localhost:8000/stock/locations/', {
+      const response = await fetch(`${API_BASE}/stock/locations/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -577,7 +578,7 @@ function MovementModal({ isOpen, onClose, onSave, items, locations, preselectedI
     };
     
     try {
-      const response = await fetch('http://localhost:8000/stock/movements/', {
+      const response = await fetch(`${API_BASE}/stock/movements/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -820,7 +821,7 @@ export default function StockPage() {
   const loadStockSummary = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/stock/reports/summary');
+      const response = await fetch(`${API_BASE}/stock/reports/summary`);
       if (response.ok) {
         const data = await response.json();
         setStockSummary(data);
@@ -836,8 +837,8 @@ export default function StockPage() {
     setIsLoading(true);
     try {
       const url = selectedItemType 
-        ? `http://localhost:8000/stock/items/?item_type=${selectedItemType}`
-        : 'http://localhost:8000/stock/items/';
+        ? `${API_BASE}/stock/items/?item_type=${selectedItemType}`
+        : `${API_BASE}/stock/items/`;
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -853,7 +854,7 @@ export default function StockPage() {
   const loadStockLocations = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/stock/locations/');
+      const response = await fetch(`${API_BASE}/stock/locations/`);
       if (response.ok) {
         const data = await response.json();
         setStockLocations(data);
@@ -868,7 +869,7 @@ export default function StockPage() {
   const loadStockMovements = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/stock/movements/?limit=50');
+      const response = await fetch(`${API_BASE}/stock/movements/?limit=50`);
       if (response.ok) {
         const data = await response.json();
         setStockMovements(data);

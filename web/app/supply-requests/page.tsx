@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import API_BASE from '@/app/main'
 
 interface Printer {
   id: number
@@ -20,7 +21,7 @@ interface SupplyItem {
   code: string
 }
 
-const TONER_REQUEST_API_BASE = 'http://localhost:8000/api'
+const TONER_REQUEST_API_BASE = `${API_BASE}/api`
 console.log('TONER_REQUEST_API_BASE configured as:', TONER_REQUEST_API_BASE)
 
 const SUPPLY_TYPES = {
@@ -237,13 +238,13 @@ export default function SupplyRequestsCompactPage() {
   // Función para cargar insumos de una impresora específica
   const loadPrinterSupplies = async (printerId: number) => {
     try {
-      const response = await fetch(`http://localhost:8000/printers/${printerId}/supplies/`)
+      const response = await fetch(`${API_BASE}/printers/${printerId}/supplies/`)
       if (response.ok) {
         const printerSupplies = await response.json()
         
         if (printerSupplies && printerSupplies.length > 0) {
           // Cargar detalles de los ítems del stock
-          const stockResponse = await fetch('http://localhost:8000/stock/items/')
+          const stockResponse = await fetch(`${API_BASE}/stock/items/`)
           if (stockResponse.ok) {
             const stockItems = await stockResponse.json()
             
@@ -557,7 +558,7 @@ export default function SupplyRequestsCompactPage() {
   const fetchPrinters = async () => {
     console.log('fetchPrinters ejecutándose')
     try {
-      const response = await fetch('http://localhost:8000/printers/')
+      const response = await fetch(`${API_BASE}/printers/`)
       if (response.ok) {
         const data = await response.json()
         console.log('Impresoras cargadas:', data.length)
@@ -595,7 +596,7 @@ export default function SupplyRequestsCompactPage() {
     try {
       const timestamp = new Date().getTime()
       // Traer todas las solicitudes para poder filtrar por impresora
-      const url = `http://localhost:8000/api/toner-requests?_t=${timestamp}`
+      const url = `${API_BASE}/api/toner-requests?_t=${timestamp}`
       
       const response = await fetch(url)
       

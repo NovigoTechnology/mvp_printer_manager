@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
+import API_BASE from '@/app/main'
 
 interface SummaryStats {
   total_printers: number

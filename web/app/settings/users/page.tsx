@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { API_BASE } from '@/lib/config'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
+const API_URL = API_BASE
 
 interface User {
   id: number
@@ -61,7 +62,7 @@ export default function UsersManagementPage() {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_BASE}/auth/users`, {
+      const response = await fetch(`${API_URL}/auth/users`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -83,7 +84,7 @@ export default function UsersManagementPage() {
     
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_BASE}/auth/users`, {
+      const response = await fetch(`${API_URL}/auth/users`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -110,7 +111,7 @@ export default function UsersManagementPage() {
   const handleUpdateUser = async (userId: number, updates: any) => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_BASE}/auth/users/${userId}`, {
+      const response = await fetch(`${API_URL}/auth/users/${userId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -132,7 +133,7 @@ export default function UsersManagementPage() {
 
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_BASE}/auth/users/${userId}`, {
+      const response = await fetch(`${API_URL}/auth/users/${userId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`

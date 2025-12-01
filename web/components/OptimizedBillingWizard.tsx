@@ -5,7 +5,7 @@ import { LeaseContract } from '@/types/contract'
 import { WizardStep1 } from './wizard/WizardStep1'
 import { WizardStep2 } from './wizard/WizardStep2'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
+import API_BASE from '@/app/main'
 
 interface BillingPeriod {
   id: number

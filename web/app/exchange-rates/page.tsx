@@ -5,6 +5,8 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { ClockIcon, ArrowPathIcon, FunnelIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
+import API_BASE from '@/app/main';
+
 interface CurrentRate {
   // Nuevos nombres descriptivos
   dolar_venta?: number;        // Venta de dólares
@@ -59,8 +61,6 @@ export default function ExchangeRatesPage() {
     onlyManual: false
   });
   const [filteredHistory, setFilteredHistory] = useState<ExchangeRate[]>([]);
-
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
   useEffect(() => {
     loadData();

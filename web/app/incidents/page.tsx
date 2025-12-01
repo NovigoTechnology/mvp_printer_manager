@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, Badge, Button } from '@/components/ui'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
+import API_BASE from '@/app/main'
 
 interface Printer {
   id: number
