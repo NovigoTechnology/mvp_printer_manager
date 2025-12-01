@@ -15,7 +15,30 @@ cd /home/im/mvp_printer_manager || exit 1
 # 1. Detener servicios actuales
 echo "⏸️  Deteniendo servicios actuales..."
 docker compose down 2>/dev/null || true
-echo "✅ Servicios detenidos"
+
+# Verificar y liberar puertos ocupados
+echo "🔍 Verificando puertos ocupados..."
+if lsof -Pi :5432 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
+    echo "⚠️  Puerto 5432 ocupado, deteniendo contenedores..."
+    docker ps -q --filter "publish=5432" | xargs -r docker stop
+fi
+if lsof -Pi :6379 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
+    echo "⚠️  Puerto 6379 ocupado, deteniendo contenedores..."
+    docker ps -q --filter "publish=6379" | xargs -r docker stop
+fi
+if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
+    echo "⚠️  Puerto 8000 ocupado, deteniendo contenedores..."
+    docker ps -q --filter "publish=8000" | xargs -r docker stop
+fi
+if lsof -Pi :3000 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
+    echo "⚠️  Puerto 3000 ocupado, deteniendo contenedores..."
+    docker ps -q --filter "publish=3000" | xargs -r docker stop
+fi
+
+# Limpiar contenedores huérfanos
+docker container prune -f 2>/dev/null || true
+
+echo "✅ Servicios detenidos y puertos liberados"
 echo ""
 
 # 2. Actualizar código
