@@ -65,7 +65,7 @@ services:
       context: ../web
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://10.10.10.193/api}
+        - NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE:-http://10.10.10.193/api}
     container_name: printer_fleet_web
     env_file:
       - ../.env.production
