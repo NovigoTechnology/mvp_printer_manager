@@ -248,7 +248,7 @@ export default function SupplyRequestsCompactPage() {
   // Función para cargar insumos de una impresora específica
   const loadPrinterSupplies = async (printerId: number) => {
     try {
-      const response = await fetch(`${API_BASE}/printers/${printerId}/supplies/`)
+      const response = await fetch(`${API_BASE}/printers/${printerId}/supplies`)
       if (response.ok) {
         const printerSupplies = await response.json()
         
@@ -659,7 +659,7 @@ export default function SupplyRequestsCompactPage() {
   // Función para cargar usuarios
   const fetchUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE}/auth/users/`)
+      const response = await fetch(`${API_BASE}/auth/users`)
       if (response.ok) {
         const data = await response.json()
         setUsers(data.map((u: any) => ({ id: u.id, name: u.name, department: u.department || '' })))
@@ -677,7 +677,7 @@ export default function SupplyRequestsCompactPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/auth/users/`, {
+      const response = await fetch(`${API_BASE}/auth/users`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

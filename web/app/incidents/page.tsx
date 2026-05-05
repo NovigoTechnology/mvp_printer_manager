@@ -80,7 +80,7 @@ export default function IncidentsPage() {
 
   const fetchTechnicians = async () => {
     try {
-      const response = await fetch(`${API_BASE}/auth/technicians/`)
+      const response = await fetch(`${API_BASE}/auth/technicians`)
       const data = await response.json()
       setTechnicians(Array.isArray(data) ? data : [])
     } catch (error) {
@@ -91,7 +91,7 @@ export default function IncidentsPage() {
 
   const fetchSystemUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE}/auth/users/`)
+      const response = await fetch(`${API_BASE}/auth/users`)
       const data = await response.json()
       setSystemUsers(Array.isArray(data) ? data : [])
     } catch (error) {
