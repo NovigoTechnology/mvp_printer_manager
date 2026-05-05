@@ -80,7 +80,7 @@ export default function IncidentsPage() {
 
   const fetchTechnicians = async () => {
     try {
-      const response = await fetch(`${API_BASE}/technicians/`)
+      const response = await fetch(`${API_BASE}/auth/technicians/`)
       const data = await response.json()
       setTechnicians(Array.isArray(data) ? data : [])
     } catch (error) {
@@ -91,7 +91,7 @@ export default function IncidentsPage() {
 
   const fetchSystemUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE}/users/`)
+      const response = await fetch(`${API_BASE}/auth/users/`)
       const data = await response.json()
       setSystemUsers(Array.isArray(data) ? data : [])
     } catch (error) {
@@ -320,7 +320,7 @@ export default function IncidentsPage() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => openEditModal(incident)}
-                        className="flex-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                        className="flex-1 px-3 py-1.5 text-xs bg-accent text-white rounded hover:opacity-90 transition-all"
                       >
                         Editar
                       </button>
@@ -388,7 +388,7 @@ export default function IncidentsPage() {
             <button
               onClick={() => setViewType('cards')}
               className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                viewType === 'cards' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                viewType === 'cards' ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
               Tarjetas
@@ -396,7 +396,7 @@ export default function IncidentsPage() {
             <button
               onClick={() => setViewType('table')}
               className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                viewType === 'table' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                viewType === 'table' ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
               Tabla
@@ -404,7 +404,7 @@ export default function IncidentsPage() {
             <button
               onClick={() => setViewType('kanban')}
               className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                viewType === 'kanban' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                viewType === 'kanban' ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
               Kanban
@@ -414,7 +414,7 @@ export default function IncidentsPage() {
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
-              showFilters ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+              showFilters ? 'border-accent bg-accent text-white' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
             }`}
           >
             Filtros
@@ -712,14 +712,14 @@ function EditModal({ incident, technicians, systemUsers, onClose, onSuccess }: a
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-accent text-white rounded-lg hover:opacity-90 transition-all disabled:opacity-50"
               >
                 {submitting ? 'Guardando...' : 'Guardar Cambios'}
               </button>
@@ -949,14 +949,14 @@ function StatusModal({ incident, technicians, onClose, onSuccess }: any) {
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-accent text-white rounded-lg hover:opacity-90 transition-all disabled:opacity-50"
               >
                 {submitting ? 'Actualizando...' : 'Cambiar Estado'}
               </button>

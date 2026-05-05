@@ -46,6 +46,13 @@ out/
 .env.test.local
 .env.production.local
 .env.production
+.env.secrets.generated
+
+# Sensitive configuration files
+api/config/snmp_credentials.json
+config/snmp_credentials.json
+**/snmp_credentials.json
+!**/snmp_credentials.json.example
 
 # IDE
 .vscode/
@@ -111,7 +118,7 @@ counter.html
 setting*.html
 drypix*.html
 
-# Exploration and test scripts
+# Exploration and test scripts (artefactos sueltos en raíz)
 test_*.py
 *_test.py
 explore_*.py
@@ -119,6 +126,8 @@ check_*.py
 get_*.py
 extract_*.py
 add_fuji_printer.py
+# Excepción: tests de integración formales en subdirectorio
+!api/tests/integration/test_*.py
 
 # JSON test data
 drypix_*.json

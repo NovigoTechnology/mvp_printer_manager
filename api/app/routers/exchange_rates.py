@@ -61,8 +61,8 @@ class ExchangeRateSourceResponse(BaseModel):
     priority: int
     last_successful_update: Optional[datetime]
     last_error: Optional[str]
-    success_count: int
-    error_count: int
+    success_count: Optional[int] = 0
+    error_count: Optional[int] = 0
     
     class Config:
         from_attributes = True

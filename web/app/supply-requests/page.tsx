@@ -182,6 +182,15 @@ export default function SupplyRequestsCompactPage() {
   const [modalSupplies, setModalSupplies] = useState<SupplyItem[]>([])
   const [printerSupplyItems, setPrinterSupplyItems] = useState<any[]>([])
 
+  // Estados para gestión de usuarios
+  const [users, setUsers] = useState<Array<{id: number, name: string, department: string}>>([])
+  const [showNewUserModal, setShowNewUserModal] = useState(false)
+  const [newUserData, setNewUserData] = useState({ name: '', department: '' })
+  const [searchingUser, setSearchingUser] = useState(false)
+  const [userSearchQuery, setUserSearchQuery] = useState('')
+  const [showUserDropdown, setShowUserDropdown] = useState(false)
+  const [filteredUsers, setFilteredUsers] = useState<Array<{id: number, name: string, department: string}>>([])
+
   // Función para generar ID temporal
   const generateTempId = () => `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
@@ -642,7 +651,88 @@ export default function SupplyRequestsCompactPage() {
     // Cargar solicitudes pendientes
     console.log('Llamando fetchPendingRequests desde useEffect...')
     fetchPendingRequests()
+    
+    // Cargar usuarios
+    fetchUsers()
   }, [])
+
+  // Función para cargar usuarios
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/auth/users/`)
+      if (response.ok) {
+        const data = await response.json()
+        setUsers(data.map((u: any) => ({ id: u.id, name: u.name, department: u.department || '' })))
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error)
+    }
+  }
+
+  // Función para crear nuevo usuario
+  const handleCreateUser = async () => {
+    if (!newUserData.name.trim()) {
+      showNotification('error', 'Campo requerido', 'El nombre es obligatorio')
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/auth/users/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: newUserData.name,
+          email: `${newUserData.name.toLowerCase().replace(/\s+/g, '.')}@temp.com`,
+          password: 'Temporal123',
+          role: 'requester',
+          department: newUserData.department,
+          is_active: true
+        })
+      })
+
+      if (response.ok) {
+        const newUser = await response.json()
+        setUsers([...users, { id: newUser.id, name: newUser.name, department: newUser.department || '' }])
+        setFormData(prev => ({ ...prev, requested_by: newUser.name, department: newUser.department || prev.department }))
+        setUserSearchQuery(newUser.name)
+        setNewUserData({ name: '', department: '' })
+        setShowNewUserModal(false)
+        showNotification('success', 'Usuario creado', 'El usuario ha sido agregado exitosamente')
+      } else {
+        showNotification('error', 'Error', 'No se pudo crear el usuario')
+      }
+    } catch (error) {
+      console.error('Error creating user:', error)
+      showNotification('error', 'Error', 'Error al crear el usuario')
+    }
+  }
+
+  // Función para manejar búsqueda de usuarios
+  const handleUserSearch = (value: string) => {
+    setUserSearchQuery(value)
+    setFormData(prev => ({ ...prev, requested_by: value }))
+    
+    if (value.trim()) {
+      const filtered = users.filter(user => 
+        user.name.toLowerCase().includes(value.toLowerCase()) ||
+        (user.department && user.department.toLowerCase().includes(value.toLowerCase()))
+      )
+      setFilteredUsers(filtered)
+      setShowUserDropdown(filtered.length > 0)
+    } else {
+      setFilteredUsers([])
+      setShowUserDropdown(false)
+    }
+  }
+
+  // Función para seleccionar usuario del dropdown
+  const selectUser = (user: {id: number, name: string, department: string}) => {
+    setUserSearchQuery(user.name)
+    setFormData(prev => ({ ...prev, requested_by: user.name, department: user.department || prev.department }))
+    setShowUserDropdown(false)
+  }
 
   // Efecto adicional para asegurar la carga
   useEffect(() => {
@@ -697,6 +787,21 @@ export default function SupplyRequestsCompactPage() {
     setFilteredPrinters(filtered)
   }, [printers, searchQuery])
 
+  // Efecto para cerrar dropdown de usuarios al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (!target.closest('.user-search-container')) {
+        setShowUserDropdown(false)
+      }
+    }
+
+    if (showUserDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showUserDropdown])
+
   // Log del render
   console.log('Rendering form with supplies:', formData.supplies)
   console.log('Current formData.supplies length:', formData.supplies.length)
@@ -714,8 +819,8 @@ export default function SupplyRequestsCompactPage() {
               onClick={() => setActiveTab('insumos')}
               className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
                 activeTab === 'insumos'
-                  ? 'bg-blue-500 text-white'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  ? 'bg-accent text-white'
+                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
             >
               Solicitud de Insumos
@@ -724,8 +829,8 @@ export default function SupplyRequestsCompactPage() {
               onClick={() => setActiveTab('servicio')}
               className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
                 activeTab === 'servicio'
-                  ? 'bg-blue-500 text-white'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  ? 'bg-accent text-white'
+                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
             >
               Solicitud de Servicio
@@ -813,7 +918,7 @@ export default function SupplyRequestsCompactPage() {
                             <button
                               type="button"
                               onClick={() => openSupplyModal(selectedPrinter)}
-                              className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                              className="px-3 py-1 text-sm bg-accent text-white rounded hover:opacity-90"
                             >
                               Agregar Insumos
                             </button>
@@ -940,13 +1045,49 @@ export default function SupplyRequestsCompactPage() {
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Solicitado por
                         </label>
-                        <input
-                          type="text"
-                          value={formData.requested_by}
-                          onChange={(e) => setFormData(prev => ({ ...prev, requested_by: e.target.value }))}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          required
-                        />
+                        <div className="flex gap-2">
+                          <div className="flex-1 relative user-search-container">
+                            <input
+                              type="text"
+                              value={userSearchQuery}
+                              onChange={(e) => handleUserSearch(e.target.value)}
+                              onFocus={() => {
+                                if (userSearchQuery.trim() && filteredUsers.length > 0) {
+                                  setShowUserDropdown(true)
+                                }
+                              }}
+                              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-accent"
+                              placeholder="Buscar o escribir nombre..."
+                              required
+                            />
+                            
+                            {/* Dropdown de sugerencias */}
+                            {showUserDropdown && filteredUsers.length > 0 && (
+                              <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                                {filteredUsers.map(user => (
+                                  <div
+                                    key={user.id}
+                                    onClick={() => selectUser(user)}
+                                    className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-sm"
+                                  >
+                                    <div className="font-medium text-gray-900 dark:text-gray-100">{user.name}</div>
+                                    {user.department && (
+                                      <div className="text-xs text-gray-500 dark:text-gray-400">{user.department}</div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowNewUserModal(true)}
+                            className="px-3 py-2 bg-accent text-white rounded-md hover:opacity-90 text-sm whitespace-nowrap"
+                            title="Agregar nuevo usuario"
+                          >
+                            + Nuevo
+                          </button>
+                        </div>
                       </div>
                       
                       <div>
@@ -1005,7 +1146,7 @@ export default function SupplyRequestsCompactPage() {
                       <button
                         type="submit"
                         disabled={loading}
-                        className="px-4 py-2 text-sm font-medium text-white bg-blue-500 border border-transparent rounded-md hover:bg-blue-600 disabled:opacity-50"
+                        className="px-4 py-2 text-sm font-medium text-white bg-accent border border-transparent rounded-md hover:opacity-90 disabled:opacity-50"
                       >
                         {loading ? 'Guardando...' : 'Crear Solicitud'}
                       </button>
@@ -1142,7 +1283,7 @@ export default function SupplyRequestsCompactPage() {
               <div className="mb-4">
                 <button
                   onClick={addSupplyRow}
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                  className="px-4 py-2 bg-accent text-white rounded hover:opacity-90"
                 >
                   Agregar Fila
                 </button>
@@ -1225,9 +1366,78 @@ export default function SupplyRequestsCompactPage() {
                 </button>
                 <button
                   onClick={saveSuppliesFromModal}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-500 border border-transparent rounded-md hover:bg-blue-600"
+                  className="px-4 py-2 text-sm font-medium text-white bg-accent border border-transparent rounded-md hover:opacity-90"
                 >
                   Guardar Insumos
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para Nuevo Usuario */}
+      {showNewUserModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Agregar Nuevo Usuario</h3>
+                <button
+                  onClick={() => {
+                    setShowNewUserModal(false)
+                    setNewUserData({ name: '', department: '' })
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nombre completo *
+                  </label>
+                  <input
+                    type="text"
+                    value={newUserData.name}
+                    onChange={(e) => setNewUserData(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-accent"
+                    placeholder="Ej: Juan Pérez"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Departamento
+                  </label>
+                  <input
+                    type="text"
+                    value={newUserData.department}
+                    onChange={(e) => setNewUserData(prev => ({ ...prev, department: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-accent"
+                    placeholder="Ej: Contabilidad"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowNewUserModal(false)
+                    setNewUserData({ name: '', department: '' })
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCreateUser}
+                  className="px-4 py-2 text-sm font-medium text-white bg-accent border border-transparent rounded-md hover:opacity-90"
+                >
+                  Crear Usuario
                 </button>
               </div>
             </div>

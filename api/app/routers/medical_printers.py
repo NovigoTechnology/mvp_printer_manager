@@ -5,12 +5,13 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import logging
+import os
+import json
 
 from ..db import get_db
 from ..models import Printer, MedicalPrinterCounter, MedicalPrinterSnapshot, MedicalPrinterTrayConfig
 from ..services.medical_printer_service import DrypixScraper
 from ..services.cartridge_detection_service import CartridgeDetectionService
-import json
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -799,12 +800,12 @@ async def create_manual_snapshot(
         raise HTTPException(status_code=404, detail="Impresora no encontrada")
     
     try:
-        # Crear scraper y obtener contadores actuales
+        # Crear scraper y obtener contadores actuales con credenciales desde env
         scraper = DrypixScraper(
-            ip=printer.ip,
+            ip_address=printer.ip,
             port=20051,
-            username='dryprinter',
-            password='fujifilm'
+            login=os.getenv('DRYPIX_LOGIN', 'dryprinter'),
+            password=os.getenv('DRYPIX_PASSWORD', 'fujifilm')
         )
         
         counters = scraper.get_counters()

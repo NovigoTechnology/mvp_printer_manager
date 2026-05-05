@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Select, Badge } from '@/components/ui'
 import UsersManagement from '@/components/UsersManagement'
+import { useTheme } from '@/contexts/ThemeContext'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
 
@@ -47,6 +48,8 @@ interface MedicalScheduleConfig {
 }
 
 export default function Settings() {
+  const { theme, accentColor, setTheme, setAccentColor } = useTheme()
+  
   const [settings, setSettings] = useState<AppSettings>({
     company_name: 'Printer Fleet Manager',
     timezone: 'America/Argentina/Buenos_Aires',
@@ -66,7 +69,7 @@ export default function Settings() {
     log_level: 'INFO'
   })
   
-  const [activeTab, setActiveTab] = useState<'general' | 'snmp' | 'exchange' | 'counters' | 'notifications' | 'system' | 'users'>('general')
+  const [activeTab, setActiveTab] = useState<'general' | 'snmp' | 'exchange' | 'counters' | 'notifications' | 'system' | 'users' | 'appearance'>('general')
   const [activeSystemSubTab, setActiveSystemSubTab] = useState<'printers' | 'medical-printers'>('printers')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null)
@@ -109,6 +112,7 @@ export default function Settings() {
 
   const tabs = [
     { id: 'general', label: 'General' },
+    { id: 'appearance', label: 'Apariencia' },
     { id: 'snmp', label: 'SNMP' },
     { id: 'exchange', label: 'Tasas de Cambio' },
     { id: 'counters', label: 'Contadores' },
@@ -201,6 +205,176 @@ export default function Settings() {
                     { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD' },
                   ]}
                 />
+              </div>
+            </div>
+          )}
+
+          {/* Appearance Tab */}
+          {activeTab === 'appearance' && (
+            <div className="space-y-6 min-h-[400px]">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Tema</h3>
+                <p className="text-sm text-gray-600 mb-6">Personaliza la apariencia de la aplicación</p>
+                
+                <div className="space-y-4">
+                  {/* Theme Selector */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Modo de color
+                    </label>
+                    <div className="grid grid-cols-3 gap-4">
+                      <button
+                        onClick={() => setTheme('light')}
+                        className={`relative flex flex-col items-center gap-3 rounded-lg border-2 p-4 transition-all ${
+                          theme === 'light'
+                            ? 'border-blue-600 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        {theme === 'light' && (
+                          <div className="absolute top-2 right-2">
+                            <svg className="h-5 w-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        )}
+                        <svg className="h-12 w-12 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                        <span className="text-sm font-medium">Claro</span>
+                      </button>
+
+                      <button
+                        onClick={() => setTheme('dark')}
+                        className={`relative flex flex-col items-center gap-3 rounded-lg border-2 p-4 transition-all ${
+                          theme === 'dark'
+                            ? 'border-blue-600 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        {theme === 'dark' && (
+                          <div className="absolute top-2 right-2">
+                            <svg className="h-5 w-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        )}
+                        <svg className="h-12 w-12 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                        </svg>
+                        <span className="text-sm font-medium">Oscuro</span>
+                      </button>
+
+                      <button
+                        onClick={() => setTheme('auto')}
+                        className={`relative flex flex-col items-center gap-3 rounded-lg border-2 p-4 transition-all ${
+                          theme === 'auto'
+                            ? 'border-blue-600 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        {theme === 'auto' && (
+                          <div className="absolute top-2 right-2">
+                            <svg className="h-5 w-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        )}
+                        <svg className="h-12 w-12 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        <span className="text-sm font-medium">Automático</span>
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500">
+                      {theme === 'auto' 
+                        ? 'El tema cambiará automáticamente según la configuración del sistema' 
+                        : `Usar tema ${theme === 'light' ? 'claro' : 'oscuro'} siempre`
+                      }
+                    </p>
+                  </div>
+
+                  {/* Accent Color */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Color de acento
+                    </label>
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="color"
+                        value={accentColor}
+                        onChange={(e) => setAccentColor(e.target.value)}
+                        className="h-12 w-20 cursor-pointer rounded border border-gray-300"
+                      />
+                      <div className="flex-1">
+                        <input
+                          type="text"
+                          value={accentColor}
+                          onChange={(e) => setAccentColor(e.target.value)}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="#3B82F6"
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500">
+                      Selecciona el color principal para botones, enlaces y elementos interactivos
+                    </p>
+                  </div>
+
+                  {/* Preset Colors */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Colores predefinidos
+                    </label>
+                    <div className="flex gap-3">
+                      {[
+                        { name: 'Azul', color: '#3B82F6' },
+                        { name: 'Índigo', color: '#6366F1' },
+                        { name: 'Púrpura', color: '#8B5CF6' },
+                        { name: 'Rosa', color: '#EC4899' },
+                        { name: 'Rojo', color: '#EF4444' },
+                        { name: 'Naranja', color: '#F97316' },
+                        { name: 'Verde', color: '#10B981' },
+                        { name: 'Teal', color: '#14B8A6' },
+                      ].map((preset) => (
+                        <button
+                          key={preset.name}
+                          onClick={() => setAccentColor(preset.color)}
+                          className={`flex h-10 w-10 items-center justify-center rounded-lg border-2 transition-all ${
+                            accentColor.toLowerCase() === preset.color.toLowerCase()
+                              ? 'border-gray-900 scale-110'
+                              : 'border-transparent hover:scale-105'
+                          }`}
+                          style={{ backgroundColor: preset.color }}
+                          title={preset.name}
+                        >
+                          {accentColor.toLowerCase() === preset.color.toLowerCase() && (
+                            <svg className="h-5 w-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Preview */}
+                  <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-6">
+                    <h4 className="text-sm font-medium text-gray-700 mb-4">Vista previa</h4>
+                    <div className="space-y-3">
+                      <button
+                        className="rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors"
+                        style={{ backgroundColor: accentColor }}
+                      >
+                        Botón de ejemplo
+                      </button>
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-2 rounded-full" style={{ backgroundColor: accentColor }}></div>
+                        <span className="text-sm" style={{ color: accentColor }}>Texto con color de acento</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -721,7 +895,7 @@ function MedicalPrinterScheduleSettings() {
         <div className="flex space-x-3">
           <button
             type="button"
-            className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"
           >
             Restaurar por Defecto
           </button>
@@ -729,7 +903,7 @@ function MedicalPrinterScheduleSettings() {
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-accent hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? 'Guardando...' : 'Guardar Cambios'}
           </button>

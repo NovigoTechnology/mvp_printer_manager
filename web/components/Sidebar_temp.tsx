@@ -59,7 +59,11 @@ export default function Sidebar({ isCollapsed }: SidebarProps) {
             
             <Link
               href="/"
-              className={getNavClasses('/')}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive('/')
+                  ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400'
+              } ${isCollapsed ? 'justify-center' : ''}`}
               title="Overview"
             >
               <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -70,7 +74,11 @@ export default function Sidebar({ isCollapsed }: SidebarProps) {
 
             <Link
               href="/printers"
-              className={getNavClasses('/printers')}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive('/printers')
+                  ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400'
+              } ${isCollapsed ? 'justify-center' : ''}`}
               title="Printers"
             >
               <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -81,7 +89,11 @@ export default function Sidebar({ isCollapsed }: SidebarProps) {
 
             <Link
               href="/inventory"
-              className={getNavClasses('/inventory')}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive('/inventory')
+                  ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400'
+              } ${isCollapsed ? 'justify-center' : ''}`}
               title="Inventory"
             >
               <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -101,7 +113,11 @@ export default function Sidebar({ isCollapsed }: SidebarProps) {
 
             <Link
               href="/counters"
-              className={getNavClasses('/counters')}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive('/counters')
+                  ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400'
+              } ${isCollapsed ? 'justify-center' : ''}`}
               title="Counters"
             >
               <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -112,7 +128,11 @@ export default function Sidebar({ isCollapsed }: SidebarProps) {
 
             <Link
               href="/medical-printers"
-              className={getNavClasses('/medical-printers')}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive('/medical-printers')
+                  ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400'
+              } ${isCollapsed ? 'justify-center' : ''}`}
               title="Medical Printers"
             >
               <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -123,7 +143,11 @@ export default function Sidebar({ isCollapsed }: SidebarProps) {
 
             <Link
               href="/incidents"
-              className={getNavClasses('/incidents')}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive('/incidents')
+                  ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400'
+              } ${isCollapsed ? 'justify-center' : ''}`}
               title="Incidents"
             >
               <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -134,7 +158,11 @@ export default function Sidebar({ isCollapsed }: SidebarProps) {
 
             <Link
               href="/contracts"
-              className={getNavClasses('/contracts')}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive('/contracts')
+                  ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400'
+              } ${isCollapsed ? 'justify-center' : ''}`}
               title="Contracts"
             >
               <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -154,7 +182,11 @@ export default function Sidebar({ isCollapsed }: SidebarProps) {
 
             <Link
               href="/billing"
-              className={getNavClasses('/billing')}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive('/billing')
+                  ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400'
+              } ${isCollapsed ? 'justify-center' : ''}`}
               title="Billing"
             >
               <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -165,7 +197,11 @@ export default function Sidebar({ isCollapsed }: SidebarProps) {
 
             <Link
               href="/exchange-rates"
-              className={getNavClasses('/exchange-rates')}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive('/exchange-rates')
+                  ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400'
+              } ${isCollapsed ? 'justify-center' : ''}`}
               title="Exchange Rates"
             >
               <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -185,7 +221,11 @@ export default function Sidebar({ isCollapsed }: SidebarProps) {
 
             <Link
               href="/stock"
-              className={getNavClasses('/stock')}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive('/stock')
+                  ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400'
+              } ${isCollapsed ? 'justify-center' : ''}`}
               title="Stock"
             >
               <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -196,7 +236,11 @@ export default function Sidebar({ isCollapsed }: SidebarProps) {
 
             <Link
               href="/settings"
-              className={getNavClasses('/settings')}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive('/settings')
+                  ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400'
+              } ${isCollapsed ? 'justify-center' : ''}`}
               title="Settings"
             >
               <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

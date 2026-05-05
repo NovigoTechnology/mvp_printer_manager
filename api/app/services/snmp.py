@@ -7,6 +7,9 @@ from bs4 import BeautifulSoup
 from typing import Dict, Optional
 from datetime import datetime
 import logging
+import json
+
+from ..config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -14,33 +17,8 @@ class SNMPService:
     def __init__(self, community: str = None):
         self.community = community or os.getenv('POLL_COMMUNITY', 'public')
         
-        # SNMPv3 credentials for specific printers
-        self.v3_credentials = {
-            '10.10.9.11': {  # OKI ES5162LP
-                'username': 'root',
-                'auth_key': '12345678',
-                'priv_key': '12345678',
-                'context_name': 'v3context',
-                'auth_protocol': usmHMACMD5AuthProtocol,
-                'priv_protocol': usmDESPrivProtocol
-            },
-            '10.10.9.7': {  # OKI ES5162LP MFP - Nueva configuración
-                'username': 'root',
-                'auth_key': '12345678',  # Cambia por la contraseña real si es diferente
-                'priv_key': '12345678',  # Cambia por la contraseña real si es diferente
-                'context_name': 'v3context',
-                'auth_protocol': usmHMACMD5AuthProtocol,
-                'priv_protocol': usmDESPrivProtocol
-            },
-            '10.10.9.15': {  # OKI - SNMPv3 configurada según imagen
-                'username': 'root',
-                'auth_key': '12345678',  # Usar la misma configuración estándar
-                'priv_key': '12345678',  # Usar la misma configuración estándar
-                'context_name': 'v3context',
-                'auth_protocol': usmHMACMD5AuthProtocol,
-                'priv_protocol': usmDESPrivProtocol
-            }
-        }
+        # SNMPv3 credentials loaded from external configuration
+        self.v3_credentials = self._load_snmpv3_credentials()
         
         # OID mappings for different printer profiles
         self.profiles = {
@@ -195,6 +173,126 @@ class SNMPService:
                 'system_location': '1.3.6.1.2.1.1.6.0'         # sysLocation
             }
         }
+    
+    def _load_snmpv3_credentials(self) -> Dict:
+        """
+        Load SNMPv3 credentials from external configuration file.
+        
+        Returns:
+            Dictionary with IP addresses as keys and credential dictionaries as values.
+            Each credential dict should contain: username, auth_key, priv_key, context_name,
+            auth_protocol, and priv_protocol.
+        """
+        config_path = settings.snmp_config_path
+        
+        try:
+            # Verificar existencia del archivo
+            if not os.path.exists(config_path):
+                logger.warning(
+                    f"SNMPv3 config file not found at '{config_path}'. "
+                    "SNMPv3 functionality will not be available. "
+                    "To enable SNMPv3, create the config file following the example in "
+                    "config/snmp_credentials.json.example"
+                )
+                return {}
+            
+            # Leer y parsear el archivo JSON
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    credentials_raw = json.load(f)
+            except json.JSONDecodeError as e:
+                logger.error(
+                    f"Invalid JSON format in SNMPv3 config file '{config_path}': {e}. "
+                    f"Error at line {e.lineno}, column {e.colno}. "
+                    "SNMPv3 will not be available. Please verify the JSON syntax."
+                )
+                return {}
+            
+            # Validar estructura del JSON
+            if not isinstance(credentials_raw, dict):
+                logger.error(
+                    f"Invalid SNMPv3 config structure in '{config_path}': "
+                    "Expected a dictionary with IP addresses as keys. "
+                    "SNMPv3 will not be available."
+                )
+                return {}
+            
+            # Procesar y validar cada credencial
+            credentials = {}
+            invalid_ips = []
+            
+            for ip, creds in credentials_raw.items():
+                # Validar que creds sea un diccionario
+                if not isinstance(creds, dict):
+                    logger.warning(
+                        f"Invalid credentials format for IP '{ip}': Expected dictionary. Skipping."
+                    )
+                    invalid_ips.append(ip)
+                    continue
+                
+                # Validar campos requeridos
+                required_fields = ['username', 'auth_key', 'priv_key']
+                missing_fields = [field for field in required_fields if field not in creds]
+                
+                if missing_fields:
+                    logger.warning(
+                        f"Missing required fields for IP '{ip}': {', '.join(missing_fields)}. "
+                        "Skipping this entry."
+                    )
+                    invalid_ips.append(ip)
+                    continue
+                
+                # Validar que los campos no estén vacíos
+                empty_fields = [field for field in required_fields if not creds.get(field)]
+                if empty_fields:
+                    logger.warning(
+                        f"Empty required fields for IP '{ip}': {', '.join(empty_fields)}. "
+                        "Skipping this entry."
+                    )
+                    invalid_ips.append(ip)
+                    continue
+                
+                # Construir credencial validada
+                credentials[ip] = {
+                    'username': creds['username'],
+                    'auth_key': creds['auth_key'],
+                    'priv_key': creds['priv_key'],
+                    'context_name': creds.get('context_name', 'v3context'),
+                    'auth_protocol': usmHMACMD5AuthProtocol,  # Default MD5
+                    'priv_protocol': usmDESPrivProtocol        # Default DES
+                }
+            
+            # Log resumen de carga
+            if credentials:
+                logger.info(
+                    f"Successfully loaded SNMPv3 credentials for {len(credentials)} printer(s) "
+                    f"from '{config_path}'"
+                )
+                if invalid_ips:
+                    logger.warning(
+                        f"Skipped {len(invalid_ips)} invalid entries: {', '.join(invalid_ips)}"
+                    )
+            else:
+                logger.warning(
+                    f"No valid SNMPv3 credentials found in '{config_path}'. "
+                    "SNMPv3 will not be available."
+                )
+            
+            return credentials
+            
+        except PermissionError:
+            logger.error(
+                f"Permission denied accessing SNMPv3 config file '{config_path}'. "
+                "Check file permissions. SNMPv3 will not be available."
+            )
+            return {}
+        except Exception as e:
+            logger.error(
+                f"Unexpected error loading SNMPv3 credentials from '{config_path}': "
+                f"{type(e).__name__}: {e}. SNMPv3 will not be available.",
+                exc_info=True
+            )
+            return {}
     
     def get_snmp_value(self, ip: str, oid: str) -> Optional[str]:
         """Get a single SNMP value, supporting both v2c and v3"""

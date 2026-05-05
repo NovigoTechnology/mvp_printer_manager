@@ -2,11 +2,13 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/components/AuthProvider'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
 
 export default function LoginPage() {
   const router = useRouter()
+  const { login } = useAuth()
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -34,21 +36,24 @@ export default function LoginPage() {
       })
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Error de conexión' }))
+        
         if (response.status === 401) {
           throw new Error('Usuario o contraseña incorrectos')
         }
-        const errorData = await response.json().catch(() => ({ detail: 'Error de conexión' }))
+        if (response.status === 403) {
+          throw new Error(errorData.detail || 'Usuario deshabilitado. Contacte al administrador.')
+        }
+        
         throw new Error(errorData.detail || 'Error al iniciar sesión')
       }
 
       const data = await response.json()
       
       if (data.access_token) {
-        localStorage.setItem('token', data.access_token)
-        if (data.user) {
-          localStorage.setItem('user', JSON.stringify(data.user))
-        }
-        window.location.href = '/'
+        // Use AuthProvider's login function instead of direct localStorage
+        login(data.access_token, data.user)
+        router.push('/')
       } else {
         throw new Error('Respuesta inválida del servidor')
       }

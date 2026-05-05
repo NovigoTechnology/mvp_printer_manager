@@ -70,7 +70,7 @@ function EmptyState() {
       </p>
       <a
         href="/printers"
-        className="mt-6 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md"
+        className="mt-6 inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 hover:shadow-md"
       >
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -143,10 +143,23 @@ export default function Dashboard() {
   const [timeRange, setTimeRange] = useState<'month' | 'year'>('year')
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [supplyRequestStats, setSupplyRequestStats] = useState<{
+    total: number
+    open: number
+    in_progress: number
+    resolved: number
+  }>({ total: 0, open: 0, in_progress: 0, resolved: 0 })
+  const [serviceRequestStats, setServiceRequestStats] = useState<{
+    total: number
+    open: number
+    in_progress: number
+    resolved: number
+  }>({ total: 0, open: 0, in_progress: 0, resolved: 0 })
 
   useEffect(() => {
     fetchData()
     fetchRecentActivities()
+    fetchIncidentStats()
   }, [])
 
   const fetchRecentActivities = async () => {
@@ -155,8 +168,11 @@ export default function Dashboard() {
       const incidentsResponse = await fetch(`${API_BASE}/incidents/`)
       const incidents = await incidentsResponse.json()
       
+      // Filtrar solo incidentes no resueltos
+      const pendingIncidents = incidents.filter((inc: any) => inc.status !== 'resolved')
+      
       // Mapear incidentes según su incident_type
-      const activities: RecentActivity[] = incidents.slice(0, 10).map((inc: any) => {
+      const activities: RecentActivity[] = pendingIncidents.map((inc: any) => {
         let type: 'incident' | 'supply_request' | 'service_request' = 'incident'
         
         // Determinar el tipo basado en incident_type
@@ -180,12 +196,42 @@ export default function Dashboard() {
         }
       })
       
-      // Ordenar por fecha más reciente
+      // Ordenar por fecha más reciente y tomar solo las últimas 5
       activities.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       
-      setRecentActivities(activities.slice(0, 10))
+      setRecentActivities(activities.slice(0, 5))
     } catch (error) {
       console.error('Error fetching recent activities:', error)
+    }
+  }
+
+  const fetchIncidentStats = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/incidents/`)
+      const incidents = await response.json()
+      
+      // Filtrar solicitudes de insumos
+      const supplyRequests = incidents.filter((inc: any) => inc.incident_type === 'solicitud_insumos')
+      const supplyStats = {
+        total: supplyRequests.length,
+        open: supplyRequests.filter((inc: any) => inc.status === 'open').length,
+        in_progress: supplyRequests.filter((inc: any) => inc.status === 'in_progress').length,
+        resolved: supplyRequests.filter((inc: any) => inc.status === 'resolved').length
+      }
+      
+      // Filtrar solicitudes de servicio
+      const serviceRequests = incidents.filter((inc: any) => inc.incident_type === 'solicitud_servicio')
+      const serviceStats = {
+        total: serviceRequests.length,
+        open: serviceRequests.filter((inc: any) => inc.status === 'open').length,
+        in_progress: serviceRequests.filter((inc: any) => inc.status === 'in_progress').length,
+        resolved: serviceRequests.filter((inc: any) => inc.status === 'resolved').length
+      }
+      
+      setSupplyRequestStats(supplyStats)
+      setServiceRequestStats(serviceStats)
+    } catch (error) {
+      console.error('Error fetching incident stats:', error)
     }
   }
 
@@ -547,7 +593,7 @@ export default function Dashboard() {
         {/* Recent Activities (Incidents & Supply Requests) */}
         <div className="rounded-xl bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-700">Actividad Reciente</h3>
+            <h3 className="text-lg font-semibold text-gray-700">Solicitudes Pendientes</h3>
             <button 
               onClick={() => window.location.href = '/incidents'}
               className="text-gray-400 hover:text-gray-600"
@@ -617,111 +663,231 @@ export default function Dashboard() {
               ))
             ) : (
               <div className="text-center py-8 text-gray-500">
-                <p className="text-sm">No hay actividad reciente</p>
+                <p className="text-sm">No hay solicitudes pendientes</p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Customer Satisfaction */}
-        <div className="rounded-xl bg-white p-6 shadow-sm">
-          <div className="mb-6 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-700">Customer Satisfaction</h3>
-            <button aria-label="More options" className="text-gray-400 hover:text-gray-600">
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-              </svg>
-            </button>
+        {/* Supply Requests Status */}
+        <div className="space-y-6">
+          {/* Solicitudes de Insumos */}
+          <div className="rounded-xl bg-white p-6 shadow-sm">
+            <div className="mb-6 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-700">Solicitudes de Insumos</h3>
+              <button 
+                onClick={() => window.location.href = '/incidents'}
+                aria-label="Ver solicitudes de insumos" 
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Total Score */}
+            <div className="mb-6 text-center">
+              <div className="flex items-baseline justify-center gap-1">
+                <span className="text-5xl font-bold text-gray-900">{supplyRequestStats.total}</span>
+              </div>
+              <div className="mt-1 text-sm text-gray-500">Total de solicitudes</div>
+              
+              {/* Color Bars */}
+              <div className="mt-4 flex justify-center gap-1">
+                {supplyRequestStats.total > 0 && (
+                  <>
+                    {supplyRequestStats.resolved > 0 && (
+                      <div 
+                        className="h-1.5 rounded-full bg-green-500" 
+                        style={{ width: `${(supplyRequestStats.resolved / supplyRequestStats.total) * 100}px` }}
+                      />
+                    )}
+                    {supplyRequestStats.in_progress > 0 && (
+                      <div 
+                        className="h-1.5 rounded-full bg-blue-500" 
+                        style={{ width: `${(supplyRequestStats.in_progress / supplyRequestStats.total) * 100}px` }}
+                      />
+                    )}
+                    {supplyRequestStats.open > 0 && (
+                      <div 
+                        className="h-1.5 rounded-full bg-yellow-500" 
+                        style={{ width: `${(supplyRequestStats.open / supplyRequestStats.total) * 100}px` }}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Progress Bars */}
+            <div className="space-y-4">
+              <div>
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2.5 w-2.5 rounded-full bg-green-500"></div>
+                    <span className="font-medium text-gray-700">Resueltos</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-gray-900">{supplyRequestStats.resolved}</span>
+                    <span className="text-gray-500">
+                      {supplyRequestStats.total > 0 ? Math.round((supplyRequestStats.resolved / supplyRequestStats.total) * 100) : 0}%
+                    </span>
+                  </div>
+                </div>
+                <ProgressBar 
+                  percentage={supplyRequestStats.total > 0 ? Math.round((supplyRequestStats.resolved / supplyRequestStats.total) * 100) : 0} 
+                  color="green" 
+                />
+              </div>
+
+              <div>
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2.5 w-2.5 rounded-full bg-blue-500"></div>
+                    <span className="font-medium text-gray-700">En Progreso</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-gray-900">{supplyRequestStats.in_progress}</span>
+                    <span className="text-gray-500">
+                      {supplyRequestStats.total > 0 ? Math.round((supplyRequestStats.in_progress / supplyRequestStats.total) * 100) : 0}%
+                    </span>
+                  </div>
+                </div>
+                <ProgressBar 
+                  percentage={supplyRequestStats.total > 0 ? Math.round((supplyRequestStats.in_progress / supplyRequestStats.total) * 100) : 0} 
+                  color="blue" 
+                />
+              </div>
+
+              <div>
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2.5 w-2.5 rounded-full bg-yellow-500"></div>
+                    <span className="font-medium text-gray-700">Abiertos</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-gray-900">{supplyRequestStats.open}</span>
+                    <span className="text-gray-500">
+                      {supplyRequestStats.total > 0 ? Math.round((supplyRequestStats.open / supplyRequestStats.total) * 100) : 0}%
+                    </span>
+                  </div>
+                </div>
+                <ProgressBar 
+                  percentage={supplyRequestStats.total > 0 ? Math.round((supplyRequestStats.open / supplyRequestStats.total) * 100) : 0} 
+                  color="yellow" 
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Score */}
-          <div className="mb-6 text-center">
-            <div className="flex items-baseline justify-center gap-1">
-              <span className="text-5xl font-bold text-gray-900">9.7</span>
-              <span className="text-sm font-medium text-green-600">+2.1%</span>
-            </div>
-            <div className="mt-1 text-sm text-gray-500">Performance score</div>
-            
-            {/* Color Bars */}
-            <div className="mt-4 flex justify-center gap-1">
-              <div className="h-1.5 w-20 rounded-full bg-green-500"></div>
-              <div className="h-1.5 w-16 rounded-full bg-teal-500"></div>
-              <div className="h-1.5 w-14 rounded-full bg-blue-500"></div>
-              <div className="h-1.5 w-12 rounded-full bg-orange-500"></div>
-              <div className="h-1.5 w-8 rounded-full bg-red-500"></div>
-            </div>
-          </div>
-
-          {/* Progress Bars */}
-          <div className="space-y-4">
-            <div>
-              <div className="mb-2 flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="h-2.5 w-2.5 rounded-full bg-green-500"></div>
-                  <span className="font-medium text-gray-700">Excellent</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold text-gray-900">1029</span>
-                  <span className="text-gray-500">42%</span>
-                </div>
-              </div>
-              <ProgressBar percentage={42} color="green" />
+          {/* Solicitudes de Servicio */}
+          <div className="rounded-xl bg-white p-6 shadow-sm">
+            <div className="mb-6 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-700">Solicitudes de Servicio</h3>
+              <button 
+                onClick={() => window.location.href = '/incidents'}
+                aria-label="Ver solicitudes de servicio" 
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             </div>
 
-            <div>
-              <div className="mb-2 flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="h-2.5 w-2.5 rounded-full bg-blue-500"></div>
-                  <span className="font-medium text-gray-700">Very Good</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold text-gray-900">426</span>
-                  <span className="text-gray-500">18%</span>
-                </div>
+            {/* Total Score */}
+            <div className="mb-6 text-center">
+              <div className="flex items-baseline justify-center gap-1">
+                <span className="text-5xl font-bold text-gray-900">{serviceRequestStats.total}</span>
               </div>
-              <ProgressBar percentage={18} color="blue" />
+              <div className="mt-1 text-sm text-gray-500">Total de solicitudes</div>
+              
+              {/* Color Bars */}
+              <div className="mt-4 flex justify-center gap-1">
+                {serviceRequestStats.total > 0 && (
+                  <>
+                    {serviceRequestStats.resolved > 0 && (
+                      <div 
+                        className="h-1.5 rounded-full bg-green-500" 
+                        style={{ width: `${(serviceRequestStats.resolved / serviceRequestStats.total) * 100}px` }}
+                      />
+                    )}
+                    {serviceRequestStats.in_progress > 0 && (
+                      <div 
+                        className="h-1.5 rounded-full bg-blue-500" 
+                        style={{ width: `${(serviceRequestStats.in_progress / serviceRequestStats.total) * 100}px` }}
+                      />
+                    )}
+                    {serviceRequestStats.open > 0 && (
+                      <div 
+                        className="h-1.5 rounded-full bg-yellow-500" 
+                        style={{ width: `${(serviceRequestStats.open / serviceRequestStats.total) * 100}px` }}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
             </div>
 
-            <div>
-              <div className="mb-2 flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="h-2.5 w-2.5 rounded-full bg-gray-400"></div>
-                  <span className="font-medium text-gray-700">Good</span>
+            {/* Progress Bars */}
+            <div className="space-y-4">
+              <div>
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2.5 w-2.5 rounded-full bg-green-500"></div>
+                    <span className="font-medium text-gray-700">Resueltos</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-gray-900">{serviceRequestStats.resolved}</span>
+                    <span className="text-gray-500">
+                      {serviceRequestStats.total > 0 ? Math.round((serviceRequestStats.resolved / serviceRequestStats.total) * 100) : 0}%
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold text-gray-900">326</span>
-                  <span className="text-gray-500">14%</span>
-                </div>
+                <ProgressBar 
+                  percentage={serviceRequestStats.total > 0 ? Math.round((serviceRequestStats.resolved / serviceRequestStats.total) * 100) : 0} 
+                  color="green" 
+                />
               </div>
-              <ProgressBar percentage={14} color="gray" />
-            </div>
 
-            <div>
-              <div className="mb-2 flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="h-2.5 w-2.5 rounded-full bg-yellow-500"></div>
-                  <span className="font-medium text-gray-700">Poor</span>
+              <div>
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2.5 w-2.5 rounded-full bg-blue-500"></div>
+                    <span className="font-medium text-gray-700">En Progreso</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-gray-900">{serviceRequestStats.in_progress}</span>
+                    <span className="text-gray-500">
+                      {serviceRequestStats.total > 0 ? Math.round((serviceRequestStats.in_progress / serviceRequestStats.total) * 100) : 0}%
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold text-gray-900">395</span>
-                  <span className="text-gray-500">17%</span>
-                </div>
+                <ProgressBar 
+                  percentage={serviceRequestStats.total > 0 ? Math.round((serviceRequestStats.in_progress / serviceRequestStats.total) * 100) : 0} 
+                  color="blue" 
+                />
               </div>
-              <ProgressBar percentage={17} color="yellow" />
-            </div>
 
-            <div>
-              <div className="mb-2 flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="h-2.5 w-2.5 rounded-full bg-red-500"></div>
-                  <span className="font-medium text-gray-700">Very Poor</span>
+              <div>
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2.5 w-2.5 rounded-full bg-yellow-500"></div>
+                    <span className="font-medium text-gray-700">Abiertos</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-gray-900">{serviceRequestStats.open}</span>
+                    <span className="text-gray-500">
+                      {serviceRequestStats.total > 0 ? Math.round((serviceRequestStats.open / serviceRequestStats.total) * 100) : 0}%
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold text-gray-900">129</span>
-                  <span className="text-gray-500">9%</span>
-                </div>
+                <ProgressBar 
+                  percentage={serviceRequestStats.total > 0 ? Math.round((serviceRequestStats.open / serviceRequestStats.total) * 100) : 0} 
+                  color="yellow" 
+                />
               </div>
-              <ProgressBar percentage={9} color="red" />
             </div>
           </div>
         </div>

@@ -7,6 +7,7 @@ import logging
 from datetime import datetime
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..db import SessionLocal
 from ..models import Printer
 from ..services.medical_printer_service import DrypixScraper
@@ -47,12 +48,12 @@ def poll_medical_printers_hourly():
             try:
                 logger.info(f"Polling {printer.brand} {printer.model} (ID: {printer.id}) - {printer.ip}")
                 
-                # Crear scraper DRYPIX
+                # Crear scraper DRYPIX con credenciales desde variables de entorno
                 scraper = DrypixScraper(
                     ip_address=printer.ip,
                     port=20051,
-                    login='dryprinter',
-                    password='fujifilm'
+                    login=os.getenv('DRYPIX_LOGIN', 'dryprinter'),
+                    password=os.getenv('DRYPIX_PASSWORD', 'fujifilm')
                 )
                 
                 # Obtener contadores actuales

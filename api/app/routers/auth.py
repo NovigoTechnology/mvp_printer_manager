@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
@@ -6,18 +6,40 @@ import bcrypt
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 from typing import Optional
-import os
 import json
+import logging
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
+from ..config import settings
 from ..db import get_db
 from ..models import User
 
 router = APIRouter()
 
-# Security
-SECRET_KEY = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 horas
+# Initialize rate limiter for auth routes
+limiter = Limiter(key_func=get_remote_address)
+
+# Configure security logger for audit trail
+security_logger = logging.getLogger("security")
+security_logger.setLevel(logging.INFO)
+
+# Create file handler for security events
+if not security_logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter(
+        '%(asctime)s - SECURITY - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    handler.setFormatter(formatter)
+    security_logger.addHandler(handler)
+
+# Security - JWT configuration desde settings centralizado
+# Settings valida que JWT_SECRET esté presente (fail-fast)
+SECRET_KEY = settings.jwt_secret
+ALGORITHM = settings.jwt_algorithm
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.jwt_expiry_minutes
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
@@ -73,14 +95,28 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
 def get_user_by_username(db: Session, username: str):
     return db.query(User).filter(User.username == username).first()
 
-def authenticate_user(db: Session, username: str, password: str):
+def authenticate_user(db: Session, username: str, password: str, ip_address: str = "unknown"):
+    """Authenticate user with security logging"""
     user = get_user_by_username(db, username)
     if not user:
-        return False
+        security_logger.warning(
+            f"Login attempt failed - User not found | Username: {username} | IP: {ip_address}"
+        )
+        return None
     if not verify_password(password, user.hashed_password):
-        return False
+        security_logger.warning(
+            f"Login attempt failed - Invalid password | Username: {username} | IP: {ip_address}"
+        )
+        return None
     if not user.is_active:
-        return False
+        security_logger.warning(
+            f"Login attempt failed - Inactive account | Username: {username} | IP: {ip_address}"
+        )
+        return "inactive"
+    
+    security_logger.info(
+        f"Login successful | Username: {username} | IP: {ip_address} | Role: {user.role or 'user'}"
+    )
     return user
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
@@ -109,9 +145,36 @@ async def get_current_admin_user(current_user: User = Depends(get_current_user))
     return current_user
 
 @router.post("/token")
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = authenticate_user(db, form_data.username, form_data.password)
+@limiter.limit(settings.rate_limit_auth)  # Maximum attempts per minute per IP (configurable via RATE_LIMIT_AUTH)
+async def login_for_access_token(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(), 
+    db: Session = Depends(get_db)
+):
+    """
+    Login endpoint with rate limiting (5 attempts per minute per IP)
+    Returns JWT access token on successful authentication
+    """
+    # Get client IP address for logging and rate limiting
+    client_ip = request.client.host if request.client else "unknown"
+    
+    # Authenticate user with security logging
+    user = authenticate_user(db, form_data.username, form_data.password, client_ip)
+    
+    if user == "inactive":
+        security_logger.warning(
+            f"Login blocked - Inactive account | Username: {form_data.username} | IP: {client_ip}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuario deshabilitado. Contacte al administrador.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     if not user:
+        security_logger.warning(
+            f"Login denied - Invalid credentials | Username: {form_data.username} | IP: {client_ip}"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -121,6 +184,10 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     # Update last login
     user.last_login = datetime.utcnow()
     db.commit()
+    
+    security_logger.info(
+        f"Token issued | Username: {user.username} | IP: {client_ip} | Expiry: {ACCESS_TOKEN_EXPIRE_MINUTES}m"
+    )
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(

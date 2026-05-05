@@ -53,6 +53,7 @@ services:
     volumes:
       - ../api:/app
       - api_logs:/app/logs
+      - ../api/config:/app/config:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

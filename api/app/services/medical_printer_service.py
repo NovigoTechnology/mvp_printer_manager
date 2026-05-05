@@ -2,6 +2,7 @@
 Servicio para monitoreo de impresoras médicas (DRYPIX, etc.)
 que no soportan SNMP y requieren web scraping
 """
+import os
 import requests
 from bs4 import BeautifulSoup
 import re
@@ -9,6 +10,8 @@ from datetime import datetime
 from typing import Dict, Optional, List
 import socket
 import concurrent.futures
+
+from ..config import settings
 
 
 class MedicalPrinterService:
@@ -48,17 +51,25 @@ class MedicalPrinterService:
 class DrypixScraper:
     """Web scraper específico para impresoras DRYPIX SMART"""
     
-    # Credenciales estándar de mantenimiento DRYPIX
-    DEFAULT_LOGIN = "dryprinter"
-    DEFAULT_PASSWORD = "fujifilm"
+    # Constantes de configuración
     DEFAULT_LANGUAGE = "en"
     TRAY_CAPACITY = 100
     
     def __init__(self, ip_address: str, port: int = 20051,
                  login: str = None, password: str = None):
+        """
+        Inicializa el scraper para impresora DRYPIX.
+        
+        Args:
+            ip_address: Dirección IP de la impresora
+            port: Puerto (default: 20051)
+            login: Usuario de mantenimiento (default: desde config)
+            password: Contraseña de mantenimiento (default: desde config)
+        """
         self.base_url = f"http://{ip_address}:{port}"
-        self.login = login or self.DEFAULT_LOGIN
-        self.password = password or self.DEFAULT_PASSWORD
+        # Credenciales desde config centralizado (lazy loading)
+        self.login = login if login is not None else settings.drypix_login
+        self.password = password if password is not None else settings.drypix_password
         self.session = requests.Session()
     
     def authenticate(self) -> bool:

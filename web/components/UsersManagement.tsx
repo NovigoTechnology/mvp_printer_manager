@@ -30,6 +30,8 @@ export default function UsersManagement() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -74,39 +76,85 @@ export default function UsersManagement() {
     }
   }
 
-  const handleCreateUser = async (e: React.FormEvent) => {
+  const handleSubmitUser = async (e: React.FormEvent) => {
     e.preventDefault()
     
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_BASE}/auth/users`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(formData)
-      })
+      
+      if (isEditMode && editingUser) {
+        // Actualizar usuario existente
+        const updateData: any = {
+          email: formData.email,
+          full_name: formData.full_name,
+          department: formData.department,
+          phone: formData.phone,
+          role: formData.role
+        }
+        
+        // Solo incluir contraseña si se ingresó una nueva
+        if (formData.password) {
+          updateData.password = formData.password
+        }
+        
+        const response = await fetch(`${API_BASE}/auth/users/${editingUser.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(updateData)
+        })
 
-      if (response.ok) {
-        alert('Usuario creado exitosamente')
-        setShowModal(false)
-        fetchUsers()
-        resetForm()
-      } else {
-        const error = await response.json()
-        if (response.status === 401) {
-          alert('No autorizado. Por favor, inicie sesión nuevamente.')
-          window.location.href = '/login'
-        } else if (response.status === 403) {
-          alert('No tiene permisos suficientes para crear usuarios. Se requiere rol de administrador.')
+        if (response.ok) {
+          alert('Usuario actualizado exitosamente')
+          setShowModal(false)
+          setIsEditMode(false)
+          setEditingUser(null)
+          fetchUsers()
+          resetForm()
         } else {
-          alert(error.detail || 'Error al crear usuario')
+          const error = await response.json()
+          if (response.status === 401) {
+            alert('No autorizado. Por favor, inicie sesión nuevamente.')
+            window.location.href = '/login'
+          } else if (response.status === 403) {
+            alert('No tiene permisos suficientes.')
+          } else {
+            alert(error.detail || 'Error al actualizar usuario')
+          }
+        }
+      } else {
+        // Crear nuevo usuario
+        const response = await fetch(`${API_BASE}/auth/users`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(formData)
+        })
+
+        if (response.ok) {
+          alert('Usuario creado exitosamente')
+          setShowModal(false)
+          fetchUsers()
+          resetForm()
+        } else {
+          const error = await response.json()
+          if (response.status === 401) {
+            alert('No autorizado. Por favor, inicie sesión nuevamente.')
+            window.location.href = '/login'
+          } else if (response.status === 403) {
+            alert('No tiene permisos suficientes para crear usuarios. Se requiere rol de administrador.')
+          } else {
+            alert(error.detail || 'Error al crear usuario')
+          }
         }
       }
     } catch (error) {
-      console.error('Error creating user:', error)
-      alert('Error de conexión al crear usuario')
+      console.error('Error saving user:', error)
+      alert('Error de conexión al guardar usuario')
     }
   }
 
@@ -151,6 +199,28 @@ export default function UsersManagement() {
     }
   }
 
+  const handleEditUser = (user: User) => {
+    setEditingUser(user)
+    setIsEditMode(true)
+    setFormData({
+      username: user.username,
+      email: user.email,
+      password: '', // No prellenar la contraseña
+      full_name: user.full_name || '',
+      department: user.department || '',
+      phone: user.phone || '',
+      role: user.role
+    })
+    setShowModal(true)
+  }
+
+  const handleNewUser = () => {
+    setIsEditMode(false)
+    setEditingUser(null)
+    resetForm()
+    setShowModal(true)
+  }
+
   const resetForm = () => {
     setFormData({
       username: '',
@@ -189,7 +259,7 @@ export default function UsersManagement() {
           <p className="text-sm text-gray-600 mt-1">Gestiona usuarios, roles y permisos del sistema</p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={handleNewUser}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
           + Nuevo Usuario
@@ -251,15 +321,26 @@ export default function UsersManagement() {
                     {formatDate(user.last_login)}
                   </td>
                   <td className="px-6 py-4">
-                    <button
-                      onClick={() => deleteUser(user.id)}
-                      className="text-red-600 hover:text-red-800"
-                      title="Eliminar usuario"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => handleEditUser(user)}
+                        className="text-blue-600 hover:text-blue-900"
+                        title="Editar usuario"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => deleteUser(user.id)}
+                        className="text-red-600 hover:text-red-900"
+                        title="Eliminar usuario"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )
@@ -273,17 +354,18 @@ export default function UsersManagement() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
             <div className="p-6 border-b border-gray-200">
-              <h3 className="text-lg font-semibold">Crear Nuevo Usuario</h3>
+              <h3 className="text-lg font-semibold">{isEditMode ? 'Editar Usuario' : 'Crear Nuevo Usuario'}</h3>
             </div>
-            <form onSubmit={handleCreateUser} className="p-6 space-y-4">
+            <form onSubmit={handleSubmitUser} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Usuario</label>
                 <input
                   type="text"
-                  required
+                  required={!isEditMode}
+                  disabled={isEditMode}
                   value={formData.username}
                   onChange={e => setFormData({ ...formData, username: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:cursor-not-allowed"
                 />
               </div>
               <div>
@@ -297,10 +379,12 @@ export default function UsersManagement() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Contraseña {isEditMode && <span className="text-xs text-gray-500">(dejar en blanco para no cambiar)</span>}
+                </label>
                 <input
                   type="password"
-                  required
+                  required={!isEditMode}
                   value={formData.password}
                   onChange={e => setFormData({ ...formData, password: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
@@ -330,16 +414,16 @@ export default function UsersManagement() {
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => { setShowModal(false); resetForm(); }}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                  onClick={() => { setShowModal(false); setIsEditMode(false); setEditingUser(null); resetForm(); }}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                 >
-                  Crear Usuario
+                  {isEditMode ? 'Actualizar Usuario' : 'Crear Usuario'}
                 </button>
               </div>
             </form>

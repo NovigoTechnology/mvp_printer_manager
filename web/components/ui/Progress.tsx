@@ -20,7 +20,7 @@ export function ProgressBar({
   const percentage = Math.min((value / max) * 100, 100)
 
   const colorStyles = {
-    blue: 'bg-blue-600',
+    blue: 'bg-accent',
     green: 'bg-green-600',
     yellow: 'bg-yellow-600',
     red: 'bg-red-600',

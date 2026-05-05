@@ -377,13 +377,13 @@ function ProductModal({ isOpen, onClose, onSave, product, locations }: ProductMo
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+              className="px-4 py-2 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="px-4 py-2 bg-accent text-white rounded-md hover:opacity-90"
             >
               {product ? 'Actualizar' : 'Crear'} Producto
             </button>
@@ -518,13 +518,13 @@ function LocationModal({ isOpen, onClose, onSave }: LocationModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+              className="px-4 py-2 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="px-4 py-2 bg-accent text-white rounded-md hover:opacity-90"
             >
               Crear Ubicación
             </button>
@@ -766,13 +766,13 @@ function MovementModal({ isOpen, onClose, onSave, items, locations, preselectedI
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+              className="px-4 py-2 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="px-4 py-2 bg-accent text-white rounded-md hover:opacity-90"
             >
               Crear Movimiento
             </button>
@@ -1048,7 +1048,7 @@ export default function StockPage() {
                     </select>
                     <button
                       onClick={() => setShowItemModal(true)}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
+                      className="bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
                     >
                       ➕ Nuevo Producto
                     </button>
@@ -1156,7 +1156,7 @@ export default function StockPage() {
                   <h3 className="text-lg font-medium text-gray-900">Ubicaciones de Stock</h3>
                   <button
                     onClick={() => setShowLocationModal(true)}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
+                    className="bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
                   >
                     ➕ Nueva Ubicación
                   </button>
@@ -1228,7 +1228,7 @@ export default function StockPage() {
                       setSelectedItemForMovement(null);
                       setShowMovementModal(true);
                     }}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
+                    className="bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
                   >
                     ➕ Nuevo Movimiento
                   </button>

@@ -39,9 +39,11 @@ const DEFAULT_PERMISSIONS = {
 }
 
 export default function UsersManagementPage() {
+  // Force recompile 2025-12-06 20:45
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [isEditMode, setIsEditMode] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [showPermissions, setShowPermissions] = useState<number | null>(null)
   
@@ -79,32 +81,71 @@ export default function UsersManagementPage() {
     }
   }
 
-  const handleCreateUser = async (e: React.FormEvent) => {
+  const handleSubmitUser = async (e: React.FormEvent) => {
     e.preventDefault()
     
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_URL}/auth/users`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(formData)
-      })
+      
+      if (isEditMode && editingUser) {
+        // Update existing user
+        const updateData: any = {
+          email: formData.email,
+          full_name: formData.full_name,
+          department: formData.department,
+          phone: formData.phone,
+          role: formData.role
+        }
+        
+        // Only include password if it was changed
+        if (formData.password) {
+          updateData.password = formData.password
+        }
+        
+        const response = await fetch(`${API_URL}/auth/users/${editingUser.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(updateData)
+        })
 
-      if (response.ok) {
-        alert('Usuario creado exitosamente')
-        setShowModal(false)
-        fetchUsers()
-        resetForm()
+        if (response.ok) {
+          alert('Usuario actualizado exitosamente')
+          setShowModal(false)
+          setIsEditMode(false)
+          setEditingUser(null)
+          fetchUsers()
+          resetForm()
+        } else {
+          const error = await response.json()
+          alert(error.detail || 'Error al actualizar usuario')
+        }
       } else {
-        const error = await response.json()
-        alert(error.detail || 'Error al crear usuario')
+        // Create new user
+        const response = await fetch(`${API_URL}/auth/users`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(formData)
+        })
+
+        if (response.ok) {
+          alert('Usuario creado exitosamente')
+          setShowModal(false)
+          fetchUsers()
+          resetForm()
+        } else {
+          const error = await response.json()
+          alert(error.detail || 'Error al crear usuario')
+        }
       }
     } catch (error) {
-      console.error('Error creating user:', error)
-      alert('Error al crear usuario')
+      console.error('Error submitting user:', error)
+      alert('Error al guardar usuario')
     }
   }
 
@@ -148,6 +189,28 @@ export default function UsersManagementPage() {
     }
   }
 
+  const handleEditUser = (user: User) => {
+    setEditingUser(user)
+    setIsEditMode(true)
+    setFormData({
+      username: user.username,
+      email: user.email,
+      password: '', // Don't populate password
+      full_name: user.full_name || '',
+      department: user.department || '',
+      phone: user.phone || '',
+      role: user.role
+    })
+    setShowModal(true)
+  }
+
+  const handleNewUser = () => {
+    setIsEditMode(false)
+    setEditingUser(null)
+    resetForm()
+    setShowModal(true)
+  }
+
   const resetForm = () => {
     setFormData({
       username: '',
@@ -186,8 +249,8 @@ export default function UsersManagementPage() {
           <p className="text-sm text-gray-600 mt-1">Gestiona usuarios, roles y permisos del sistema</p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          onClick={handleNewUser}
+          className="px-4 py-2 bg-accent text-white rounded-lg hover:opacity-90 transition-all"
         >
           + Nuevo Usuario
         </button>
@@ -238,27 +301,37 @@ export default function UsersManagementPage() {
                       onChange={(e) => handleUpdateUser(user.id, { is_active: e.target.checked })}
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-accent/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div>
                   </label>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Nunca'}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                  <button
-                    onClick={() => setShowPermissions(showPermissions === user.id ? null : user.id)}
-                    className="text-blue-600 hover:text-blue-900"
-                    title="Ver permisos"
-                  >
-                    🔒
-                  </button>
-                  <button
-                    onClick={() => handleDeleteUser(user.id)}
-                    className="text-red-600 hover:text-red-900"
-                    title="Eliminar"
-                  >
-                    🗑️
-                  </button>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  {/* Updated: 2025-12-06 Actions column */}
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => handleEditUser(user)}
+                      className="px-3 py-1 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded"
+                      title="Editar usuario"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => setShowPermissions(showPermissions === user.id ? null : user.id)}
+                      className="px-3 py-1 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded"
+                      title="Ver permisos"
+                    >
+                      Permisos
+                    </button>
+                    <button
+                      onClick={() => handleDeleteUser(user.id)}
+                      className="px-3 py-1 text-red-600 hover:text-red-900 hover:bg-red-50 rounded"
+                      title="Eliminar usuario"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -266,12 +339,14 @@ export default function UsersManagementPage() {
         </table>
       </div>
 
-      {/* Create User Modal */}
+      {/* Create/Edit User Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h2 className="text-xl font-bold mb-4">Crear Nuevo Usuario</h2>
-            <form onSubmit={handleCreateUser} className="space-y-4">
+            <h2 className="text-xl font-bold mb-4">
+              {isEditMode ? 'Editar Usuario' : 'Crear Nuevo Usuario'}
+            </h2>
+            <form onSubmit={handleSubmitUser} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Usuario *</label>
                 <input
@@ -279,7 +354,8 @@ export default function UsersManagementPage() {
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  required
+                  disabled={isEditMode}
+                  required={!isEditMode}
                 />
               </div>
               <div>
@@ -293,13 +369,15 @@ export default function UsersManagementPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Contraseña {isEditMode ? '(dejar en blanco para no cambiar)' : '*'}
+                </label>
                 <input
                   type="password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  required
+                  required={!isEditMode}
                 />
               </div>
               <div>
@@ -337,16 +415,16 @@ export default function UsersManagementPage() {
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => { setShowModal(false); resetForm(); }}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  onClick={() => { setShowModal(false); setIsEditMode(false); setEditingUser(null); resetForm(); }}
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="flex-1 px-4 py-2 bg-accent text-white rounded-lg hover:opacity-90"
                 >
-                  Crear Usuario
+                  {isEditMode ? 'Actualizar Usuario' : 'Crear Usuario'}
                 </button>
               </div>
             </form>
