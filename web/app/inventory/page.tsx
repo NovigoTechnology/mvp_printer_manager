@@ -587,119 +587,51 @@ export default function Inventory() {
   }
 
   return (
-    <div className="w-full mx-auto py-6 px-4 sm:px-6 lg:px-8">
+    <div className="w-full mx-auto py-3 px-4 sm:px-6 lg:px-8">
       <div className="sm:px-0">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Printer Inventory</h1>
-          <p className="mt-2 text-gray-600">Complete inventory management system</p>
-        </div>
-
         {/* Stats Cards */}
         {stats && (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-            <div className="stat-card">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                    </svg>
-                  </div>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="stat-label">Total Printers</dt>
-                    <dd className="stat-value">{stats.total_printers}</dd>
-                  </dl>
-                </div>
-              </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-4">
+            <div className="bg-white border border-gray-100 rounded-lg p-4 shadow-sm">
+              <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Total</p>
+              <p className="text-2xl font-semibold text-gray-800">{stats.total_printers}</p>
             </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
-                      <span className="text-white text-sm font-medium">
-                        {stats.status_distribution.find((s: any) => s.status === 'active')?.count || 0}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Active</dt>
-                      <dd className="text-lg font-medium text-gray-900">
-                        {stats.status_distribution.find((s: any) => s.status === 'active')?.count || 0}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
+            <div className="bg-white border border-gray-100 rounded-lg p-4 shadow-sm">
+              <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Activas</p>
+              <p className="text-2xl font-semibold text-emerald-600">
+                {stats.status_distribution.find((s: any) => s.status === 'active')?.count || 0}
+              </p>
             </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
-                      <span className="text-white text-sm font-medium">
-                        {stats.ownership_distribution.find((o: any) => o.type === 'leased')?.count || 0}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Leased</dt>
-                      <dd className="text-lg font-medium text-gray-900">
-                        {stats.ownership_distribution.find((o: any) => o.type === 'leased')?.count || 0}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
+            <div className="bg-white border border-gray-100 rounded-lg p-4 shadow-sm">
+              <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Arrendadas</p>
+              <p className="text-2xl font-semibold text-violet-600">
+                {stats.ownership_distribution.find((o: any) => o.type === 'leased')?.count || 0}
+              </p>
             </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-red-500 rounded-md flex items-center justify-center">
-                      <span className="text-white text-sm font-medium">{stats.warranties_expiring_soon}</span>
-                    </div>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Warranties Expiring</dt>
-                      <dd className="text-lg font-medium text-gray-900">{stats.warranties_expiring_soon}</dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
+            <div className="bg-white border border-gray-100 rounded-lg p-4 shadow-sm">
+              <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Garantías por vencer</p>
+              <p className="text-2xl font-semibold text-rose-500">{stats.warranties_expiring_soon}</p>
             </div>
           </div>
         )}
 
         {/* Search and Filters */}
-        <div className="bg-white shadow rounded-lg p-6 mb-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="bg-white border border-gray-100 rounded-lg p-3 mb-4 shadow-sm">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
               <input
                 type="text"
-                placeholder="Search by brand, model, serial..."
+                placeholder="Buscar marca, modelo, serie..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-1.5 text-sm text-gray-600 placeholder-gray-400 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Brand</label>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              >
+                className="block w-full px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white">
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
@@ -708,12 +640,10 @@ export default function Inventory() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Condition</label>
               <select
                 value={conditionFilter}
                 onChange={(e) => setConditionFilter(e.target.value)}
-                className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              >
+                className="block w-full px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white">
                 <option value="all">All Conditions</option>
                 <option value="excellent">Excellent</option>
                 <option value="good">Good</option>
@@ -722,12 +652,10 @@ export default function Inventory() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Proveedor</label>
               <select
                 value={supplierFilter}
                 onChange={(e) => setSupplierFilter(e.target.value)}
-                className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              >
+                className="block w-full px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white">
                 <option value="all">Todos los Proveedores</option>
                 <option value="hp">HP</option>
                 <option value="canon">Canon</option>
@@ -741,15 +669,18 @@ export default function Inventory() {
                 <option value="lexmark">Lexmark</option>
               </select>
             </div>
-            <div className="flex items-end">
+            <div className="flex items-center">
               <button
                 onClick={() => {
                   setShowAddForm(true)
                   setActiveTab('basic')
                 }}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-1.5 rounded-full border border-gray-300 text-gray-600 text-sm font-medium bg-transparent hover:bg-gray-50 transition-colors"
               >
-                Agregar Impresora
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Agregar
               </button>
             </div>
           </div>

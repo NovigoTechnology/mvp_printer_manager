@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { PrinterIcon, usePrinterEmoji } from '../../components/icons'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
@@ -155,6 +155,42 @@ export default function Printers() {
   const [selectAllPrinters, setSelectAllPrinters] = useState(false)
   const [showBulkActionsModal, setShowBulkActionsModal] = useState(false)
   const [bulkActionInProgress, setBulkActionInProgress] = useState(false)
+
+  // Estados para ordenación de columnas
+  const [sortKey, setSortKey] = useState<string>('')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  // Estados para ancho de columnas (resize)
+  const [colWidths, setColWidths] = useState<Record<string, number>>({})
+
+  const startResize = useCallback((e: React.MouseEvent, key: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const th = (e.currentTarget as HTMLElement).closest('th') as HTMLElement
+    if (!th) return
+    const startX = e.clientX
+    const startWidth = th.getBoundingClientRect().width
+
+    const onMouseMove = (ev: MouseEvent) => {
+      const newWidth = Math.max(60, startWidth + ev.clientX - startX)
+      setColWidths(prev => ({ ...prev, [key]: newWidth }))
+    }
+    const onMouseUp = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }, [])
+
+  const handleSort = (key: string) => {
+    setSortDir(prev => sortKey === key ? (prev === 'asc' ? 'desc' : 'asc') : 'asc')
+    setSortKey(key)
+  }
 
   // Estados para columnas visibles y filtros
   const [showColumnSelector, setShowColumnSelector] = useState(false)
@@ -1288,6 +1324,16 @@ export default function Printers() {
     return usePrinterEmoji(brand);
   }
 
+  const sortedFilteredPrinters = (list: Printer[]) => {
+    if (!sortKey) return list
+    return [...list].sort((a, b) => {
+      const aVal = (a as any)[sortKey] ?? ''
+      const bVal = (b as any)[sortKey] ?? ''
+      const cmp = String(aVal).localeCompare(String(bVal), undefined, { numeric: true, sensitivity: 'base' })
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }
+
   const filteredPrinters = printers.filter(printer => {
     const matchesSearch = printer.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          printer.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1492,59 +1538,64 @@ export default function Printers() {
   return (
     <>
       <style jsx>{customStyles}</style>
-      <div className="max-w-full mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
+      <div className="max-w-full mx-auto py-3 sm:px-6 lg:px-8">
+        <div className="px-4 py-3 sm:px-0">
           {/* Header */}
-          <div className="mb-8 flex flex-col lg:flex-row lg:justify-between lg:items-center">
-            <div className="mb-4 lg:mb-0">
-              <h1 className="text-3xl font-bold text-gray-900">Gestión de Impresoras 🖨️</h1>
-              <p className="mt-2 text-gray-600">Administra tu flota de impresoras ({printers.length} dispositivos) - Herramientas mejoradas</p>
+          <div className="mb-5 flex flex-col lg:flex-row lg:justify-between lg:items-center">
+            <div className="mb-3 lg:mb-0">
+              <h1 className="text-xl font-semibold text-gray-800">Gestión de Impresoras</h1>
             </div>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={refreshPrinters}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center space-x-2"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-blue-300 text-blue-600 text-sm font-medium bg-transparent hover:bg-blue-50 transition-colors"
               >
-                <span>🔄</span>
-                <span>Actualizar</span>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Actualizar
               </button>
               <button
                 onClick={() => {
                   resetDiscovery()
                   setShowDiscoveryModal(true)
                 }}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center space-x-2"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-emerald-300 text-emerald-600 text-sm font-medium bg-transparent hover:bg-emerald-50 transition-colors"
               >
-                <span>🔍</span>
-                <span>Descubrir</span>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+                </svg>
+                Descubrir
               </button>
               <button
                 onClick={() => setShowAddModal(true)}
-                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center space-x-2"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-300 text-gray-600 text-sm font-medium bg-transparent hover:bg-gray-50 transition-colors"
               >
-                <span>➕</span>
-                <span>Agregar</span>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Agregar
               </button>
             </div>
           </div>
 
           {/* Filters and Controls */}
-          <div className="mb-6 p-4 bg-white rounded-lg shadow">
-            <div className="flex flex-col lg:flex-row gap-4 items-center">
+          <div className="mb-4 p-3 bg-white rounded-lg shadow-sm border border-gray-100">
+            <div className="flex flex-col lg:flex-row gap-3 items-center">
               <div className="flex-1">
                 <input
                   type="text"
                   placeholder="Buscar por marca, modelo, IP o ubicación..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-1.5 text-sm text-gray-600 placeholder-gray-400 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
                 />
               </div>
               <div>
                 <select
                   value={filterBrand}
                   onChange={(e) => setFilterBrand(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400 bg-white"
                   title="Filtrar por marca"
                 >
                   <option value="">Todas las marcas</option>
@@ -1557,12 +1608,12 @@ export default function Printers() {
                 {viewMode === 'table' && (
                   <button
                     onClick={() => setShowColumnSelector(!showColumnSelector)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-                      showColumnSelector ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                      showColumnSelector ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                     }`}
                     title="Seleccionar columnas"
                   >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
                     </svg>
                     Columnas
@@ -1570,30 +1621,30 @@ export default function Printers() {
                 )}
                 <button
                   onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-                    showAdvancedFilters ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                    showAdvancedFilters ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                   }`}
                   title="Filtros avanzados"
                 >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                   </svg>
                   Filtros
                 </button>
               </div>
-              <div className="flex bg-gray-100 rounded-lg p-1">
+              <div className="flex bg-gray-100 rounded-md p-0.5">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                    viewMode === 'grid' ? 'bg-white text-blue-600 shadow' : 'text-gray-600'
+                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                    viewMode === 'grid' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'
                   }`}
                 >
                   ⚏ Tarjetas
                 </button>
                 <button
                   onClick={() => setViewMode('table')}
-                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                    viewMode === 'table' ? 'bg-white text-blue-600 shadow' : 'text-gray-600'
+                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                    viewMode === 'table' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'
                   }`}
                 >
                   ☰ Tabla
@@ -1847,34 +1898,45 @@ export default function Printers() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex space-x-1">
-                      <button 
-                        className="flex-1 text-xs py-2 px-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-md transition-colors"
+                    <div className="flex gap-1 pt-1">
+                      <button
+                        className="flex-1 flex items-center justify-center gap-1 text-xs py-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                         onClick={(e) => {
                           e.stopPropagation()
                           setSelectedPrinter(printer)
                         }}
                       >
-                        👁️ Ver
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Ver
                       </button>
-                      <button 
-                        className="flex-1 text-xs py-2 px-2 bg-green-100 hover:bg-green-200 text-green-800 rounded-md transition-colors"
+                      <button
+                        className="flex-1 flex items-center justify-center gap-1 text-xs py-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
                         onClick={(e) => {
                           e.stopPropagation()
                           openEditModal(printer)
                         }}
                       >
-                        ✏️ Editar
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H7v-3.414a2 2 0 01.586-1.414z" />
+                        </svg>
+                        Editar
                       </button>
-                      <button 
-                        className="flex-1 text-xs py-2 px-2 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                      <button
+                        className="flex-1 flex items-center justify-center gap-1 text-xs py-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
                         onClick={(e) => {
                           e.stopPropagation()
                           setToolsPrinter(printer)
                           setShowToolsModal(true)
                         }}
                       >
-                        🔧 Herramientas
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Herramientas
                       </button>
                     </div>
                   </div>
@@ -1884,11 +1946,27 @@ export default function Printers() {
           ) : (
             /* Table View */
             <div className="bg-white shadow-lg rounded-lg overflow-hidden">
+              <style>{`
+                .resizable-th { position: relative; user-select: none; }
+                .col-resize-handle {
+                  position: absolute; right: 0; top: 0; bottom: 0;
+                  width: 5px; cursor: col-resize; z-index: 1;
+                }
+                .col-resize-handle:hover, .col-resize-handle:active { background: #93c5fd; }
+                .sort-btn { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+                .sort-btn:hover { color: #1d4ed8; }
+                .printer-table td {
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
+                  max-width: 0;
+                }
+              `}</style>
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
+                <table className="printer-table divide-y divide-gray-200" style={{ tableLayout: 'fixed', width: '100%', minWidth: 600 }}>
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="resizable-th px-3 py-3 text-left" style={{ width: colWidths['_check'] ?? 48 }}>
                         <input
                           type="checkbox"
                           checked={selectAllPrinters}
@@ -1896,60 +1974,144 @@ export default function Printers() {
                           className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                           title="Seleccionar todas las impresoras"
                         />
+                        <div className="col-resize-handle" onMouseDown={(e) => startResize(e, '_check')} />
                       </th>
                       {visibleColumns.brand && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Marca</th>
+                        <th className="resizable-th px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: colWidths['brand'] ?? 130, overflow: 'hidden' }}>
+                          <span className="sort-btn" onClick={() => handleSort('brand')}>
+                            Marca {sortKey === 'brand' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                          </span>
+                          <div className="col-resize-handle" onMouseDown={(e) => startResize(e, 'brand')} />
+                        </th>
                       )}
                       {visibleColumns.model && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Modelo</th>
+                        <th className="resizable-th px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: colWidths['model'] ?? 160, overflow: 'hidden' }}>
+                          <span className="sort-btn" onClick={() => handleSort('model')}>
+                            Modelo {sortKey === 'model' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                          </span>
+                          <div className="col-resize-handle" onMouseDown={(e) => startResize(e, 'model')} />
+                        </th>
                       )}
                       {visibleColumns.asset_tag && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asset Tag</th>
+                        <th className="resizable-th px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: colWidths['asset_tag'] ?? 110, overflow: 'hidden' }}>
+                          <span className="sort-btn" onClick={() => handleSort('asset_tag')}>
+                            Asset Tag {sortKey === 'asset_tag' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                          </span>
+                          <div className="col-resize-handle" onMouseDown={(e) => startResize(e, 'asset_tag')} />
+                        </th>
                       )}
                       {visibleColumns.serial_number && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Serie</th>
+                        <th className="resizable-th px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: colWidths['serial_number'] ?? 130, overflow: 'hidden' }}>
+                          <span className="sort-btn" onClick={() => handleSort('serial_number')}>
+                            Serie {sortKey === 'serial_number' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                          </span>
+                          <div className="col-resize-handle" onMouseDown={(e) => startResize(e, 'serial_number')} />
+                        </th>
                       )}
                       {visibleColumns.ip && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP</th>
+                        <th className="resizable-th px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: colWidths['ip'] ?? 120, overflow: 'hidden' }}>
+                          <span className="sort-btn" onClick={() => handleSort('ip')}>
+                            IP {sortKey === 'ip' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                          </span>
+                          <div className="col-resize-handle" onMouseDown={(e) => startResize(e, 'ip')} />
+                        </th>
                       )}
                       {visibleColumns.location && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ubicación</th>
+                        <th className="resizable-th px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: colWidths['location'] ?? 180, overflow: 'hidden' }}>
+                          <span className="sort-btn" onClick={() => handleSort('location')}>
+                            Ubicación {sortKey === 'location' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                          </span>
+                          <div className="col-resize-handle" onMouseDown={(e) => startResize(e, 'location')} />
+                        </th>
                       )}
                       {visibleColumns.status && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                        <th className="resizable-th px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: colWidths['status'] ?? 100, overflow: 'hidden' }}>
+                          <span className="sort-btn" onClick={() => handleSort('status')}>
+                            Estado {sortKey === 'status' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                          </span>
+                          <div className="col-resize-handle" onMouseDown={(e) => startResize(e, 'status')} />
+                        </th>
                       )}
                       {visibleColumns.department && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Departamento</th>
+                        <th className="resizable-th px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: colWidths['department'] ?? 140, overflow: 'hidden' }}>
+                          <span className="sort-btn" onClick={() => handleSort('department')}>
+                            Departamento {sortKey === 'department' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                          </span>
+                          <div className="col-resize-handle" onMouseDown={(e) => startResize(e, 'department')} />
+                        </th>
                       )}
                       {visibleColumns.floor && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Piso</th>
+                        <th className="resizable-th px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: colWidths['floor'] ?? 80, overflow: 'hidden' }}>
+                          <span className="sort-btn" onClick={() => handleSort('floor')}>
+                            Piso {sortKey === 'floor' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                          </span>
+                          <div className="col-resize-handle" onMouseDown={(e) => startResize(e, 'floor')} />
+                        </th>
                       )}
                       {visibleColumns.building && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Edificio</th>
+                        <th className="resizable-th px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: colWidths['building'] ?? 100, overflow: 'hidden' }}>
+                          <span className="sort-btn" onClick={() => handleSort('building')}>
+                            Edificio {sortKey === 'building' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                          </span>
+                          <div className="col-resize-handle" onMouseDown={(e) => startResize(e, 'building')} />
+                        </th>
                       )}
                       {visibleColumns.sector && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sector</th>
+                        <th className="resizable-th px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: colWidths['sector'] ?? 100, overflow: 'hidden' }}>
+                          <span className="sort-btn" onClick={() => handleSort('sector')}>
+                            Sector {sortKey === 'sector' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                          </span>
+                          <div className="col-resize-handle" onMouseDown={(e) => startResize(e, 'sector')} />
+                        </th>
                       )}
                       {visibleColumns.supplier && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Proveedor</th>
+                        <th className="resizable-th px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: colWidths['supplier'] ?? 120, overflow: 'hidden' }}>
+                          <span className="sort-btn" onClick={() => handleSort('supplier')}>
+                            Proveedor {sortKey === 'supplier' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                          </span>
+                          <div className="col-resize-handle" onMouseDown={(e) => startResize(e, 'supplier')} />
+                        </th>
                       )}
                       {visibleColumns.warranty_expiry && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Garantía</th>
+                        <th className="resizable-th px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: colWidths['warranty_expiry'] ?? 110, overflow: 'hidden' }}>
+                          <span className="sort-btn" onClick={() => handleSort('warranty_expiry')}>
+                            Garantía {sortKey === 'warranty_expiry' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                          </span>
+                          <div className="col-resize-handle" onMouseDown={(e) => startResize(e, 'warranty_expiry')} />
+                        </th>
                       )}
                       {visibleColumns.responsible_person && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Responsable</th>
+                        <th className="resizable-th px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: colWidths['responsible_person'] ?? 130, overflow: 'hidden' }}>
+                          <span className="sort-btn" onClick={() => handleSort('responsible_person')}>
+                            Responsable {sortKey === 'responsible_person' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                          </span>
+                          <div className="col-resize-handle" onMouseDown={(e) => startResize(e, 'responsible_person')} />
+                        </th>
                       )}
                       {visibleColumns.purchase_date && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">F. Compra</th>
+                        <th className="resizable-th px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: colWidths['purchase_date'] ?? 110, overflow: 'hidden' }}>
+                          <span className="sort-btn" onClick={() => handleSort('purchase_date')}>
+                            F. Compra {sortKey === 'purchase_date' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                          </span>
+                          <div className="col-resize-handle" onMouseDown={(e) => startResize(e, 'purchase_date')} />
+                        </th>
                       )}
                       {visibleColumns.installation_date && (
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">F. Instalación</th>
+                        <th className="resizable-th px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: colWidths['installation_date'] ?? 120, overflow: 'hidden' }}>
+                          <span className="sort-btn" onClick={() => handleSort('installation_date')}>
+                            F. Instalación {sortKey === 'installation_date' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                          </span>
+                          <div className="col-resize-handle" onMouseDown={(e) => startResize(e, 'installation_date')} />
+                        </th>
                       )}
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                      <th className="resizable-th px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ width: colWidths['_actions'] ?? 100 }}>
+                        Acciones
+                        <div className="col-resize-handle" onMouseDown={(e) => startResize(e, '_actions')} />
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredPrinters.map((printer) => (
+                    {sortedFilteredPrinters(filteredPrinters).map((printer) => (
                       <tr key={printer.id} className={`hover:bg-gray-50 ${selectedPrinters.includes(printer.id) ? 'bg-blue-50' : ''}`}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <input
@@ -2756,124 +2918,133 @@ export default function Printers() {
           {/* Printer Detail Modal */}
           {selectedPrinter && (
             <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
-              <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto animate-fadeIn">
-                <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-500 to-gray-600">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h2 className="text-xl font-bold text-white">
-                        {selectedPrinter.brand} {selectedPrinter.model}
-                      </h2>
-                      <p className="text-gray-100">{selectedPrinter.ip}</p>
-                    </div>
+              <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto animate-fadeIn">
+                {/* Header */}
+                <div className="px-6 pt-6 pb-4 flex justify-between items-start">
+                  <div>
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-0.5">{selectedPrinter.brand}</p>
+                    <h2 className="text-xl font-semibold text-gray-900">{selectedPrinter.model}</h2>
+                    <p className="text-sm text-gray-400 font-mono mt-0.5">{selectedPrinter.ip}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedPrinter.status)}`}>
+                      {selectedPrinter.status}
+                    </span>
                     <button
                       onClick={() => setSelectedPrinter(null)}
-                      className="text-white hover:text-gray-200 text-2xl"
+                      className="text-gray-300 hover:text-gray-500 transition-colors"
                     >
-                      ×
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
                   </div>
                 </div>
 
-                <div className="p-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <h3 className="font-semibold text-gray-900 mb-3">Información General</h3>
-                      <div className="space-y-2">
-                        <div><span className="font-medium">Marca:</span> {selectedPrinter.brand}</div>
-                        <div><span className="font-medium">Modelo:</span> {selectedPrinter.model}</div>
-                        {selectedPrinter.serial_number && (
-                          <div><span className="font-medium">Serie:</span> {selectedPrinter.serial_number}</div>
-                        )}
-                        {selectedPrinter.asset_tag && (
-                          <div><span className="font-medium">Asset Tag:</span> {selectedPrinter.asset_tag}</div>
-                        )}
-                        <div><span className="font-medium">Estado:</span> 
-                          <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedPrinter.status)}`}>
-                            {selectedPrinter.status}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                <div className="border-t border-gray-100 mx-6" />
 
-                    <div>
-                      <h3 className="font-semibold text-gray-900 mb-3">Red y Conectividad</h3>
-                      <div className="space-y-2">
-                        <div><span className="font-medium">IP:</span> {selectedPrinter.ip}</div>
-                        {selectedPrinter.hostname && (
-                          <div><span className="font-medium">Hostname:</span> {selectedPrinter.hostname}</div>
-                        )}
-                        {selectedPrinter.mac_address && (
-                          <div><span className="font-medium">MAC:</span> {selectedPrinter.mac_address}</div>
-                        )}
-                        <div><span className="font-medium">SNMP:</span> {selectedPrinter.snmp_profile}</div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="font-semibold text-gray-900 mb-3">Características</h3>
-                      <div className="flex flex-wrap gap-2">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          selectedPrinter.is_color ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {selectedPrinter.is_color ? 'Color' : 'B&W'}
-                        </span>
-                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                          {selectedPrinter.printer_type}
-                        </span>
-                        {selectedPrinter.duplex_capable && (
-                          <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                            Duplex
-                          </span>
-                        )}
-                        {selectedPrinter.network_capable && (
-                          <span className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded-full text-xs font-medium">
-                            Red
-                          </span>
-                        )}
-                        {selectedPrinter.wireless_capable && (
-                          <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">
-                            WiFi
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="font-semibold text-gray-900 mb-3">Ubicación</h3>
-                      <div className="space-y-2">
-                        {selectedPrinter.location && (
-                          <div><span className="font-medium">Ubicación:</span> {selectedPrinter.location}</div>
-                        )}
-                        {selectedPrinter.sector && (
-                          <div><span className="font-medium">Sector:</span> {selectedPrinter.sector}</div>
-                        )}
-                        {selectedPrinter.floor && (
-                          <div><span className="font-medium">Piso:</span> {selectedPrinter.floor}</div>
-                        )}
-                        {selectedPrinter.building && (
-                          <div><span className="font-medium">Edificio:</span> {selectedPrinter.building}</div>
-                        )}
-                        {selectedPrinter.department && (
-                          <div><span className="font-medium">Departamento:</span> {selectedPrinter.department}</div>
-                        )}
-                      </div>
-                    </div>
+                <div className="px-6 py-4 space-y-4">
+                  {/* Info rows */}
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                    {selectedPrinter.serial_number && (
+                      <>
+                        <span className="text-gray-400">Serie</span>
+                        <span className="text-gray-700 font-mono text-xs">{selectedPrinter.serial_number}</span>
+                      </>
+                    )}
+                    {selectedPrinter.asset_tag && (
+                      <>
+                        <span className="text-gray-400">Asset Tag</span>
+                        <span className="text-gray-700">{selectedPrinter.asset_tag}</span>
+                      </>
+                    )}
+                    <>
+                      <span className="text-gray-400">SNMP</span>
+                      <span className="text-gray-700">{selectedPrinter.snmp_profile}</span>
+                    </>
+                    {selectedPrinter.hostname && (
+                      <>
+                        <span className="text-gray-400">Hostname</span>
+                        <span className="text-gray-700 font-mono text-xs">{selectedPrinter.hostname}</span>
+                      </>
+                    )}
+                    {selectedPrinter.mac_address && (
+                      <>
+                        <span className="text-gray-400">MAC</span>
+                        <span className="text-gray-700 font-mono text-xs">{selectedPrinter.mac_address}</span>
+                      </>
+                    )}
+                    {selectedPrinter.location && (
+                      <>
+                        <span className="text-gray-400">Ubicación</span>
+                        <span className="text-gray-700">{selectedPrinter.location}</span>
+                      </>
+                    )}
+                    {selectedPrinter.sector && (
+                      <>
+                        <span className="text-gray-400">Sector</span>
+                        <span className="text-gray-700">{selectedPrinter.sector}</span>
+                      </>
+                    )}
+                    {selectedPrinter.floor && (
+                      <>
+                        <span className="text-gray-400">Piso</span>
+                        <span className="text-gray-700">{selectedPrinter.floor}</span>
+                      </>
+                    )}
+                    {selectedPrinter.building && (
+                      <>
+                        <span className="text-gray-400">Edificio</span>
+                        <span className="text-gray-700">{selectedPrinter.building}</span>
+                      </>
+                    )}
+                    {selectedPrinter.department && (
+                      <>
+                        <span className="text-gray-400">Departamento</span>
+                        <span className="text-gray-700">{selectedPrinter.department}</span>
+                      </>
+                    )}
                   </div>
 
-                  <div className="mt-6 flex justify-end space-x-3">
-                    <button
-                      onClick={() => window.open(`http://${selectedPrinter.ip}`, '_blank')}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                    >
-                      🌐 Acceder a Panel Web
-                    </button>
-                    <button
-                      onClick={() => setSelectedPrinter(null)}
-                      className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                    >
-                      Cerrar
-                    </button>
+                  {/* Tags */}
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                      selectedPrinter.is_color ? 'bg-violet-50 text-violet-600' : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      {selectedPrinter.is_color ? 'Color' : 'B&W'}
+                    </span>
+                    <span className="px-2.5 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-medium">
+                      {selectedPrinter.printer_type}
+                    </span>
+                    {selectedPrinter.duplex_capable && (
+                      <span className="px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-medium">Duplex</span>
+                    )}
+                    {selectedPrinter.network_capable && (
+                      <span className="px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-medium">Red</span>
+                    )}
+                    {selectedPrinter.wireless_capable && (
+                      <span className="px-2.5 py-1 bg-amber-50 text-amber-600 rounded-full text-xs font-medium">WiFi</span>
+                    )}
                   </div>
+                </div>
+
+                {/* Footer */}
+                <div className="px-6 pb-5 pt-2 flex justify-end gap-2">
+                  <button
+                    onClick={() => setSelectedPrinter(null)}
+                    className="px-4 py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    Cerrar
+                  </button>
+                  <button
+                    onClick={() => window.open(`http://${selectedPrinter.ip}`, '_blank')}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-blue-200 text-blue-600 text-sm font-medium bg-transparent hover:bg-blue-50 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" />
+                    </svg>
+                    Panel Web
+                  </button>
                 </div>
               </div>
             </div>
