@@ -84,11 +84,11 @@ const SortIcon = ({ field, sortField, sortDirection }: { field: string; sortFiel
   }
   
   return sortDirection === 'asc' ? (
-    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
     </svg>
   ) : (
-    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
     </svg>
   )
@@ -152,6 +152,12 @@ export default function Inventory() {
   })
   const [showColumnManager, setShowColumnManager] = useState(false)
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+
+  // Estado para marcas personalizadas
+  const defaultBrands = ['Brother', 'Canon', 'Epson', 'Fujifilm', 'HP', 'Konica Minolta', 'Kyocera', 'Lexmark', 'OKI', 'Ricoh', 'Samsung', 'Sharp', 'Toshiba', 'Xerox']
+  const [customBrands, setCustomBrands] = useState<string[]>([])
+  const [showAddBrand, setShowAddBrand] = useState(false)
+  const [newBrandInput, setNewBrandInput] = useState('')
   
   useEffect(() => {
     fetchData()
@@ -624,14 +630,14 @@ export default function Inventory() {
                 placeholder="Buscar marca, modelo, serie..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="block w-full px-3 py-1.5 text-sm text-gray-600 placeholder-gray-400 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
+                className="block w-full px-3 py-1.5 text-sm text-gray-600 placeholder-gray-400 border border-accent rounded-md focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
               />
             </div>
             <div>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="block w-full px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white">
+                className="block w-full px-3 py-1.5 text-sm text-gray-600 border border-accent rounded-md focus:outline-none focus:ring-1 focus:ring-accent bg-white">
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
@@ -643,7 +649,7 @@ export default function Inventory() {
               <select
                 value={conditionFilter}
                 onChange={(e) => setConditionFilter(e.target.value)}
-                className="block w-full px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white">
+                className="block w-full px-3 py-1.5 text-sm text-gray-600 border border-accent rounded-md focus:outline-none focus:ring-1 focus:ring-accent bg-white">
                 <option value="all">All Conditions</option>
                 <option value="excellent">Excellent</option>
                 <option value="good">Good</option>
@@ -655,7 +661,7 @@ export default function Inventory() {
               <select
                 value={supplierFilter}
                 onChange={(e) => setSupplierFilter(e.target.value)}
-                className="block w-full px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white">
+                className="block w-full px-3 py-1.5 text-sm text-gray-600 border border-accent rounded-md focus:outline-none focus:ring-1 focus:ring-accent bg-white">
                 <option value="all">Todos los Proveedores</option>
                 <option value="hp">HP</option>
                 <option value="canon">Canon</option>
@@ -688,10 +694,10 @@ export default function Inventory() {
 
         {/* Panel de Filtros Avanzados */}
         {showAdvancedFilters && (
-          <div className="bg-white shadow rounded-lg p-6 mb-6 border-l-4 border-blue-500">
+          <div className="bg-white shadow rounded-lg p-6 mb-6 border-l-4 border-accent">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium text-gray-900 flex items-center">
-                <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-accent mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.414A1 1 0 013 6.707V4z" />
                 </svg>
                 Filtros Avanzados
@@ -709,7 +715,7 @@ export default function Inventory() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Equipo</label>
-                <select className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                <select className="block w-full border border-accent rounded-md shadow-sm focus:ring-accent focus:border-accent text-sm text-gray-700 px-3 py-1.5 bg-white">
                   <option value="">Todos los tipos</option>
                   <option value="printer">Solo Impresora</option>
                   <option value="multifunction">Multifunción</option>
@@ -719,7 +725,7 @@ export default function Inventory() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Capacidad de Color</label>
-                <select className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                <select className="block w-full border border-accent rounded-md shadow-sm focus:ring-accent focus:border-accent text-sm text-gray-700 px-3 py-1.5 bg-white">
                   <option value="">Todos</option>
                   <option value="color">Color</option>
                   <option value="mono">Monocromático</option>
@@ -728,7 +734,7 @@ export default function Inventory() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Garantía</label>
-                <select className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                <select className="block w-full border border-accent rounded-md shadow-sm focus:ring-accent focus:border-accent text-sm text-gray-700 px-3 py-1.5 bg-white">
                   <option value="">Todas</option>
                   <option value="active">Activa</option>
                   <option value="expired">Vencida</option>
@@ -738,7 +744,7 @@ export default function Inventory() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Fecha de Compra</label>
-                <select className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                <select className="block w-full border border-accent rounded-md shadow-sm focus:ring-accent focus:border-accent text-sm text-gray-700 px-3 py-1.5 bg-white">
                   <option value="">Cualquier fecha</option>
                   <option value="last_year">Último año</option>
                   <option value="last_2_years">Últimos 2 años</option>
@@ -748,7 +754,7 @@ export default function Inventory() {
             </div>
             
             <div className="mt-4 flex space-x-3">
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+              <button className="px-4 py-2 bg-accent text-white rounded-md hover:opacity-90 transition-colors">
                 Aplicar Filtros
               </button>
               <button className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors">
@@ -800,7 +806,7 @@ export default function Inventory() {
                                 type="checkbox"
                                 checked={value}
                                 onChange={() => toggleColumn(key)}
-                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
                                 disabled={key === 'acciones'} // Las acciones siempre están visibles
                               />
                               <span className="ml-2 text-sm text-gray-700">
@@ -824,7 +830,7 @@ export default function Inventory() {
                   onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
                   className={`p-2 rounded-lg transition-all duration-200 ${
                     showAdvancedFilters 
-                      ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' 
+                      ? 'text-accent bg-accent-light' 
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                   }`}
                   title="Filtros avanzados"
@@ -984,21 +990,21 @@ export default function Inventory() {
                       <div className="flex items-center justify-center space-x-1">
                         <button
                           onClick={() => setSelectedPrinter(printer)}
-                          className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-all duration-200"
+                          className="p-1.5 text-accent bg-accent-light rounded-lg hover:opacity-80 transition-all duration-200"
                           title="Ver detalles"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                           </svg>
                         </button>
                         <button
                           onClick={() => startEdit(printer)}
-                          className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-all duration-200"
+                          className="p-1.5 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all duration-200"
                           title="Editar"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
                         <button
@@ -1007,11 +1013,11 @@ export default function Inventory() {
                             await fetchPrinterSupplies(printer.id)
                             setShowSupplyModal(true)
                           }}
-                          className="p-2 text-green-600 hover:text-green-900 hover:bg-green-50 rounded-lg transition-all duration-200"
+                          className="p-1.5 text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-all duration-200"
                           title="Agregar Insumos"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                           </svg>
                         </button>
                         <button
@@ -1019,11 +1025,11 @@ export default function Inventory() {
                             e.stopPropagation()
                             handleDelete(printer.id, `${printer.brand} ${printer.model}`)
                           }}
-                          className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-all duration-200"
+                          className="p-1.5 text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition-all duration-200"
                           title="Eliminar"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                         </button>
                       </div>
@@ -1045,10 +1051,10 @@ export default function Inventory() {
         {/* Printer Details Modal */}
         {selectedPrinter && (
           <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-5xl shadow-lg rounded-md bg-white">
-              <div className="mt-3">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900">
+            <div className="relative top-10 mx-auto p-6 w-11/12 max-w-5xl shadow-2xl rounded-2xl bg-white">
+              <div>
+                <div className="flex justify-between items-center mb-5">
+                  <h3 className="text-base font-semibold text-accent">
                     {selectedPrinter.brand} {selectedPrinter.model}
                   </h3>
                   <button
@@ -1056,20 +1062,20 @@ export default function Inventory() {
                       setSelectedPrinter(null)
                       setActiveTab('basic')
                     }}
-                    className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+                    className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-xl"
                   >
                     ×
                   </button>
                 </div>
 
                 {/* Tab Navigation */}
-                <div className="border-b border-gray-200 mb-6">
-                  <nav className="-mb-px flex space-x-8">
+                <div className="border-b border-gray-100 mb-5">
+                  <nav className="-mb-px flex space-x-4">
                     <button
                       onClick={() => setActiveTab('basic')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         activeTab === 'basic'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -1079,7 +1085,7 @@ export default function Inventory() {
                       onClick={() => setActiveTab('network')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         activeTab === 'network'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -1089,7 +1095,7 @@ export default function Inventory() {
                       onClick={() => setActiveTab('technical')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         activeTab === 'technical'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -1099,7 +1105,7 @@ export default function Inventory() {
                       onClick={() => setActiveTab('location')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         activeTab === 'location'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -1109,7 +1115,7 @@ export default function Inventory() {
                       onClick={() => setActiveTab('ownership')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         activeTab === 'ownership'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -1119,7 +1125,7 @@ export default function Inventory() {
                       onClick={() => setActiveTab('supplies')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         activeTab === 'supplies'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -1129,7 +1135,7 @@ export default function Inventory() {
                       onClick={() => setActiveTab('toner-history')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         activeTab === 'toner-history'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -1143,8 +1149,8 @@ export default function Inventory() {
                   {/* Basic Information Tab */}
                   {activeTab === 'basic' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-gray-50 p-6 rounded-lg">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Device Information</h4>
+                      <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-3">Información del Dispositivo</h4>
                         <div className="space-y-3">
                           <div><span className="font-medium">Brand:</span> {selectedPrinter.brand}</div>
                           <div><span className="font-medium">Model:</span> {selectedPrinter.model}</div>
@@ -1176,8 +1182,8 @@ export default function Inventory() {
                         </div>
                       </div>
                       
-                      <div className="bg-gray-50 p-6 rounded-lg">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Current Status</h4>
+                      <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-3">Estado Actual</h4>
                         <div className="space-y-3">
                           <div>
                             <span className="font-medium">Status:</span> 
@@ -1199,8 +1205,8 @@ export default function Inventory() {
                       </div>
                       
                       {selectedPrinter.notes && (
-                        <div className="md:col-span-2 bg-yellow-50 p-6 rounded-lg">
-                          <h4 className="text-lg font-semibold text-gray-900 mb-2">Notes</h4>
+                        <div className="md:col-span-2 border border-amber-100 rounded-lg p-5 bg-amber-50/40">
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-3">Notas</h4>
                           <p className="text-gray-700">{selectedPrinter.notes}</p>
                         </div>
                       )}
@@ -1210,8 +1216,8 @@ export default function Inventory() {
                   {/* Network Tab */}
                   {activeTab === 'network' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-gray-50 p-6 rounded-lg">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Network Configuration</h4>
+                      <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-3">Configuración de Red</h4>
                         <div className="space-y-3">
                           <div><span className="font-medium">IP Address:</span> {selectedPrinter.ip}</div>
                           {selectedPrinter.mac_address && (
@@ -1224,8 +1230,8 @@ export default function Inventory() {
                         </div>
                       </div>
                       
-                      <div className="bg-gray-50 p-6 rounded-lg">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Capabilities</h4>
+                      <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-3">Capacidades</h4>
                         <div className="space-y-3">
                           <div>
                             <span className="font-medium">Network:</span> 
@@ -1251,8 +1257,8 @@ export default function Inventory() {
                   {/* Technical Tab */}
                   {activeTab === 'technical' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-gray-50 p-6 rounded-lg">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Print Specifications</h4>
+                      <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-3">Especificaciones de Impresión</h4>
                         <div className="space-y-3">
                           {selectedPrinter.print_technology && (
                             <div><span className="font-medium">Technology:</span> {selectedPrinter.print_technology}</div>
@@ -1271,8 +1277,8 @@ export default function Inventory() {
                         </div>
                       </div>
                       
-                      <div className="bg-gray-50 p-6 rounded-lg">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Print Type</h4>
+                      <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-3">Tipo de Impresión</h4>
                         <div className="space-y-3">
                           <div>
                             <span className="font-medium">Color Capability:</span> 
@@ -1290,8 +1296,8 @@ export default function Inventory() {
                   {/* Location Tab */}
                   {activeTab === 'location' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-gray-50 p-6 rounded-lg">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Physical Location</h4>
+                      <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-3">Ubicación Física</h4>
                         <div className="space-y-3">
                           {selectedPrinter.location && (
                             <div><span className="font-medium">Location:</span> {selectedPrinter.location}</div>
@@ -1305,8 +1311,8 @@ export default function Inventory() {
                         </div>
                       </div>
                       
-                      <div className="bg-gray-50 p-6 rounded-lg">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Organizational</h4>
+                      <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-3">Organización</h4>
                         <div className="space-y-3">
                           {selectedPrinter.department && (
                             <div><span className="font-medium">Department:</span> {selectedPrinter.department}</div>
@@ -1328,8 +1334,8 @@ export default function Inventory() {
                   {/* Ownership Tab */}
                   {activeTab === 'ownership' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-gray-50 p-6 rounded-lg">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Ownership Information</h4>
+                      <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-3">Propiedad</h4>
                         <div className="space-y-3">
                           <div>
                             <span className="font-medium">Ownership Type:</span> 
@@ -1346,8 +1352,8 @@ export default function Inventory() {
                         </div>
                       </div>
                       
-                      <div className="bg-gray-50 p-6 rounded-lg">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Important Dates</h4>
+                      <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-3">Fechas Importantes</h4>
                         <div className="space-y-3">
                           {selectedPrinter.purchase_date && (
                             <div><span className="font-medium">Purchase Date:</span> {new Date(selectedPrinter.purchase_date).toLocaleDateString()}</div>
@@ -1371,8 +1377,8 @@ export default function Inventory() {
                   {/* Supplies Tab */}
                   {activeTab === 'supplies' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-gray-50 p-6 rounded-lg">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Toner Cartridges</h4>
+                      <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-3">Tóners</h4>
                         <div className="space-y-3">
                           {selectedPrinter.toner_black_code && (
                             <div>
@@ -1413,8 +1419,8 @@ export default function Inventory() {
                         </div>
                       </div>
                       
-                      <div className="bg-gray-50 p-6 rounded-lg">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Other Supplies</h4>
+                      <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-3">Otros Insumos</h4>
                         <div className="space-y-3">
                           {selectedPrinter.other_supplies ? (
                             <div className="bg-white p-3 rounded border">
@@ -1464,30 +1470,30 @@ export default function Inventory() {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex justify-end space-x-3 mt-6 pt-6 border-t border-gray-200">
+                  <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
                   <button
                     onClick={() => {
                       setSelectedPrinter(null)
                       setActiveTab('basic')
                     }}
-                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors"
+                    className="px-4 py-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
                   >
-                    Close
+                    Cerrar
                   </button>
                   <button 
                     onClick={() => startEdit(selectedPrinter)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                    className="px-4 py-1.5 rounded-full bg-accent text-white text-sm hover:opacity-90 transition-colors"
                   >
-                    Edit Printer
+                    Editar
                   </button>
                   <button 
                     onClick={() => handleDelete(selectedPrinter.id, `${selectedPrinter.brand} ${selectedPrinter.model}`)}
-                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+                    className="px-4 py-1.5 rounded-full border border-red-200 text-red-500 text-sm hover:bg-red-50 transition-colors"
                   >
-                    Delete Printer
+                    Eliminar
                   </button>
-                  <button className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">
-                    Poll Status
+                  <button className="px-4 py-1.5 rounded-full border border-emerald-300 text-emerald-600 text-sm hover:bg-emerald-50 transition-colors">
+                    Consultar SNMP
                   </button>
                 </div>
               </div>
@@ -1498,28 +1504,28 @@ export default function Inventory() {
         {/* Edit Printer Modal */}
         {editingPrinter && (
           <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-5xl shadow-lg rounded-md bg-white">
-              <div className="mt-3">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900">
+            <div className="relative top-10 mx-auto p-6 w-11/12 max-w-5xl shadow-2xl rounded-2xl bg-white">
+              <div>
+                <div className="flex justify-between items-center mb-5">
+                  <h3 className="text-base font-semibold text-accent">
                     Editar Impresora: {editingPrinter.brand} {editingPrinter.model}
                   </h3>
                   <button
                     onClick={handleEditCancel}
-                    className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+                    className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-xl"
                   >
                     ×
                   </button>
                 </div>
 
                 {/* Tab Navigation */}
-                <div className="border-b border-gray-200 mb-6">
-                  <nav className="-mb-px flex space-x-8">
+                <div className="border-b border-gray-100 mb-5">
+                  <nav className="-mb-px flex space-x-4">
                     <button
                       onClick={() => setEditActiveTab('basic')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         editActiveTab === 'basic'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -1529,7 +1535,7 @@ export default function Inventory() {
                       onClick={() => setEditActiveTab('network')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         editActiveTab === 'network'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -1539,7 +1545,7 @@ export default function Inventory() {
                       onClick={() => setEditActiveTab('technical')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         editActiveTab === 'technical'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -1549,7 +1555,7 @@ export default function Inventory() {
                       onClick={() => setEditActiveTab('location')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         editActiveTab === 'location'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -1559,7 +1565,7 @@ export default function Inventory() {
                       onClick={() => setEditActiveTab('ownership')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         editActiveTab === 'ownership'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -1569,7 +1575,7 @@ export default function Inventory() {
                       onClick={() => setEditActiveTab('supplies')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         editActiveTab === 'supplies'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -1589,7 +1595,7 @@ export default function Inventory() {
                             type="text"
                             value={editForm.brand || ''}
                             onChange={(e) => setEditForm({...editForm, brand: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             required
                           />
                         </div>
@@ -1599,7 +1605,7 @@ export default function Inventory() {
                             type="text"
                             value={editForm.model || ''}
                             onChange={(e) => setEditForm({...editForm, model: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             required
                           />
                         </div>
@@ -1609,7 +1615,7 @@ export default function Inventory() {
                             type="text"
                             value={editForm.serial_number || ''}
                             onChange={(e) => setEditForm({...editForm, serial_number: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                           />
                         </div>
                         <div>
@@ -1618,7 +1624,7 @@ export default function Inventory() {
                             type="text"
                             value={editForm.asset_tag || ''}
                             onChange={(e) => setEditForm({...editForm, asset_tag: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             required
                           />
                         </div>
@@ -1627,7 +1633,7 @@ export default function Inventory() {
                           <select
                             value={editForm.printer_type || 'printer'}
                             onChange={(e) => setEditForm({...editForm, printer_type: e.target.value as 'printer' | 'multifunction' | 'scanner'})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                           >
                             <option value="printer">Solo Impresora</option>
                             <option value="multifunction">Multifunción</option>
@@ -1639,7 +1645,7 @@ export default function Inventory() {
                           <select
                             value={editForm.status || 'active'}
                             onChange={(e) => setEditForm({...editForm, status: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                           >
                             <option value="active">Activo</option>
                             <option value="inactive">Inactivo</option>
@@ -1652,7 +1658,7 @@ export default function Inventory() {
                           <select
                             value={editForm.condition || 'good'}
                             onChange={(e) => setEditForm({...editForm, condition: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                           >
                             <option value="excellent">Excelente</option>
                             <option value="good">Bueno</option>
@@ -1665,7 +1671,7 @@ export default function Inventory() {
                           <textarea
                             value={editForm.notes || ''}
                             onChange={(e) => setEditForm({...editForm, notes: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             rows={3}
                             placeholder="Notas adicionales sobre la impresora"
                           />
@@ -1681,7 +1687,7 @@ export default function Inventory() {
                             type="text"
                             value={editForm.ip || ''}
                             onChange={(e) => setEditForm({...editForm, ip: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             placeholder="192.168.1.100"
                             required
                           />
@@ -1692,7 +1698,7 @@ export default function Inventory() {
                             type="text"
                             value={editForm.hostname || ''}
                             onChange={(e) => setEditForm({...editForm, hostname: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             placeholder="Nombre del equipo en la red"
                           />
                         </div>
@@ -1702,7 +1708,7 @@ export default function Inventory() {
                             type="text"
                             value={editForm.mac_address || ''}
                             onChange={(e) => setEditForm({...editForm, mac_address: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             placeholder="AA:BB:CC:DD:EE:FF"
                           />
                         </div>
@@ -1711,7 +1717,7 @@ export default function Inventory() {
                           <select
                             value={editForm.snmp_profile || 'generic_v2c'}
                             onChange={(e) => setEditForm({...editForm, snmp_profile: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                           >
                             <option value="generic_v2c">Generic v2c</option>
                             <option value="hp">HP</option>
@@ -1728,7 +1734,7 @@ export default function Inventory() {
                                 type="checkbox"
                                 checked={editForm.network_capable || false}
                                 onChange={(e) => setEditForm({...editForm, network_capable: e.target.checked})}
-                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
                               />
                               <span className="ml-2 text-sm text-gray-700">Capacidad de Red</span>
                             </label>
@@ -1737,7 +1743,7 @@ export default function Inventory() {
                                 type="checkbox"
                                 checked={editForm.wireless_capable || false}
                                 onChange={(e) => setEditForm({...editForm, wireless_capable: e.target.checked})}
-                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
                               />
                               <span className="ml-2 text-sm text-gray-700">WiFi</span>
                             </label>
@@ -1753,7 +1759,7 @@ export default function Inventory() {
                           <select
                             value={editForm.print_technology || ''}
                             onChange={(e) => setEditForm({...editForm, print_technology: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                           >
                             <option value="">Seleccionar Tecnología</option>
                             <option value="laser">Láser</option>
@@ -1768,7 +1774,7 @@ export default function Inventory() {
                           <select
                             value={editForm.max_paper_size || ''}
                             onChange={(e) => setEditForm({...editForm, max_paper_size: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                           >
                             <option value="">Seleccionar Tamaño</option>
                             <option value="A4">A4</option>
@@ -1785,7 +1791,7 @@ export default function Inventory() {
                                 type="checkbox"
                                 checked={editForm.is_color || false}
                                 onChange={(e) => setEditForm({...editForm, is_color: e.target.checked})}
-                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
                               />
                               <span className="ml-2 text-sm text-gray-700">Impresión a Color</span>
                             </label>
@@ -1794,7 +1800,7 @@ export default function Inventory() {
                                 type="checkbox"
                                 checked={editForm.duplex_capable || false}
                                 onChange={(e) => setEditForm({...editForm, duplex_capable: e.target.checked})}
-                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
                               />
                               <span className="ml-2 text-sm text-gray-700">Impresión Dúplex</span>
                             </label>
@@ -1811,7 +1817,7 @@ export default function Inventory() {
                             type="text"
                             value={editForm.sector || ''}
                             onChange={(e) => setEditForm({...editForm, sector: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             placeholder="Ej: Administración, Producción"
                           />
                         </div>
@@ -1821,7 +1827,7 @@ export default function Inventory() {
                             type="text"
                             value={editForm.location || ''}
                             onChange={(e) => setEditForm({...editForm, location: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             placeholder="Ubicación específica"
                           />
                         </div>
@@ -1831,7 +1837,7 @@ export default function Inventory() {
                             type="text"
                             value={editForm.building || ''}
                             onChange={(e) => setEditForm({...editForm, building: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             placeholder="Nombre del edificio"
                           />
                         </div>
@@ -1841,7 +1847,7 @@ export default function Inventory() {
                             type="text"
                             value={editForm.floor || ''}
                             onChange={(e) => setEditForm({...editForm, floor: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             placeholder="Número de piso"
                           />
                         </div>
@@ -1851,7 +1857,7 @@ export default function Inventory() {
                             type="text"
                             value={editForm.department || ''}
                             onChange={(e) => setEditForm({...editForm, department: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             placeholder="Departamento o área"
                           />
                         </div>
@@ -1861,7 +1867,7 @@ export default function Inventory() {
                             type="text"
                             value={editForm.responsible_person || ''}
                             onChange={(e) => setEditForm({...editForm, responsible_person: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             placeholder="Nombre del responsable"
                           />
                         </div>
@@ -1875,7 +1881,7 @@ export default function Inventory() {
                           <select
                             value={editForm.ownership_type || 'owned'}
                             onChange={(e) => setEditForm({...editForm, ownership_type: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                           >
                             <option value="owned">Propio</option>
                             <option value="leased">Arrendado</option>
@@ -1888,7 +1894,7 @@ export default function Inventory() {
                             type="text"
                             value={editForm.supplier || ''}
                             onChange={(e) => setEditForm({...editForm, supplier: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             placeholder="Nombre del proveedor"
                           />
                         </div>
@@ -1898,7 +1904,7 @@ export default function Inventory() {
                             type="date"
                             value={editForm.purchase_date ? new Date(editForm.purchase_date).toISOString().split('T')[0] : ''}
                             onChange={(e) => setEditForm({...editForm, purchase_date: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                           />
                         </div>
                         <div>
@@ -1907,7 +1913,7 @@ export default function Inventory() {
                             type="date"
                             value={editForm.installation_date ? new Date(editForm.installation_date).toISOString().split('T')[0] : ''}
                             onChange={(e) => setEditForm({...editForm, installation_date: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                           />
                         </div>
                         <div>
@@ -1916,7 +1922,7 @@ export default function Inventory() {
                             type="date"
                             value={editForm.warranty_expiry ? new Date(editForm.warranty_expiry).toISOString().split('T')[0] : ''}
                             onChange={(e) => setEditForm({...editForm, warranty_expiry: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                           />
                         </div>
                         <div>
@@ -1925,7 +1931,7 @@ export default function Inventory() {
                             type="text"
                             value={editForm.lease_contract || ''}
                             onChange={(e) => setEditForm({...editForm, lease_contract: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             placeholder="Número de contrato"
                           />
                         </div>
@@ -1935,7 +1941,7 @@ export default function Inventory() {
                             type="text"
                             value={editForm.cost_center || ''}
                             onChange={(e) => setEditForm({...editForm, cost_center: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             placeholder="Centro de costo"
                           />
                         </div>
@@ -1945,12 +1951,12 @@ export default function Inventory() {
                     {editActiveTab === 'supplies' && (
                       <div className="space-y-6">
                         {/* Información sobre el tipo de impresora */}
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                          <div className="flex items-center">
-                            <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                          <div className="flex items-center gap-2">
+                            <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            <span className="text-sm font-medium text-blue-800">
+                            <span className="text-sm text-gray-500">
                               Seleccione los insumos que puede solicitar este equipo desde el inventario
                             </span>
                           </div>
@@ -1966,7 +1972,7 @@ export default function Inventory() {
                                 fetchPrinterSupplies(editingPrinter?.id || 0)
                                 setShowSupplyModal(true)
                               }}
-                              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                              className="px-3 py-1.5 rounded-full border border-emerald-300 text-emerald-600 text-sm hover:bg-emerald-50 transition-colors"
                             >
                               Seleccionar Insumos
                             </button>
@@ -2027,7 +2033,7 @@ export default function Inventory() {
                                 type="text"
                                 value={editForm.toner_black_code || ''}
                                 onChange={(e) => setEditForm({...editForm, toner_black_code: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                                 placeholder="Ej: HP-12A"
                               />
                             </div>
@@ -2041,7 +2047,7 @@ export default function Inventory() {
                                     type="text"
                                     value={editForm.toner_cyan_code || ''}
                                     onChange={(e) => setEditForm({...editForm, toner_cyan_code: e.target.value})}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                                     placeholder="Ej: HP-410A-C"
                                   />
                                 </div>
@@ -2051,7 +2057,7 @@ export default function Inventory() {
                                     type="text"
                                     value={editForm.toner_magenta_code || ''}
                                     onChange={(e) => setEditForm({...editForm, toner_magenta_code: e.target.value})}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                                     placeholder="Ej: HP-410A-M"
                                   />
                                 </div>
@@ -2061,7 +2067,7 @@ export default function Inventory() {
                                     type="text"
                                     value={editForm.toner_yellow_code || ''}
                                     onChange={(e) => setEditForm({...editForm, toner_yellow_code: e.target.value})}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                                     placeholder="Ej: HP-410A-Y"
                                   />
                                 </div>
@@ -2076,7 +2082,7 @@ export default function Inventory() {
                           <textarea
                             value={editForm.other_supplies || ''}
                             onChange={(e) => setEditForm({...editForm, other_supplies: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             rows={4}
                             placeholder="Tambores, fusores, unidades de imagen, etc."
                           />
@@ -2086,17 +2092,17 @@ export default function Inventory() {
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+                  <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
                     <button
                       type="button"
                       onClick={handleEditCancel}
-                      className="px-6 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors"
+                      className="px-4 py-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
                     >
                       Cancelar
                     </button>
                     <button
                       type="submit"
-                      className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                      className="px-5 py-1.5 rounded-full bg-accent text-white text-sm font-medium hover:opacity-90 transition-colors"
                     >
                       Guardar Cambios
                     </button>
@@ -2110,26 +2116,26 @@ export default function Inventory() {
         {/* Add Printer Modal */}
         {showAddForm && (
           <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-5xl shadow-lg rounded-md bg-white">
-              <div className="mt-3">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900">Agregar Nueva Impresora</h3>
+            <div className="relative top-10 mx-auto p-6 w-11/12 max-w-5xl shadow-2xl rounded-2xl bg-white">
+              <div>
+                <div className="flex justify-between items-center mb-5">
+                  <h3 className="text-base font-semibold text-accent">Agregar Nueva Impresora</h3>
                   <button
                     onClick={handleAddCancel}
-                    className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+                    className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-xl"
                   >
                     ×
                   </button>
                 </div>
 
                 {/* Tab Navigation */}
-                <div className="border-b border-gray-200 mb-6">
-                  <nav className="-mb-px flex space-x-8">
+                <div className="border-b border-gray-100 mb-5">
+                  <nav className="-mb-px flex space-x-4">
                     <button
                       onClick={() => setActiveTab('basic')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         activeTab === 'basic'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -2139,7 +2145,7 @@ export default function Inventory() {
                       onClick={() => setActiveTab('network')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         activeTab === 'network'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -2149,7 +2155,7 @@ export default function Inventory() {
                       onClick={() => setActiveTab('technical')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         activeTab === 'technical'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -2159,7 +2165,7 @@ export default function Inventory() {
                       onClick={() => setActiveTab('location')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         activeTab === 'location'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -2169,7 +2175,7 @@ export default function Inventory() {
                       onClick={() => setActiveTab('ownership')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         activeTab === 'ownership'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -2179,7 +2185,7 @@ export default function Inventory() {
                       onClick={() => setActiveTab('supplies')}
                       className={`py-2 px-1 border-b-2 font-medium text-sm ${
                         activeTab === 'supplies'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-accent text-accent'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
@@ -2194,24 +2200,68 @@ export default function Inventory() {
                     {/* Información Básica Tab */}
                     {activeTab === 'basic' && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-100">
-                          <h4 className="text-lg font-semibold text-blue-900 mb-4 flex items-center">
-                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
+                        <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">
                             Información del Dispositivo
                           </h4>
                           <div className="space-y-4">
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">Marca *</label>
-                              <input
-                                type="text"
-                                required
-                                value={addForm.brand || ''}
-                                onChange={(e) => setAddForm({...addForm, brand: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
-                                placeholder="HP, Canon, Brother..."
-                              />
+                              <div className="flex gap-2">
+                                <select
+                                  required
+                                  value={addForm.brand || ''}
+                                  onChange={(e) => setAddForm({...addForm, brand: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
+                                >
+                                  <option value="">Seleccionar marca...</option>
+                                  {[...defaultBrands, ...customBrands].sort().map(b => (
+                                    <option key={b} value={b}>{b}</option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowAddBrand(v => !v)}
+                                  className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-accent hover:bg-accent-light transition-colors text-lg leading-none"
+                                  title="Agregar marca"
+                                >+</button>
+                              </div>
+                              {showAddBrand && (
+                                <div className="flex gap-2 mt-2">
+                                  <input
+                                    type="text"
+                                    value={newBrandInput}
+                                    onChange={(e) => setNewBrandInput(e.target.value)}
+                                    placeholder="Nueva marca..."
+                                    className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault()
+                                        const trimmed = newBrandInput.trim()
+                                        if (trimmed && ![...defaultBrands, ...customBrands].includes(trimmed)) {
+                                          setCustomBrands(prev => [...prev, trimmed])
+                                        }
+                                        if (trimmed) setAddForm({...addForm, brand: trimmed})
+                                        setNewBrandInput('')
+                                        setShowAddBrand(false)
+                                      }
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const trimmed = newBrandInput.trim()
+                                      if (trimmed && ![...defaultBrands, ...customBrands].includes(trimmed)) {
+                                        setCustomBrands(prev => [...prev, trimmed])
+                                      }
+                                      if (trimmed) setAddForm({...addForm, brand: trimmed})
+                                      setNewBrandInput('')
+                                      setShowAddBrand(false)
+                                    }}
+                                    className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-accent text-white text-sm hover:opacity-90 transition-colors"
+                                  >OK</button>
+                                </div>
+                              )}
                             </div>
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">Modelo *</label>
@@ -2220,7 +2270,7 @@ export default function Inventory() {
                                 required
                                 value={addForm.model || ''}
                                 onChange={(e) => setAddForm({...addForm, model: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                 placeholder="LaserJet Pro 400, imageRUNNER..."
                               />
                             </div>
@@ -2230,13 +2280,12 @@ export default function Inventory() {
                                 required
                                 value={addForm.printer_type || 'printer'}
                                 onChange={(e) => setAddForm({...addForm, printer_type: e.target.value as 'printer' | 'multifunction' | 'scanner'})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                               >
                                 <option value="printer">Solo Impresora</option>
                                 <option value="multifunction">Multifunción (Impresora/Scanner/Copia)</option>
                                 <option value="scanner">Solo Scanner</option>
                               </select>
-                              <p className="text-xs text-gray-500 mt-1">Tipo de dispositivo según sus funcionalidades</p>
                             </div>
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">Condición del Equipo *</label>
@@ -2244,12 +2293,11 @@ export default function Inventory() {
                                 required
                                 value={addForm.equipment_condition || 'new'}
                                 onChange={(e) => setAddForm({...addForm, equipment_condition: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                               >
                                 <option value="new">Nuevo</option>
                                 <option value="used">Usado</option>
                               </select>
-                              <p className="text-xs text-gray-500 mt-1">Indique si el equipo es nuevo o usado</p>
                             </div>
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">Número de Serie</label>
@@ -2257,22 +2305,19 @@ export default function Inventory() {
                                 type="text"
                                 value={addForm.serial_number || ''}
                                 onChange={(e) => setAddForm({...addForm, serial_number: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                 placeholder="ABC123456789"
                               />
                             </div>
                             
                             {/* Contadores Iniciales - Solo para equipos usados */}
                             {addForm.equipment_condition === 'used' && (
-                              <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                <h5 className="text-sm font-semibold text-yellow-800 mb-3 flex items-center">
-                                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                                  </svg>
-                                  Contadores Iniciales (Equipo Usado)
+                              <div className="mt-5 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                                <h5 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
+                                  Contadores Iniciales
                                 </h5>
-                                <p className="text-xs text-yellow-700 mb-3">
-                                  Para equipos usados, ingrese al menos un contador inicial. Esto es necesario para calcular correctamente las páginas impresas en futuros registros.
+                                <p className="text-xs text-gray-500 mb-3">
+                                  Para equipos usados, ingrese al menos un contador inicial para calcular correctamente las páginas futuras.
                                 </p>
                                 <div className="space-y-3">
                                   <div>
@@ -2282,7 +2327,7 @@ export default function Inventory() {
                                       min="0"
                                       value={addForm.initial_counter_bw || ''}
                                       onChange={(e) => setAddForm({...addForm, initial_counter_bw: parseInt(e.target.value) || 0})}
-                                      className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-3 py-2"
+                                      className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                       placeholder="0"
                                     />
                                   </div>
@@ -2293,7 +2338,7 @@ export default function Inventory() {
                                       min="0"
                                       value={addForm.initial_counter_color || ''}
                                       onChange={(e) => setAddForm({...addForm, initial_counter_color: parseInt(e.target.value) || 0})}
-                                      className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-3 py-2"
+                                      className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                       placeholder="0"
                                     />
                                   </div>
@@ -2304,7 +2349,7 @@ export default function Inventory() {
                                       min="0"
                                       value={addForm.initial_counter_total || ''}
                                       onChange={(e) => setAddForm({...addForm, initial_counter_total: parseInt(e.target.value) || 0})}
-                                      className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-3 py-2"
+                                      className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                       placeholder="0"
                                     />
                                   </div>
@@ -2314,11 +2359,8 @@ export default function Inventory() {
                           </div>
                         </div>
                         
-                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-lg border border-green-100">
-                          <h4 className="text-lg font-semibold text-green-900 mb-4 flex items-center">
-                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                            </svg>
+                        <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">
                             Identificación
                           </h4>
                           <div className="space-y-4">
@@ -2329,17 +2371,16 @@ export default function Inventory() {
                                 required
                                 value={addForm.asset_tag || ''}
                                 onChange={(e) => setAddForm({...addForm, asset_tag: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                 placeholder="AT0001, PRINT-001..."
                               />
-                              <p className="text-xs text-gray-500 mt-1">Código único obligatorio para identificar la impresora</p>
                             </div>
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">Estado</label>
                               <select
                                 value={addForm.status || 'active'}
                                 onChange={(e) => setAddForm({...addForm, status: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                               >
                                 <option value="active">Activa</option>
                                 <option value="inactive">Inactiva</option>
@@ -2352,7 +2393,7 @@ export default function Inventory() {
                               <select
                                 value={addForm.condition || 'good'}
                                 onChange={(e) => setAddForm({...addForm, condition: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                               >
                                 <option value="excellent">Excelente</option>
                                 <option value="good">Buena</option>
@@ -2368,11 +2409,8 @@ export default function Inventory() {
                     {/* Red y Configuración Tab */}
                     {activeTab === 'network' && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-gradient-to-br from-purple-50 to-violet-50 p-6 rounded-lg border border-purple-100">
-                          <h4 className="text-lg font-semibold text-purple-900 mb-4 flex items-center">
-                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                            </svg>
+                        <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">
                             Configuración de Red
                           </h4>
                           <div className="space-y-4">
@@ -2383,7 +2421,7 @@ export default function Inventory() {
                                 required
                                 value={addForm.ip || ''}
                                 onChange={(e) => setAddForm({...addForm, ip: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                 placeholder="192.168.1.100"
                               />
                             </div>
@@ -2393,7 +2431,7 @@ export default function Inventory() {
                                 type="text"
                                 value={addForm.hostname || ''}
                                 onChange={(e) => setAddForm({...addForm, hostname: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                 placeholder="printer-office-01"
                               />
                             </div>
@@ -2403,19 +2441,15 @@ export default function Inventory() {
                                 type="text"
                                 value={addForm.mac_address || ''}
                                 onChange={(e) => setAddForm({...addForm, mac_address: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                 placeholder="AA:BB:CC:DD:EE:FF"
                               />
                             </div>
                           </div>
                         </div>
                         
-                        <div className="bg-gradient-to-br from-orange-50 to-amber-50 p-6 rounded-lg border border-orange-100">
-                          <h4 className="text-lg font-semibold text-orange-900 mb-4 flex items-center">
-                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
+                        <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">
                             Configuración SNMP
                           </h4>
                           <div className="space-y-4">
@@ -2424,7 +2458,7 @@ export default function Inventory() {
                               <select
                                 value={addForm.snmp_profile || 'generic_v2c'}
                                 onChange={(e) => setAddForm({...addForm, snmp_profile: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                               >
                                 <option value="generic_v2c">Genérico v2c</option>
                                 <option value="hp">HP</option>
@@ -2435,27 +2469,27 @@ export default function Inventory() {
                               </select>
                             </div>
                             <div className="space-y-3">
-                              <div className="flex items-center p-3 bg-white rounded-lg border">
+                              <div className="flex items-center gap-2.5">
                                 <input
                                   type="checkbox"
                                   id="network_capable"
                                   checked={addForm.network_capable || true}
                                   onChange={(e) => setAddForm({...addForm, network_capable: e.target.checked})}
-                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                  className="h-4 w-4 text-gray-600 focus:ring-0 border-gray-300 rounded"
                                 />
-                                <label htmlFor="network_capable" className="ml-3 block text-sm text-gray-900 font-medium">
+                                <label htmlFor="network_capable" className="text-sm text-gray-700">
                                   Capacidad de Red
                                 </label>
                               </div>
-                              <div className="flex items-center p-3 bg-white rounded-lg border">
+                              <div className="flex items-center gap-2.5">
                                 <input
                                   type="checkbox"
                                   id="wireless_capable"
                                   checked={addForm.wireless_capable || false}
                                   onChange={(e) => setAddForm({...addForm, wireless_capable: e.target.checked})}
-                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                  className="h-4 w-4 text-gray-600 focus:ring-0 border-gray-300 rounded"
                                 />
-                                <label htmlFor="wireless_capable" className="ml-3 block text-sm text-gray-900 font-medium">
+                                <label htmlFor="wireless_capable" className="text-sm text-gray-700">
                                   Capacidad Inalámbrica
                                 </label>
                               </div>
@@ -2468,11 +2502,8 @@ export default function Inventory() {
                     {/* Especificaciones Tab */}
                     {activeTab === 'technical' && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-gradient-to-br from-cyan-50 to-blue-50 p-6 rounded-lg border border-cyan-100">
-                          <h4 className="text-lg font-semibold text-cyan-900 mb-4 flex items-center">
-                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                            </svg>
+                        <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">
                             Especificaciones de Impresión
                           </h4>
                           <div className="space-y-4">
@@ -2481,7 +2512,7 @@ export default function Inventory() {
                               <select
                                 value={addForm.print_technology || ''}
                                 onChange={(e) => setAddForm({...addForm, print_technology: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                               >
                                 <option value="">Seleccionar Tecnología</option>
                                 <option value="laser">Láser</option>
@@ -2496,7 +2527,7 @@ export default function Inventory() {
                               <select
                                 value={addForm.max_paper_size || ''}
                                 onChange={(e) => setAddForm({...addForm, max_paper_size: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                               >
                                 <option value="">Seleccionar Tamaño</option>
                                 <option value="A4">A4</option>
@@ -2509,35 +2540,32 @@ export default function Inventory() {
                           </div>
                         </div>
                         
-                        <div className="bg-gradient-to-br from-pink-50 to-rose-50 p-6 rounded-lg border border-pink-100">
-                          <h4 className="text-lg font-semibold text-pink-900 mb-4 flex items-center">
-                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 5a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a4 4 0 004 4h4a2 2 0 002-2V5z" />
-                            </svg>
+                        <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">
                             Capacidades
                           </h4>
                           <div className="space-y-3">
-                            <div className="flex items-center p-3 bg-white rounded-lg border">
+                            <div className="flex items-center gap-2.5 p-3 border border-gray-100 rounded-lg">
                               <input
                                 type="checkbox"
                                 id="is_color"
                                 checked={addForm.is_color || false}
                                 onChange={(e) => setAddForm({...addForm, is_color: e.target.checked})}
-                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-gray-600 focus:ring-0 border-gray-300 rounded"
                               />
-                              <label htmlFor="is_color" className="ml-3 block text-sm text-gray-900 font-medium">
+                              <label htmlFor="is_color" className="text-sm text-gray-700">
                                 Impresión a Color
                               </label>
                             </div>
-                            <div className="flex items-center p-3 bg-white rounded-lg border">
+                            <div className="flex items-center gap-2.5 p-3 border border-gray-100 rounded-lg">
                               <input
                                 type="checkbox"
                                 id="duplex_capable"
                                 checked={addForm.duplex_capable || false}
                                 onChange={(e) => setAddForm({...addForm, duplex_capable: e.target.checked})}
-                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-gray-600 focus:ring-0 border-gray-300 rounded"
                               />
-                              <label htmlFor="duplex_capable" className="ml-3 block text-sm text-gray-900 font-medium">
+                              <label htmlFor="duplex_capable" className="text-sm text-gray-700">
                                 Impresión Dúplex (Doble Cara)
                               </label>
                             </div>
@@ -2549,12 +2577,8 @@ export default function Inventory() {
                     {/* Ubicación Tab */}
                     {activeTab === 'location' && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-6 rounded-lg border border-indigo-100">
-                          <h4 className="text-lg font-semibold text-indigo-900 mb-4 flex items-center">
-                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
+                        <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">
                             Ubicación Física
                           </h4>
                           <div className="space-y-4">
@@ -2564,7 +2588,7 @@ export default function Inventory() {
                                 type="text"
                                 value={addForm.location || ''}
                                 onChange={(e) => setAddForm({...addForm, location: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                 placeholder="Oficina Principal, Planta 1"
                               />
                             </div>
@@ -2574,7 +2598,7 @@ export default function Inventory() {
                                 type="text"
                                 value={addForm.building || ''}
                                 onChange={(e) => setAddForm({...addForm, building: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                 placeholder="Edificio Principal, Anexo..."
                               />
                             </div>
@@ -2584,18 +2608,15 @@ export default function Inventory() {
                                 type="text"
                                 value={addForm.floor || ''}
                                 onChange={(e) => setAddForm({...addForm, floor: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                 placeholder="Piso 1, Piso 2..."
                               />
                             </div>
                           </div>
                         </div>
                         
-                        <div className="bg-gradient-to-br from-emerald-50 to-teal-50 p-6 rounded-lg border border-emerald-100">
-                          <h4 className="text-lg font-semibold text-emerald-900 mb-4 flex items-center">
-                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                            </svg>
+                        <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">
                             Información Organizacional
                           </h4>
                           <div className="space-y-4">
@@ -2605,7 +2626,7 @@ export default function Inventory() {
                                 type="text"
                                 value={addForm.department || ''}
                                 onChange={(e) => setAddForm({...addForm, department: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                 placeholder="Administración, IT, Marketing..."
                               />
                             </div>
@@ -2615,7 +2636,7 @@ export default function Inventory() {
                                 type="text"
                                 value={addForm.sector || ''}
                                 onChange={(e) => setAddForm({...addForm, sector: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                 placeholder="Operaciones, Soporte, Ventas..."
                               />
                             </div>
@@ -2625,7 +2646,7 @@ export default function Inventory() {
                                 type="text"
                                 value={addForm.responsible_person || ''}
                                 onChange={(e) => setAddForm({...addForm, responsible_person: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                 placeholder="Nombre del responsable"
                               />
                             </div>
@@ -2635,7 +2656,7 @@ export default function Inventory() {
                                 type="text"
                                 value={addForm.cost_center || ''}
                                 onChange={(e) => setAddForm({...addForm, cost_center: e.target.value})}
-                                className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                 placeholder="CC001, CC-ADM-001..."
                               />
                             </div>
@@ -2648,11 +2669,8 @@ export default function Inventory() {
                     {activeTab === 'ownership' && (
                       <div className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="bg-gradient-to-br from-yellow-50 to-orange-50 p-6 rounded-lg border border-yellow-100">
-                            <h4 className="text-lg font-semibold text-yellow-900 mb-4 flex items-center">
-                              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                              </svg>
+                          <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">
                               Información de Propiedad
                             </h4>
                             <div className="space-y-4">
@@ -2661,7 +2679,7 @@ export default function Inventory() {
                                 <select
                                   value={addForm.ownership_type || 'owned'}
                                   onChange={(e) => setAddForm({...addForm, ownership_type: e.target.value})}
-                                  className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                 >
                                   <option value="owned">Propia</option>
                                   <option value="leased">Arrendada</option>
@@ -2674,7 +2692,7 @@ export default function Inventory() {
                                   type="text"
                                   value={addForm.supplier || ''}
                                   onChange={(e) => setAddForm({...addForm, supplier: e.target.value})}
-                                  className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                   placeholder="Nombre del proveedor"
                                 />
                               </div>
@@ -2684,18 +2702,15 @@ export default function Inventory() {
                                   type="text"
                                   value={addForm.lease_contract || ''}
                                   onChange={(e) => setAddForm({...addForm, lease_contract: e.target.value})}
-                                  className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                   placeholder="Número de contrato (si aplica)"
                                 />
                               </div>
                             </div>
                           </div>
                           
-                          <div className="bg-gradient-to-br from-slate-50 to-gray-50 p-6 rounded-lg border border-slate-100">
-                            <h4 className="text-lg font-semibold text-slate-900 mb-4 flex items-center">
-                              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 9l6-6m-6 6l6 6m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
+                          <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">
                               Fechas Importantes
                             </h4>
                             <div className="space-y-4">
@@ -2705,7 +2720,7 @@ export default function Inventory() {
                                   type="date"
                                   value={addForm.purchase_date ? new Date(addForm.purchase_date).toISOString().split('T')[0] : ''}
                                   onChange={(e) => setAddForm({...addForm, purchase_date: e.target.value})}
-                                  className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                 />
                               </div>
                               <div>
@@ -2714,7 +2729,7 @@ export default function Inventory() {
                                   type="date"
                                   value={addForm.installation_date ? new Date(addForm.installation_date).toISOString().split('T')[0] : ''}
                                   onChange={(e) => setAddForm({...addForm, installation_date: e.target.value})}
-                                  className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                 />
                               </div>
                               <div>
@@ -2723,7 +2738,7 @@ export default function Inventory() {
                                   type="date"
                                   value={addForm.warranty_expiry ? new Date(addForm.warranty_expiry).toISOString().split('T')[0] : ''}
                                   onChange={(e) => setAddForm({...addForm, warranty_expiry: e.target.value})}
-                                  className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                 />
                               </div>
                             </div>
@@ -2731,18 +2746,15 @@ export default function Inventory() {
                         </div>
 
                         {/* Notas */}
-                        <div className="bg-gradient-to-br from-gray-50 to-slate-50 p-6 rounded-lg border border-gray-100">
-                          <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
+                        <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">
                             Notas Adicionales
                           </h4>
                           <textarea
                             value={addForm.notes || ''}
                             onChange={(e) => setAddForm({...addForm, notes: e.target.value})}
                             rows={4}
-                            className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                            className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                             placeholder="Información adicional sobre esta impresora, configuraciones especiales, observaciones de mantenimiento, etc..."
                           />
                         </div>
@@ -2753,26 +2765,21 @@ export default function Inventory() {
                     {activeTab === 'supplies' && (
                       <div className="space-y-6">
                         {/* Información sobre el tipo de impresora */}
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                           <div className="flex items-center">
-                            <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span className="text-sm font-medium text-blue-800">
+                            <svg className="w-4 h-4 text-gray-400 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <span className="text-sm text-gray-500">
                               {addForm.is_color 
-                                ? 'Impresora a color - Se muestran todos los tóners' 
-                                : 'Impresora monocromática - Solo se muestra tóner negro'
+                                ? 'Impresora a color — se muestran todos los tóners' 
+                                : 'Impresora monocromática — solo tóner negro'
                               }
                             </span>
                           </div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="bg-gradient-to-br from-purple-50 to-violet-50 p-6 rounded-lg border border-purple-100">
-                            <h4 className="text-lg font-semibold text-purple-900 mb-4 flex items-center">
-                              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2M7 4h10M7 4v16a1 1 0 001 1h8a1 1 0 001-1V4M9 8h6M9 12h6M9 16h6" />
-                              </svg>
+                          <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">
                               Códigos de Tóner
                             </h4>
                             <div className="space-y-4">
@@ -2783,7 +2790,7 @@ export default function Inventory() {
                                   type="text"
                                   value={addForm.toner_black_code || ''}
                                   onChange={(e) => setAddForm({...addForm, toner_black_code: e.target.value})}
-                                  className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                   placeholder="HP 85A, TN-2410, C-EXV33..."
                                 />
                               </div>
@@ -2797,7 +2804,7 @@ export default function Inventory() {
                                       type="text"
                                       value={addForm.toner_cyan_code || ''}
                                       onChange={(e) => setAddForm({...addForm, toner_cyan_code: e.target.value})}
-                                      className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                      className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                       placeholder="HP 201A, TN-245C, C-EXV49C..."
                                     />
                                   </div>
@@ -2807,7 +2814,7 @@ export default function Inventory() {
                                       type="text"
                                       value={addForm.toner_magenta_code || ''}
                                       onChange={(e) => setAddForm({...addForm, toner_magenta_code: e.target.value})}
-                                      className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                      className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                       placeholder="HP 201A, TN-245M, C-EXV49M..."
                                     />
                                   </div>
@@ -2817,7 +2824,7 @@ export default function Inventory() {
                                       type="text"
                                       value={addForm.toner_yellow_code || ''}
                                       onChange={(e) => setAddForm({...addForm, toner_yellow_code: e.target.value})}
-                                      className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                      className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                       placeholder="HP 201A, TN-245Y, C-EXV49Y..."
                                     />
                                   </div>
@@ -2826,11 +2833,8 @@ export default function Inventory() {
                             </div>
                           </div>
 
-                          <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-lg border border-green-100">
-                            <h4 className="text-lg font-semibold text-green-900 mb-4 flex items-center">
-                              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                              </svg>
+                          <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">
                               Otros Insumos
                             </h4>
                             <div className="space-y-4">
@@ -2840,7 +2844,7 @@ export default function Inventory() {
                                   value={addForm.other_supplies || ''}
                                   onChange={(e) => setAddForm({...addForm, other_supplies: e.target.value})}
                                   rows={8}
-                                  className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-2"
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
                                   placeholder="Tambores, fusores, kits de mantenimiento, rollos de transferencia, etc.&#10;&#10;Ejemplo:&#10;- Tambor: DR-2400&#10;- Fusor: RM1-6319&#10;- Kit de mantenimiento: MK-8505"
                                 />
                               </div>
@@ -2848,16 +2852,13 @@ export default function Inventory() {
                           </div>
 
                           {/* Información de Compatibilidad */}
-                          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-100">
-                            <h4 className="text-lg font-semibold text-blue-900 mb-4 flex items-center">
-                              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
+                          <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">
                               Información de Compatibilidad
                             </h4>
-                            <div className="bg-blue-25 p-4 rounded-lg border border-blue-200">
-                              <div className="text-sm text-blue-800">
-                                <p className="font-medium mb-2">💡 Consejos para códigos de insumos:</p>
+                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                              <div className="text-sm text-gray-500">
+                                <p className="font-medium mb-2 text-gray-600">Consejos para códigos de insumos:</p>
                                 <ul className="space-y-1 ml-4">
                                   <li>• Para impresoras B&N, solo completar el campo "Tóner Negro"</li>
                                   <li>• Para impresoras color, completar los 4 colores (CMYK)</li>
@@ -2873,63 +2874,20 @@ export default function Inventory() {
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex justify-between items-center pt-6 border-t border-gray-200">
-                    <div className="flex space-x-2">
-                      {activeTab !== 'basic' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const tabs = ['basic', 'network', 'technical', 'location', 'ownership', 'supplies'];
-                            const currentIndex = tabs.indexOf(activeTab);
-                            if (currentIndex > 0) {
-                              setActiveTab(tabs[currentIndex - 1]);
-                            }
-                          }}
-                          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center"
-                        >
-                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                          </svg>
-                          Anterior
-                        </button>
-                      )}
-                      {activeTab !== 'supplies' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const tabs = ['basic', 'network', 'technical', 'location', 'ownership', 'supplies'];
-                            const currentIndex = tabs.indexOf(activeTab);
-                            if (currentIndex < tabs.length - 1) {
-                              setActiveTab(tabs[currentIndex + 1]);
-                            }
-                          }}
-                          className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors flex items-center"
-                        >
-                          Siguiente
-                          <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex space-x-3">
-                      <button
-                        type="button"
-                        onClick={handleAddCancel}
-                        className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
-                      >
-                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                        Agregar Impresora
-                      </button>
-                    </div>
+                  <div className="flex justify-end items-center pt-5 border-t border-gray-100 gap-3">
+                    <button
+                      type="button"
+                      onClick={handleAddCancel}
+                      className="px-4 py-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-1.5 rounded-full border border-accent text-accent text-sm font-medium hover:bg-accent-light transition-colors"
+                    >
+                      Agregar
+                    </button>
                   </div>
                 </form>
               </div>
@@ -2982,7 +2940,7 @@ export default function Inventory() {
                                 setSelectedSupplies(prev => prev.filter(id => id !== item.id))
                               }
                             }}
-                            className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            className="mt-1 h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded"
                           />
                           <div className="flex-1">
                             <div className="flex items-center justify-between">
@@ -2998,7 +2956,7 @@ export default function Inventory() {
                                   <p className="text-sm text-gray-500 mt-1">{item.description}</p>
                                 )}
                                 {item.compatible_printers && (
-                                  <p className="text-xs text-blue-600 mt-1">
+                                  <p className="text-xs text-accent mt-1">
                                     Compatible: {item.compatible_printers}
                                   </p>
                                 )}
@@ -3050,7 +3008,7 @@ export default function Inventory() {
                       await fetchPrinterSupplies(editingPrinter?.id || 0)
                       setShowSupplyModal(false)
                     }}
-                    className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="px-6 py-2 bg-accent text-white rounded hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent"
                   >
                     Guardar Selección
                   </button>

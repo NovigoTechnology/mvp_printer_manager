@@ -99,6 +99,47 @@ export default function Printers() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingPrinter, setEditingPrinter] = useState<Printer | null>(null)
   const [editActiveTab, setEditActiveTab] = useState<'general' | 'management'>('general')
+
+  // Estados para el formulario de agregar (igual que inventory)
+  const [activeTab, setActiveTab] = useState('basic')
+  const defaultBrands = ['Brother', 'Canon', 'Epson', 'Fujifilm', 'HP', 'Konica Minolta', 'Kyocera', 'Lexmark', 'OKI', 'Ricoh', 'Samsung', 'Sharp', 'Toshiba', 'Xerox']
+  const [customBrands, setCustomBrands] = useState<string[]>([])
+  const [showAddBrand, setShowAddBrand] = useState(false)
+  const [newBrandInput, setNewBrandInput] = useState('')
+  const [addForm, setAddForm] = useState<any>({
+    brand: '', model: '', ip: '', hostname: '', snmp_profile: 'generic_v2c',
+    is_color: false, printer_type: 'printer', duplex_capable: false,
+    network_capable: true, wireless_capable: false, ownership_type: 'owned',
+    status: 'active', condition: 'good', equipment_condition: 'new',
+    initial_counter_bw: 0, initial_counter_color: 0, initial_counter_total: 0,
+    toner_black_code: '', toner_cyan_code: '', toner_magenta_code: '', toner_yellow_code: '', other_supplies: ''
+  })
+  const resetAddForm = () => {
+    setAddForm({
+      brand: '', model: '', ip: '', hostname: '', snmp_profile: 'generic_v2c',
+      is_color: false, printer_type: 'printer', duplex_capable: false,
+      network_capable: true, wireless_capable: false, ownership_type: 'owned',
+      status: 'active', condition: 'good', equipment_condition: 'new',
+      initial_counter_bw: 0, initial_counter_color: 0, initial_counter_total: 0,
+      toner_black_code: '', toner_cyan_code: '', toner_magenta_code: '', toner_yellow_code: '', other_supplies: ''
+    })
+    setActiveTab('basic')
+  }
+  const handleAddSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (addForm.equipment_condition === 'used') {
+      if ((addForm.initial_counter_bw || 0) === 0 && (addForm.initial_counter_color || 0) === 0 && (addForm.initial_counter_total || 0) === 0) {
+        alert('Para equipos usados, debe especificar al menos un contador inicial')
+        return
+      }
+    }
+    await addManualPrinter(addForm)
+    resetAddForm()
+  }
+  const handleAddCancel = () => {
+    setShowAddModal(false)
+    resetAddForm()
+  }
   const [selectedPrinter, setSelectedPrinter] = useState<Printer | null>(null)
   const [showToolsModal, setShowToolsModal] = useState(false)
   const [toolsPrinter, setToolsPrinter] = useState<Printer | null>(null)
@@ -1581,7 +1622,7 @@ export default function Printers() {
 
           {/* Filters and Controls */}
           <div className="mb-4 p-3 bg-white rounded-lg shadow-sm border border-gray-100">
-            <div className="flex flex-col lg:flex-row gap-3 items-center">
+            <div className="flex flex-col lg:flex-row gap-2 items-center">
               <div className="flex-1">
                 <input
                   type="text"
@@ -1604,16 +1645,16 @@ export default function Printers() {
                   ))}
                 </select>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 {viewMode === 'table' && (
                   <button
                     onClick={() => setShowColumnSelector(!showColumnSelector)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-md text-sm transition-colors flex items-center gap-1.5 ${
                       showColumnSelector ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                     }`}
                     title="Seleccionar columnas"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
                     </svg>
                     Columnas
@@ -1621,12 +1662,12 @@ export default function Printers() {
                 )}
                 <button
                   onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-md text-sm transition-colors flex items-center gap-1.5 ${
                     showAdvancedFilters ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                   }`}
                   title="Filtros avanzados"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                   </svg>
                   Filtros
@@ -1635,19 +1676,25 @@ export default function Printers() {
               <div className="flex bg-gray-100 rounded-md p-0.5">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  className={`px-3 py-1.5 rounded text-sm transition-colors flex items-center gap-1.5 ${
                     viewMode === 'grid' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'
                   }`}
                 >
-                  ⚏ Tarjetas
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                  </svg>
+                  Tarjetas
                 </button>
                 <button
                   onClick={() => setViewMode('table')}
-                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  className={`px-3 py-1.5 rounded text-sm transition-colors flex items-center gap-1.5 ${
                     viewMode === 'table' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'
                   }`}
                 >
-                  ☰ Tabla
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18M3 6h18M3 18h18" />
+                  </svg>
+                  Tabla
                 </button>
               </div>
             </div>
@@ -1797,10 +1844,12 @@ export default function Printers() {
                   </div>
                   <button
                     onClick={() => setShowBulkActionsModal(true)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center space-x-2"
+                    className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-gray-300 text-gray-600 text-sm font-medium bg-transparent hover:bg-gray-50 transition-colors"
                   >
-                    <span>⚡</span>
-                    <span>Acciones Masivas</span>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                    </svg>
+                    Acciones masivas
                   </button>
                 </div>
               </div>
@@ -1809,136 +1858,150 @@ export default function Printers() {
 
           {/* Printers Display */}
           {viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filteredPrinters.map((printer) => (
                 <div
                   key={printer.id}
-                  className={`bg-white rounded-lg card-shadow hover-scale transition-all cursor-pointer relative ${
-                    selectedPrinters.includes(printer.id) ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+                  className={`bg-white rounded-xl border transition-all cursor-pointer relative flex flex-col ${
+                    selectedPrinters.includes(printer.id)
+                      ? 'border-blue-300 ring-2 ring-blue-100'
+                      : 'border-gray-100 hover:border-gray-200 hover:shadow-md shadow-sm'
                   }`}
                   onClick={() => setSelectedPrinter(printer)}
                 >
-                  {/* Checkbox de selección */}
-                  <div className="absolute top-3 right-3 z-10">
-                    <input
-                      type="checkbox"
-                      checked={selectedPrinters.includes(printer.id)}
-                      onChange={(e) => {
-                        e.stopPropagation()
-                        handlePrinterSelection(printer.id, e.target.checked)
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="w-4 h-4 text-blue-600 bg-white border-2 border-gray-300 rounded focus:ring-blue-500 shadow-sm"
-                    />
-                  </div>
-                  <div className="p-6">
-                    {/* Header */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <PrinterIcon brand={printer.brand} size={32} className="flex-shrink-0" />
-                        <div>
-                          <div className="flex items-center space-x-2 mb-1">
-                            <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-full tracking-tight">
-                              {printer.brand}
-                            </span>
-                          </div>
-                          <h3 className="font-semibold text-gray-900 text-sm tracking-tight">
-                            {printer.model}
-                          </h3>
-                          <p className="text-xs text-gray-500 font-mono mt-1">{printer.ip}</p>
-                        </div>
+                  <div className="p-4 flex flex-col gap-3 flex-1">
+                    {/* Header: icon + brand/model/ip + status + checkbox */}
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-50 border border-gray-100 flex-shrink-0">
+                        <PrinterIcon brand={printer.brand} size={22} className="flex-shrink-0" />
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(printer.status)}`}>
-                        {printer.status}
-                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className="inline-block text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded mb-1">
+                          {printer.brand}
+                        </span>
+                        <h3 className="font-semibold text-gray-900 text-sm leading-tight truncate">
+                          {printer.model}
+                        </h3>
+                        <p className="text-xs text-gray-400 font-mono mt-0.5">{printer.ip}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedPrinters.includes(printer.id)}
+                          onChange={(e) => {
+                            e.stopPropagation()
+                            handlePrinterSelection(printer.id, e.target.checked)
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-4 h-4 text-blue-600 bg-white border-2 border-gray-300 rounded focus:ring-blue-500 shadow-sm"
+                        />
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(printer.status)}`}>
+                          <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
+                          {printer.status === 'active' ? 'Activo' : printer.status}
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Details */}
-                    <div className="space-y-2 mb-4">
+                    {/* Divider */}
+                    <div className="border-t border-gray-100" />
+
+                    {/* Details rows */}
+                    <div className="space-y-2.5">
                       {printer.asset_tag && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Asset Tag:</span>
-                          <span className="font-medium">{printer.asset_tag}</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-1.5 text-xs text-gray-400 uppercase tracking-wide font-medium">
+                            <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3H5a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2zm0 10H5a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2zm10-10h-2a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2zM7 10h10" />
+                            </svg>
+                            Etiqueta
+                          </span>
+                          <span className="text-xs font-medium text-gray-700">{printer.asset_tag}</span>
                         </div>
                       )}
                       {printer.serial_number && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Serie:</span>
-                          <span className="font-medium text-xs">{printer.serial_number}</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-1.5 text-xs text-gray-400 uppercase tracking-wide font-medium">
+                            <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                            </svg>
+                            Serie
+                          </span>
+                          <span className="text-xs font-mono text-gray-700 truncate max-w-[120px]">{printer.serial_number}</span>
                         </div>
                       )}
-                      {printer.location && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Ubicación:</span>
-                          <span className="font-medium text-xs">{printer.location}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-1.5 text-xs text-gray-400 uppercase tracking-wide font-medium">
+                          <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          Ubicación
+                        </span>
+                        <span className="text-xs text-gray-700 truncate max-w-[140px]">
+                          {printer.location || 'Detección automática'}
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Features */}
-                    <div className="flex flex-wrap gap-1 mb-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        printer.is_color ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
+                    {/* Tags */}
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium border ${
+                        printer.is_color ? 'border-violet-200 text-violet-600' : 'border-gray-200 text-gray-500'
                       }`}>
                         {printer.is_color ? 'Color' : 'B&W'}
                       </span>
-                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                      <span className="px-2 py-0.5 rounded text-xs font-medium border border-gray-200 text-gray-500 capitalize">
                         {printer.printer_type}
                       </span>
-                      {printer.duplex_capable && (
-                        <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                          Duplex
-                        </span>
-                      )}
                       {printer.network_capable && (
-                        <span className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded-full text-xs font-medium">
-                          Red
-                        </span>
+                        <span className="px-2 py-0.5 rounded text-xs font-medium border border-gray-200 text-gray-500">Red</span>
+                      )}
+                      {printer.duplex_capable && (
+                        <span className="px-2 py-0.5 rounded text-xs font-medium border border-gray-200 text-gray-500">Duplex</span>
                       )}
                     </div>
+                  </div>
 
-                    {/* Actions */}
-                    <div className="flex gap-1 pt-1">
-                      <button
-                        className="flex-1 flex items-center justify-center gap-1 text-xs py-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSelectedPrinter(printer)
-                        }}
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        Ver
-                      </button>
-                      <button
-                        className="flex-1 flex items-center justify-center gap-1 text-xs py-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          openEditModal(printer)
-                        }}
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H7v-3.414a2 2 0 01.586-1.414z" />
-                        </svg>
-                        Editar
-                      </button>
-                      <button
-                        className="flex-1 flex items-center justify-center gap-1 text-xs py-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setToolsPrinter(printer)
-                          setShowToolsModal(true)
-                        }}
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        Herramientas
-                      </button>
-                    </div>
+                  {/* Actions footer */}
+                  <div className="border-t border-gray-100 px-4 py-2.5 flex justify-end gap-2">
+                    <button
+                      className="p-1.5 text-accent bg-accent-light rounded-lg hover:opacity-75 transition-colors"
+                      title="Ver"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedPrinter(printer)
+                      }}
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </button>
+                    <button
+                      className="p-1.5 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                      title="Editar"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openEditModal(printer)
+                      }}
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H7v-3.414a2 2 0 01.586-1.414z" />
+                      </svg>
+                    </button>
+                    <button
+                      className="p-1.5 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+                      title="Herramientas"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setToolsPrinter(printer)
+                        setShowToolsModal(true)
+                      }}
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
               ))}
@@ -2185,31 +2248,38 @@ export default function Printers() {
                             {printer.installation_date ? new Date(printer.installation_date).toLocaleDateString() : '-'}
                           </td>
                         )}
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex space-x-2">
-                            <button 
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-0.5">
+                            <button
                               onClick={() => setSelectedPrinter(printer)}
-                              className="text-blue-600 hover:text-blue-900"
+                              className="p-1 text-gray-400 hover:text-blue-500 transition-colors rounded"
                               title="Ver detalles"
                             >
-                              👁️
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
                             </button>
-                            <button 
+                            <button
                               onClick={() => openEditModal(printer)}
-                              className="text-green-600 hover:text-green-900"
+                              className="p-1 text-gray-400 hover:text-emerald-500 transition-colors rounded"
                               title="Editar impresora"
                             >
-                              ✏️
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H7v-3.414a2 2 0 01.586-1.414z" />
+                              </svg>
                             </button>
-                            <button 
+                            <button
                               onClick={() => {
                                 setToolsPrinter(printer)
                                 setShowToolsModal(true)
                               }}
-                              className="text-green-600 hover:text-green-900"
+                              className="p-1 text-gray-400 hover:text-gray-700 transition-colors rounded"
                               title="Herramientas"
                             >
-                              🔧
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                              </svg>
                             </button>
                           </div>
                         </td>
@@ -3190,133 +3260,353 @@ export default function Printers() {
 
           {/* Add Printer Modal */}
           {showAddModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 modal-backdrop">
-              <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-                <h2 className="text-xl font-bold text-gray-800 mb-4">Agregar Nueva Impresora</h2>
-                
-                <form onSubmit={(e) => {
-                  e.preventDefault()
-                  const formData = new FormData(e.target as HTMLFormElement)
-                  const newPrinter = {
-                    brand: formData.get('brand') as string,
-                    model: formData.get('model') as string,
-                    asset_tag: formData.get('asset_tag') as string,
-                    serial_number: formData.get('serial_number') as string,
-                    ip: formData.get('ip') as string,
-                    hostname: formData.get('hostname') as string,
-                    snmp_profile: formData.get('snmp_profile') as string,
-                    is_color: formData.get('is_color') === 'true',
-                    printer_type: 'Laser',
-                    ownership_type: 'owned',
-                    status: 'active',
-                    condition: 'good',
-                    equipment_condition: 'used',
-                    duplex_capable: false,
-                    network_capable: true,
-                    wireless_capable: false,
-                    initial_counter_bw: 0,
-                    initial_counter_color: 0,
-                    initial_counter_total: 0,
-                    location: formData.get('location') as string || 'Agregado manualmente'
-                  }
-                  addManualPrinter(newPrinter)
-                }}>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Marca</label>
-                      <select name="brand" required className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="">Seleccionar marca</option>
-                        <option value="HP">HP</option>
-                        <option value="Brother">Brother</option>
-                        <option value="OKI">OKI</option>
-                        <option value="Lexmark">Lexmark</option>
-                        <option value="Ricoh">Ricoh</option>
-                        <option value="EPSON">EPSON</option>
-                        <option value="Canon">Canon</option>
-                      </select>
-                    </div>
+            <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+              <div className="relative top-10 mx-auto p-6 w-11/12 max-w-5xl shadow-2xl rounded-2xl bg-white">
+                <div>
+                  <div className="flex justify-between items-center mb-5">
+                    <h3 className="text-base font-semibold text-accent">Agregar Nueva Impresora</h3>
+                    <button
+                      onClick={handleAddCancel}
+                      className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-xl"
+                    >×</button>
+                  </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Modelo</label>
-                      <input type="text" name="model" required className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ej: LaserJet Pro M404n" />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Etiqueta de Inventario</label>
-                      <div className="flex space-x-2">
-                        <input type="text" name="asset_tag" required className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ej: PRT-001" />
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            const input = (e.target as HTMLElement).parentElement?.querySelector('input[name="asset_tag"]') as HTMLInputElement
-                            if (input) input.value = generateAssetTag()
-                          }}
-                          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-md text-sm transition-colors"
-                        >
-                          Auto
+                  {/* Tab Navigation */}
+                  <div className="border-b border-gray-100 mb-5">
+                    <nav className="-mb-px flex space-x-4">
+                      {[
+                        { id: 'basic', label: 'Información Básica' },
+                        { id: 'network', label: 'Red y Configuración' },
+                        { id: 'technical', label: 'Especificaciones' },
+                        { id: 'location', label: 'Ubicación' },
+                        { id: 'ownership', label: 'Propiedad y Fechas' },
+                        { id: 'supplies', label: 'Insumos' }
+                      ].map(tab => (
+                        <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                          className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>
+                          {tab.label}
                         </button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Número de Serie</label>
-                      <input type="text" name="serial_number" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Opcional" />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Dirección IP</label>
-                      <input type="text" name="ip" required pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ej: 192.168.1.100" />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Hostname</label>
-                      <input type="text" name="hostname" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Opcional" />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Ubicación</label>
-                      <input type="text" name="location" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ej: Oficina principal" />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Perfil SNMP</label>
-                      <select name="snmp_profile" required className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="public">public (estándar)</option>
-                        <option value="hp">HP</option>
-                        <option value="brother">Brother</option>
-                        <option value="oki">OKI</option>
-                        <option value="lexmark">Lexmark</option>
-                        <option value="ricoh">Ricoh</option>
-                        <option value="epson">EPSON</option>
-                        <option value="generic_v2c">Genérico v2c</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Impresora</label>
-                      <select name="is_color" required className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="false">Monocromática</option>
-                        <option value="true">Color</option>
-                      </select>
-                    </div>
+                      ))}
+                    </nav>
                   </div>
 
-                  <div className="mt-6 flex justify-end space-x-3">
-                    <button
-                      type="button"
-                      onClick={() => setShowAddModal(false)}
-                      className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                    >
-                      Agregar Impresora
-                    </button>
-                  </div>
-                </form>
+                  <form onSubmit={handleAddSubmit} className="space-y-6">
+                    <div className="min-h-[450px]">
+
+                      {/* Información Básica */}
+                      {activeTab === 'basic' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">Información del Dispositivo</h4>
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Marca *</label>
+                                <div className="flex gap-2">
+                                  <select required value={addForm.brand || ''} onChange={(e) => setAddForm({...addForm, brand: e.target.value})}
+                                    className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white">
+                                    <option value="">Seleccionar marca...</option>
+                                    {[...defaultBrands, ...customBrands].sort().map(b => <option key={b} value={b}>{b}</option>)}
+                                  </select>
+                                  <button type="button" onClick={() => setShowAddBrand(v => !v)}
+                                    className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-accent hover:bg-accent-light transition-colors text-lg leading-none" title="Agregar marca">+</button>
+                                </div>
+                                {showAddBrand && (
+                                  <div className="flex gap-2 mt-2">
+                                    <input type="text" value={newBrandInput} onChange={(e) => setNewBrandInput(e.target.value)}
+                                      placeholder="Nueva marca..."
+                                      className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
+                                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const t = newBrandInput.trim(); if (t && ![...defaultBrands, ...customBrands].includes(t)) setCustomBrands(p => [...p, t]); if (t) setAddForm({...addForm, brand: t}); setNewBrandInput(''); setShowAddBrand(false) }}} />
+                                    <button type="button" onClick={() => { const t = newBrandInput.trim(); if (t && ![...defaultBrands, ...customBrands].includes(t)) setCustomBrands(p => [...p, t]); if (t) setAddForm({...addForm, brand: t}); setNewBrandInput(''); setShowAddBrand(false) }}
+                                      className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-accent text-white text-sm hover:opacity-90 transition-colors">OK</button>
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Modelo *</label>
+                                <input type="text" required value={addForm.model || ''} onChange={(e) => setAddForm({...addForm, model: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="LaserJet Pro 400, imageRUNNER..." />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Impresora *</label>
+                                <select required value={addForm.printer_type || 'printer'} onChange={(e) => setAddForm({...addForm, printer_type: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white">
+                                  <option value="printer">Solo Impresora</option>
+                                  <option value="multifunction">Multifunción</option>
+                                  <option value="scanner">Solo Scanner</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Condición del Equipo *</label>
+                                <select required value={addForm.equipment_condition || 'new'} onChange={(e) => setAddForm({...addForm, equipment_condition: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white">
+                                  <option value="new">Nuevo</option>
+                                  <option value="used">Usado</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Número de Serie</label>
+                                <input type="text" value={addForm.serial_number || ''} onChange={(e) => setAddForm({...addForm, serial_number: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="ABC123456789" />
+                              </div>
+                              {addForm.equipment_condition === 'used' && (
+                                <div className="mt-5 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                                  <h5 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Contadores Iniciales</h5>
+                                  <div className="space-y-3">
+                                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Contador B/N</label>
+                                      <input type="number" min="0" value={addForm.initial_counter_bw || ''} onChange={(e) => setAddForm({...addForm, initial_counter_bw: parseInt(e.target.value) || 0})}
+                                        className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="0" /></div>
+                                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Contador Color</label>
+                                      <input type="number" min="0" value={addForm.initial_counter_color || ''} onChange={(e) => setAddForm({...addForm, initial_counter_color: parseInt(e.target.value) || 0})}
+                                        className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="0" /></div>
+                                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Contador Total</label>
+                                      <input type="number" min="0" value={addForm.initial_counter_total || ''} onChange={(e) => setAddForm({...addForm, initial_counter_total: parseInt(e.target.value) || 0})}
+                                        className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="0" /></div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">Identificación</h4>
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Asset Tag *</label>
+                                <div className="flex gap-2">
+                                  <input type="text" required value={addForm.asset_tag || ''} onChange={(e) => setAddForm({...addForm, asset_tag: e.target.value})}
+                                    className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="AT0001, PRINT-001..." />
+                                  <button type="button" onClick={() => setAddForm({...addForm, asset_tag: generateAssetTag()})}
+                                    className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-accent text-white text-sm hover:opacity-90 transition-colors">Auto</button>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Estado</label>
+                                <select value={addForm.status || 'active'} onChange={(e) => setAddForm({...addForm, status: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white">
+                                  <option value="active">Activa</option>
+                                  <option value="inactive">Inactiva</option>
+                                  <option value="maintenance">En Mantenimiento</option>
+                                  <option value="retired">Retirada</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Condición</label>
+                                <select value={addForm.condition || 'good'} onChange={(e) => setAddForm({...addForm, condition: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white">
+                                  <option value="excellent">Excelente</option>
+                                  <option value="good">Buena</option>
+                                  <option value="fair">Regular</option>
+                                  <option value="poor">Pobre</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Red y Configuración */}
+                      {activeTab === 'network' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">Configuración de Red</h4>
+                            <div className="space-y-4">
+                              <div><label className="block text-sm font-medium text-gray-700 mb-2">Dirección IP *</label>
+                                <input type="text" required value={addForm.ip || ''} onChange={(e) => setAddForm({...addForm, ip: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="192.168.1.100" /></div>
+                              <div><label className="block text-sm font-medium text-gray-700 mb-2">Hostname</label>
+                                <input type="text" value={addForm.hostname || ''} onChange={(e) => setAddForm({...addForm, hostname: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="printer-office-01" /></div>
+                              <div><label className="block text-sm font-medium text-gray-700 mb-2">Dirección MAC</label>
+                                <input type="text" value={addForm.mac_address || ''} onChange={(e) => setAddForm({...addForm, mac_address: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="AA:BB:CC:DD:EE:FF" /></div>
+                            </div>
+                          </div>
+                          <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">Configuración SNMP</h4>
+                            <div className="space-y-4">
+                              <div><label className="block text-sm font-medium text-gray-700 mb-2">Perfil SNMP</label>
+                                <select value={addForm.snmp_profile || 'generic_v2c'} onChange={(e) => setAddForm({...addForm, snmp_profile: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white">
+                                  <option value="generic_v2c">Genérico v2c</option>
+                                  <option value="hp">HP</option>
+                                  <option value="oki">OKI</option>
+                                  <option value="brother">Brother</option>
+                                  <option value="canon">Canon</option>
+                                  <option value="epson">Epson</option>
+                                </select></div>
+                              <div className="space-y-3">
+                                <label className="flex items-center gap-2.5"><input type="checkbox" checked={addForm.network_capable !== false} onChange={(e) => setAddForm({...addForm, network_capable: e.target.checked})} className="h-4 w-4 border-gray-300 rounded" /><span className="text-sm text-gray-700">Capacidad de Red</span></label>
+                                <label className="flex items-center gap-2.5"><input type="checkbox" checked={addForm.wireless_capable || false} onChange={(e) => setAddForm({...addForm, wireless_capable: e.target.checked})} className="h-4 w-4 border-gray-300 rounded" /><span className="text-sm text-gray-700">Capacidad Inalámbrica</span></label>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Especificaciones */}
+                      {activeTab === 'technical' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">Especificaciones de Impresión</h4>
+                            <div className="space-y-4">
+                              <div><label className="block text-sm font-medium text-gray-700 mb-2">Tecnología de Impresión</label>
+                                <select value={addForm.print_technology || ''} onChange={(e) => setAddForm({...addForm, print_technology: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white">
+                                  <option value="">Seleccionar Tecnología</option>
+                                  <option value="laser">Láser</option>
+                                  <option value="inkjet">Inyección de Tinta</option>
+                                  <option value="led">LED</option>
+                                  <option value="thermal">Térmica</option>
+                                  <option value="dicom">DICOM</option>
+                                </select></div>
+                              <div><label className="block text-sm font-medium text-gray-700 mb-2">Tamaño Máximo de Papel</label>
+                                <select value={addForm.max_paper_size || ''} onChange={(e) => setAddForm({...addForm, max_paper_size: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white">
+                                  <option value="">Seleccionar Tamaño</option>
+                                  <option value="A4">A4</option>
+                                  <option value="A3">A3</option>
+                                  <option value="Letter">Carta</option>
+                                  <option value="Legal">Legal</option>
+                                </select></div>
+                            </div>
+                          </div>
+                          <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">Capacidades</h4>
+                            <div className="space-y-3">
+                              <label className="flex items-center gap-2.5 p-3 border border-gray-100 rounded-lg"><input type="checkbox" checked={addForm.is_color || false} onChange={(e) => setAddForm({...addForm, is_color: e.target.checked})} className="h-4 w-4 border-gray-300 rounded" /><span className="text-sm text-gray-700">Impresión a Color</span></label>
+                              <label className="flex items-center gap-2.5 p-3 border border-gray-100 rounded-lg"><input type="checkbox" checked={addForm.duplex_capable || false} onChange={(e) => setAddForm({...addForm, duplex_capable: e.target.checked})} className="h-4 w-4 border-gray-300 rounded" /><span className="text-sm text-gray-700">Impresión Dúplex (Doble Cara)</span></label>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Ubicación */}
+                      {activeTab === 'location' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">Ubicación Física</h4>
+                            <div className="space-y-4">
+                              <div><label className="block text-sm font-medium text-gray-700 mb-2">Ubicación</label>
+                                <input type="text" value={addForm.location || ''} onChange={(e) => setAddForm({...addForm, location: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="Oficina Principal, Planta 1" /></div>
+                              <div><label className="block text-sm font-medium text-gray-700 mb-2">Edificio</label>
+                                <input type="text" value={addForm.building || ''} onChange={(e) => setAddForm({...addForm, building: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="Edificio Principal, Anexo..." /></div>
+                              <div><label className="block text-sm font-medium text-gray-700 mb-2">Piso</label>
+                                <input type="text" value={addForm.floor || ''} onChange={(e) => setAddForm({...addForm, floor: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="Piso 1, Piso 2..." /></div>
+                            </div>
+                          </div>
+                          <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">Información Organizacional</h4>
+                            <div className="space-y-4">
+                              <div><label className="block text-sm font-medium text-gray-700 mb-2">Departamento</label>
+                                <input type="text" value={addForm.department || ''} onChange={(e) => setAddForm({...addForm, department: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="Administración, IT, Marketing..." /></div>
+                              <div><label className="block text-sm font-medium text-gray-700 mb-2">Sector</label>
+                                <input type="text" value={addForm.sector || ''} onChange={(e) => setAddForm({...addForm, sector: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="Operaciones, Soporte, Ventas..." /></div>
+                              <div><label className="block text-sm font-medium text-gray-700 mb-2">Persona Responsable</label>
+                                <input type="text" value={addForm.responsible_person || ''} onChange={(e) => setAddForm({...addForm, responsible_person: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="Nombre del responsable" /></div>
+                              <div><label className="block text-sm font-medium text-gray-700 mb-2">Centro de Costos</label>
+                                <input type="text" value={addForm.cost_center || ''} onChange={(e) => setAddForm({...addForm, cost_center: e.target.value})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="CC001, CC-ADM-001..." /></div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Propiedad y Fechas */}
+                      {activeTab === 'ownership' && (
+                        <div className="space-y-6">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                              <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">Información de Propiedad</h4>
+                              <div className="space-y-4">
+                                <div><label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Propiedad</label>
+                                  <select value={addForm.ownership_type || 'owned'} onChange={(e) => setAddForm({...addForm, ownership_type: e.target.value})}
+                                    className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white">
+                                    <option value="owned">Propia</option>
+                                    <option value="leased">Arrendada</option>
+                                    <option value="rented">Alquilada</option>
+                                  </select></div>
+                                <div><label className="block text-sm font-medium text-gray-700 mb-2">Proveedor</label>
+                                  <input type="text" value={addForm.supplier || ''} onChange={(e) => setAddForm({...addForm, supplier: e.target.value})}
+                                    className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="Nombre del proveedor" /></div>
+                                <div><label className="block text-sm font-medium text-gray-700 mb-2">Contrato</label>
+                                  <input type="text" value={addForm.lease_contract || ''} onChange={(e) => setAddForm({...addForm, lease_contract: e.target.value})}
+                                    className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="Número de contrato (si aplica)" /></div>
+                              </div>
+                            </div>
+                            <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                              <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">Fechas Importantes</h4>
+                              <div className="space-y-4">
+                                <div><label className="block text-sm font-medium text-gray-700 mb-2">Fecha de Compra</label>
+                                  <input type="date" value={addForm.purchase_date ? new Date(addForm.purchase_date).toISOString().split('T')[0] : ''} onChange={(e) => setAddForm({...addForm, purchase_date: e.target.value})}
+                                    className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" /></div>
+                                <div><label className="block text-sm font-medium text-gray-700 mb-2">Fecha de Instalación</label>
+                                  <input type="date" value={addForm.installation_date ? new Date(addForm.installation_date).toISOString().split('T')[0] : ''} onChange={(e) => setAddForm({...addForm, installation_date: e.target.value})}
+                                    className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" /></div>
+                                <div><label className="block text-sm font-medium text-gray-700 mb-2">Vencimiento de Garantía</label>
+                                  <input type="date" value={addForm.warranty_expiry ? new Date(addForm.warranty_expiry).toISOString().split('T')[0] : ''} onChange={(e) => setAddForm({...addForm, warranty_expiry: e.target.value})}
+                                    className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" /></div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">Notas Adicionales</h4>
+                            <textarea value={addForm.notes || ''} onChange={(e) => setAddForm({...addForm, notes: e.target.value})} rows={4}
+                              className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
+                              placeholder="Información adicional, configuraciones especiales, observaciones..." />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Insumos */}
+                      {activeTab === 'supplies' && (
+                        <div className="space-y-6">
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <span className="text-sm text-gray-500">{addForm.is_color ? 'Impresora a color — se muestran todos los tóners' : 'Impresora monocromática — solo tóner negro'}</span>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                              <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">Códigos de Tóner</h4>
+                              <div className="space-y-4">
+                                <div><label className="block text-sm font-medium text-gray-700 mb-2">Tóner Negro</label>
+                                  <input type="text" value={addForm.toner_black_code || ''} onChange={(e) => setAddForm({...addForm, toner_black_code: e.target.value})}
+                                    className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="HP 85A, TN-2410, C-EXV33..." /></div>
+                                {addForm.is_color && (<>
+                                  <div><label className="block text-sm font-medium text-gray-700 mb-2">Tóner Cian</label>
+                                    <input type="text" value={addForm.toner_cyan_code || ''} onChange={(e) => setAddForm({...addForm, toner_cyan_code: e.target.value})}
+                                      className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="HP 201A, TN-245C..." /></div>
+                                  <div><label className="block text-sm font-medium text-gray-700 mb-2">Tóner Magenta</label>
+                                    <input type="text" value={addForm.toner_magenta_code || ''} onChange={(e) => setAddForm({...addForm, toner_magenta_code: e.target.value})}
+                                      className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="HP 201A, TN-245M..." /></div>
+                                  <div><label className="block text-sm font-medium text-gray-700 mb-2">Tóner Amarillo</label>
+                                    <input type="text" value={addForm.toner_yellow_code || ''} onChange={(e) => setAddForm({...addForm, toner_yellow_code: e.target.value})}
+                                      className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="HP 201A, TN-245Y..." /></div>
+                                </>)}
+                              </div>
+                            </div>
+                            <div className="border border-gray-100 border-l-2 border-l-accent rounded-lg p-5">
+                              <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-4">Otros Insumos</h4>
+                              <textarea value={addForm.other_supplies || ''} onChange={(e) => setAddForm({...addForm, other_supplies: e.target.value})} rows={8}
+                                className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white"
+                                placeholder={"Tambores, fusores, kits de mantenimiento...\n\nEjemplo:\n- Tambor: DR-2400\n- Fusor: RM1-6319"} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex justify-end items-center pt-5 border-t border-gray-100 gap-3">
+                      <button type="button" onClick={handleAddCancel} className="px-4 py-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors">Cancelar</button>
+                      <button type="submit" className="px-5 py-1.5 rounded-full border border-accent text-accent text-sm font-medium hover:bg-accent-light transition-colors">Agregar</button>
+                    </div>
+                  </form>
+                </div>
               </div>
             </div>
           )}
@@ -3624,80 +3914,106 @@ export default function Printers() {
           {/* Bulk Actions Modal */}
           {showBulkActionsModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
-              <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 animate-fadeIn">
-                <div className="px-6 py-4 border-b border-gray-200">
-                  <h2 className="text-xl font-semibold text-gray-900">Acciones Masivas</h2>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {selectedPrinters.length} impresora{selectedPrinters.length !== 1 ? 's' : ''} seleccionada{selectedPrinters.length !== 1 ? 's' : ''}
-                  </p>
+              <div className="bg-white rounded-xl shadow-xl max-w-sm w-full mx-4 animate-fadeIn">
+                {/* Header */}
+                <div className="px-6 pt-6 pb-4 flex justify-between items-start">
+                  <div>
+                    <h2 className="text-base font-semibold text-gray-900">Acciones masivas</h2>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {selectedPrinters.length} impresora{selectedPrinters.length !== 1 ? 's' : ''} seleccionada{selectedPrinters.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowBulkActionsModal(false)}
+                    className="text-gray-300 hover:text-gray-500 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
 
-                <div className="p-6">
-                  <div className="space-y-3">
-                    <button
-                      onClick={() => executeBulkAction('change_status')}
-                      disabled={bulkActionInProgress}
-                      className="w-full text-left px-4 py-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors flex items-center space-x-3"
-                    >
-                      <span className="text-blue-600">🔄</span>
-                      <div>
-                        <div className="font-medium text-blue-900">Cambiar Estado</div>
-                        <div className="text-sm text-blue-600">Actualizar el estado de todas las impresoras seleccionadas</div>
-                      </div>
-                    </button>
+                <div className="border-t border-gray-100 mx-6" />
 
-                    <button
-                      onClick={() => executeBulkAction('change_location')}
-                      disabled={bulkActionInProgress}
-                      className="w-full text-left px-4 py-3 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg transition-colors flex items-center space-x-3"
-                    >
-                      <span className="text-green-600">📍</span>
-                      <div>
-                        <div className="font-medium text-green-900">Cambiar Ubicación</div>
-                        <div className="text-sm text-green-600">Asignar una nueva ubicación a todas las impresoras</div>
-                      </div>
-                    </button>
+                <div className="p-4 space-y-1.5">
+                  <button
+                    onClick={() => executeBulkAction('change_status')}
+                    disabled={bulkActionInProgress}
+                    className="w-full text-left px-4 py-3 rounded-lg border border-gray-100 hover:border-gray-200 hover:bg-gray-50 transition-colors flex items-center gap-3 disabled:opacity-50"
+                  >
+                    <div className="w-8 h-8 flex items-center justify-center rounded-md bg-blue-50 flex-shrink-0">
+                      <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-gray-800">Cambiar estado</div>
+                      <div className="text-xs text-gray-400 mt-0.5">Actualizar el estado de todas las seleccionadas</div>
+                    </div>
+                  </button>
 
-                    <button
-                      onClick={() => executeBulkAction('export_selected')}
-                      disabled={bulkActionInProgress}
-                      className="w-full text-left px-4 py-3 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors flex items-center space-x-3"
-                    >
-                      <span className="text-purple-600">📊</span>
-                      <div>
-                        <div className="font-medium text-purple-900">Exportar Seleccionadas</div>
-                        <div className="text-sm text-purple-600">Descargar un archivo CSV con las impresoras seleccionadas</div>
-                      </div>
-                    </button>
+                  <button
+                    onClick={() => executeBulkAction('change_location')}
+                    disabled={bulkActionInProgress}
+                    className="w-full text-left px-4 py-3 rounded-lg border border-gray-100 hover:border-gray-200 hover:bg-gray-50 transition-colors flex items-center gap-3 disabled:opacity-50"
+                  >
+                    <div className="w-8 h-8 flex items-center justify-center rounded-md bg-emerald-50 flex-shrink-0">
+                      <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-gray-800">Cambiar ubicación</div>
+                      <div className="text-xs text-gray-400 mt-0.5">Asignar una nueva ubicación a todas</div>
+                    </div>
+                  </button>
 
-                    <button
-                      onClick={() => executeBulkAction('delete_selected')}
-                      disabled={bulkActionInProgress}
-                      className="w-full text-left px-4 py-3 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors flex items-center space-x-3"
-                    >
-                      <span className="text-red-600">🗑️</span>
-                      <div>
-                        <div className="font-medium text-red-900">Eliminar Seleccionadas</div>
-                        <div className="text-sm text-red-600">Eliminar permanentemente las impresoras seleccionadas</div>
-                      </div>
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => executeBulkAction('export_selected')}
+                    disabled={bulkActionInProgress}
+                    className="w-full text-left px-4 py-3 rounded-lg border border-gray-100 hover:border-gray-200 hover:bg-gray-50 transition-colors flex items-center gap-3 disabled:opacity-50"
+                  >
+                    <div className="w-8 h-8 flex items-center justify-center rounded-md bg-violet-50 flex-shrink-0">
+                      <svg className="w-4 h-4 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-gray-800">Exportar seleccionadas</div>
+                      <div className="text-xs text-gray-400 mt-0.5">Descargar CSV con las impresoras seleccionadas</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => executeBulkAction('delete_selected')}
+                    disabled={bulkActionInProgress}
+                    className="w-full text-left px-4 py-3 rounded-lg border border-red-100 hover:border-red-200 hover:bg-red-50 transition-colors flex items-center gap-3 disabled:opacity-50"
+                  >
+                    <div className="w-8 h-8 flex items-center justify-center rounded-md bg-red-50 flex-shrink-0">
+                      <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-red-600">Eliminar seleccionadas</div>
+                      <div className="text-xs text-red-400 mt-0.5">Eliminar permanentemente las impresoras</div>
+                    </div>
+                  </button>
 
                   {bulkActionInProgress && (
-                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <div className="flex items-center space-x-2">
-                        <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-                        <span className="text-blue-800 text-sm font-medium">Ejecutando acción masiva...</span>
-                      </div>
+                    <div className="mt-2 p-3 bg-gray-50 border border-gray-100 rounded-lg flex items-center gap-2">
+                      <div className="animate-spin h-3.5 w-3.5 border-2 border-gray-400 border-t-transparent rounded-full flex-shrink-0"></div>
+                      <span className="text-gray-500 text-xs">Ejecutando acción...</span>
                     </div>
                   )}
                 </div>
 
-                <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+                <div className="px-4 pb-4 flex justify-end">
                   <button
                     onClick={() => setShowBulkActionsModal(false)}
                     disabled={bulkActionInProgress}
-                    className="bg-gray-300 hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed text-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                    className="px-4 py-1.5 text-sm text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
                   >
                     Cancelar
                   </button>

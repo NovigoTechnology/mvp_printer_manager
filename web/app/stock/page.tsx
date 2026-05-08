@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 
@@ -166,35 +166,35 @@ function ProductModal({ isOpen, onClose, onSave, product, locations }: ProductMo
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-screen overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-2xl max-h-screen overflow-y-auto">
+        <h2 className="text-base font-semibold text-accent mb-5">
           {product ? 'Editar Producto' : 'Nuevo Producto'}
         </h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">
                 Código del Producto *
               </label>
               <input
                 type="text"
                 value={formData.item_code}
                 onChange={(e) => setFormData({ ...formData, item_code: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
                 required
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">
                 Nombre del Producto *
               </label>
               <input
                 type="text"
                 value={formData.item_name}
                 onChange={(e) => setFormData({ ...formData, item_name: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
                 required
               />
             </div>
@@ -202,13 +202,13 @@ function ProductModal({ isOpen, onClose, onSave, product, locations }: ProductMo
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">
                 Tipo *
               </label>
               <select
                 value={formData.item_type}
                 onChange={(e) => setFormData({ ...formData, item_type: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
                 required
               >
                 <option value="toner">Tóner</option>
@@ -219,39 +219,39 @@ function ProductModal({ isOpen, onClose, onSave, product, locations }: ProductMo
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">
                 Marca
               </label>
               <input
                 type="text"
                 value={formData.brand}
                 onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">
                 Modelo
               </label>
               <input
                 type="text"
                 value={formData.model}
                 onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">
                 Unidad de Medida
               </label>
               <select
                 value={formData.unit_of_measure}
                 onChange={(e) => setFormData({ ...formData, unit_of_measure: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
               >
                 <option value="unidad">Unidad</option>
                 <option value="resma">Resma</option>
@@ -264,59 +264,59 @@ function ProductModal({ isOpen, onClose, onSave, product, locations }: ProductMo
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
               Descripción
             </label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
               rows={2}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
               Impresoras Compatibles
             </label>
             <input
               type="text"
               value={formData.compatible_printers}
               onChange={(e) => setFormData({ ...formData, compatible_printers: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
               placeholder="Ej: HP LaserJet Pro M404, M428"
             />
           </div>
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">
                 Stock Mínimo
               </label>
               <input
                 type="number"
                 value={formData.minimum_stock}
                 onChange={(e) => setFormData({ ...formData, minimum_stock: parseInt(e.target.value) || 0 })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
                 min="0"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">
                 Stock Máximo
               </label>
               <input
                 type="number"
                 value={formData.maximum_stock}
                 onChange={(e) => setFormData({ ...formData, maximum_stock: parseInt(e.target.value) || 0 })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
                 min="0"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">
                 Costo Unitario ($)
               </label>
               <input
@@ -324,7 +324,7 @@ function ProductModal({ isOpen, onClose, onSave, product, locations }: ProductMo
                 step="0.01"
                 value={formData.cost_per_unit}
                 onChange={(e) => setFormData({ ...formData, cost_per_unit: parseFloat(e.target.value) || 0 })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
                 min="0"
               />
             </div>
@@ -332,38 +332,38 @@ function ProductModal({ isOpen, onClose, onSave, product, locations }: ProductMo
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">
                 Proveedor
               </label>
               <input
                 type="text"
                 value={formData.supplier}
                 onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">
                 Código del Proveedor
               </label>
               <input
                 type="text"
                 value={formData.supplier_code}
                 onChange={(e) => setFormData({ ...formData, supplier_code: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
               Ubicación de Almacenamiento
             </label>
             <select
               value={formData.storage_location_id}
               onChange={(e) => setFormData({ ...formData, storage_location_id: parseInt(e.target.value) })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
             >
               {locations.map((location) => (
                 <option key={location.id} value={location.id}>
@@ -377,13 +377,13 @@ function ProductModal({ isOpen, onClose, onSave, product, locations }: ProductMo
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-accent text-white rounded-md hover:opacity-90"
+              className="px-5 py-2 rounded-full bg-accent text-white text-sm font-medium hover:opacity-90"
             >
               {product ? 'Actualizar' : 'Crear'} Producto
             </button>
@@ -444,31 +444,31 @@ function LocationModal({ isOpen, onClose, onSave }: LocationModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">Nueva Ubicación</h2>
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md">
+        <h2 className="text-base font-semibold text-accent mb-5">Nueva Ubicación</h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
               Nombre *
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
               Tipo *
             </label>
             <select
               value={formData.location_type}
               onChange={(e) => setFormData({ ...formData, location_type: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
               required
             >
               <option value="warehouse">Depósito</option>
@@ -479,38 +479,38 @@ function LocationModal({ isOpen, onClose, onSave }: LocationModalProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
               Descripción
             </label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
               rows={2}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
               Dirección
             </label>
             <input
               type="text"
               value={formData.address}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
               Responsable
             </label>
             <input
               type="text"
               value={formData.responsible_person}
               onChange={(e) => setFormData({ ...formData, responsible_person: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
             />
           </div>
 
@@ -518,13 +518,13 @@ function LocationModal({ isOpen, onClose, onSave }: LocationModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-accent text-white rounded-md hover:opacity-90"
+              className="px-5 py-2 rounded-full bg-accent text-white text-sm font-medium hover:opacity-90"
             >
               Crear Ubicación
             </button>
@@ -612,14 +612,14 @@ function MovementModal({ isOpen, onClose, onSave, items, locations, preselectedI
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md">
+        <h2 className="text-base font-semibold text-accent mb-5">
           {preselectedItem ? `Movimiento - ${preselectedItem.item_name}` : 'Nuevo Movimiento'}
         </h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
               Producto *
             </label>
             <select
@@ -632,7 +632,7 @@ function MovementModal({ isOpen, onClose, onSave, items, locations, preselectedI
                   unit_cost: selectedItem ? selectedItem.cost_per_unit : 0
                 });
               }}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
               required
               disabled={!!preselectedItem}
             >
@@ -651,13 +651,13 @@ function MovementModal({ isOpen, onClose, onSave, items, locations, preselectedI
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
               Tipo de Movimiento *
             </label>
             <select
               value={formData.movement_type}
               onChange={(e) => setFormData({ ...formData, movement_type: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
               required
             >
               <option value="in">Entrada</option>
@@ -669,21 +669,21 @@ function MovementModal({ isOpen, onClose, onSave, items, locations, preselectedI
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">
                 Cantidad *
               </label>
               <input
                 type="number"
                 value={formData.quantity}
                 onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 1 })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
                 min="1"
                 required
               />
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">
                 Costo Unitario ($)
               </label>
               <input
@@ -691,7 +691,7 @@ function MovementModal({ isOpen, onClose, onSave, items, locations, preselectedI
                 step="0.01"
                 value={formData.unit_cost}
                 onChange={(e) => setFormData({ ...formData, unit_cost: parseFloat(e.target.value) || 0 })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
                 min="0"
               />
             </div>
@@ -699,13 +699,13 @@ function MovementModal({ isOpen, onClose, onSave, items, locations, preselectedI
 
           {formData.movement_type === 'out' || formData.movement_type === 'transfer' ? (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">
                 Ubicación Origen
               </label>
               <select
                 value={formData.source_location_id}
                 onChange={(e) => setFormData({ ...formData, source_location_id: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
               >
                 <option value="">Seleccionar ubicación</option>
                 {locations.map((location) => (
@@ -719,13 +719,13 @@ function MovementModal({ isOpen, onClose, onSave, items, locations, preselectedI
 
           {formData.movement_type === 'in' || formData.movement_type === 'transfer' ? (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">
                 Ubicación Destino
               </label>
               <select
                 value={formData.destination_location_id}
                 onChange={(e) => setFormData({ ...formData, destination_location_id: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
               >
                 <option value="">Seleccionar ubicación</option>
                 {locations.map((location) => (
@@ -738,26 +738,26 @@ function MovementModal({ isOpen, onClose, onSave, items, locations, preselectedI
           ) : null}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
               Movido por *
             </label>
             <input
               type="text"
               value={formData.moved_by}
               onChange={(e) => setFormData({ ...formData, moved_by: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
               Notas
             </label>
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:ring-accent focus:border-accent"
               rows={2}
             />
           </div>
@@ -766,13 +766,13 @@ function MovementModal({ isOpen, onClose, onSave, items, locations, preselectedI
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+              className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-accent text-white rounded-md hover:opacity-90"
+              className="px-5 py-2 rounded-full bg-accent text-white text-sm font-medium hover:opacity-90"
             >
               Crear Movimiento
             </button>
@@ -892,7 +892,7 @@ export default function StockPage() {
   const getStockStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'low': return 'text-red-600 bg-red-50';
-      case 'high': return 'text-blue-600 bg-blue-50';
+      case 'high': return 'text-accent bg-accent-light';
       default: return 'text-green-600 bg-green-50';
     }
   };
@@ -915,36 +915,35 @@ export default function StockPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       <div className="max-w-full mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Control de Stock</h1>
-            <p className="text-gray-600 mt-2">
-              Gestión de inventario de insumos, tóner, papel y repuestos
-            </p>
+        <div className="px-4 py-8 sm:px-0">
+          <div className="mb-8 flex items-end justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-accent mb-1">Inventario</p>
+              <h1 className="text-2xl font-semibold text-gray-900">Control de Stock</h1>
+            </div>
           </div>
 
         {/* Tabs */}
         <div className="mb-6">
-          <div className="border-b border-gray-200">
+          <div className="border-b border-gray-100">
             <nav className="-mb-px flex space-x-8">
               {[
-                { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-                { id: 'items', label: 'Productos', icon: '📦' },
-                { id: 'locations', label: 'Ubicaciones', icon: '🏢' },
-                { id: 'movements', label: 'Movimientos', icon: '📋' }
+                { id: 'dashboard', label: 'Dashboard' },
+                { id: 'items', label: 'Productos' },
+                { id: 'locations', label: 'Ubicaciones' },
+                { id: 'movements', label: 'Movimientos' }
               ].map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
                     activeTab === tab.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-accent text-accent'
+                      : 'border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200'
                   }`}
                 >
-                  <span className="mr-2">{tab.icon}</span>
                   {tab.label}
                 </button>
               ))}
@@ -959,65 +958,35 @@ export default function StockPage() {
               <>
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="bg-white rounded-lg shadow p-6">
-                    <div className="flex items-center">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-600">Total Productos</p>
-                        <p className="text-2xl font-semibold text-gray-900">{stockSummary.total_items}</p>
-                      </div>
-                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                        📦
-                      </div>
-                    </div>
+                  <div className="bg-white rounded-xl border border-gray-100 p-5 border-l-4 border-l-accent">
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Total Productos</p>
+                    <p className="text-3xl font-bold text-gray-900">{stockSummary.total_items}</p>
                   </div>
 
-                  <div className="bg-white rounded-lg shadow p-6">
-                    <div className="flex items-center">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-600">Stock Bajo</p>
-                        <p className="text-2xl font-semibold text-red-600">{stockSummary.low_stock_items}</p>
-                      </div>
-                      <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                        ⚠️
-                      </div>
-                    </div>
+                  <div className="bg-white rounded-xl border border-gray-100 p-5 border-l-4 border-l-red-400">
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Stock Bajo</p>
+                    <p className="text-3xl font-bold text-red-500">{stockSummary.low_stock_items}</p>
                   </div>
 
-                  <div className="bg-white rounded-lg shadow p-6">
-                    <div className="flex items-center">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-600">Valor Total</p>
-                        <p className="text-2xl font-semibold text-green-600">
-                          {formatCurrency(stockSummary.total_stock_value)}
-                        </p>
-                      </div>
-                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                        💰
-                      </div>
-                    </div>
+                  <div className="bg-white rounded-xl border border-gray-100 p-5 border-l-4 border-l-emerald-400">
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Valor Total</p>
+                    <p className="text-3xl font-bold text-gray-900">{formatCurrency(stockSummary.total_stock_value)}</p>
                   </div>
 
-                  <div className="bg-white rounded-lg shadow p-6">
-                    <div className="flex items-center">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-600">Movimientos (7d)</p>
-                        <p className="text-2xl font-semibold text-gray-900">{stockSummary.recent_movements_7days}</p>
-                      </div>
-                      <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                        🔄
-                      </div>
-                    </div>
+                  <div className="bg-white rounded-xl border border-gray-100 p-5 border-l-4 border-l-violet-400">
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Movimientos (7d)</p>
+                    <p className="text-3xl font-bold text-gray-900">{stockSummary.recent_movements_7days}</p>
                   </div>
                 </div>
 
                 {/* Items by Type */}
-                <div className="bg-white rounded-lg shadow p-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Productos por Tipo</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white rounded-xl border border-gray-100 p-5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Productos por Tipo</p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {stockSummary.items_by_type.map((item, index) => (
-                      <div key={index} className="text-center p-4 bg-gray-50 rounded-lg">
-                        <p className="text-sm text-gray-600 capitalize">{item.type}</p>
-                        <p className="text-xl font-semibold text-gray-900">{item.count}</p>
+                      <div key={index} className="p-4 rounded-xl border border-gray-100 bg-gray-50/40">
+                        <p className="text-xs text-gray-400 capitalize mb-1">{item.type}</p>
+                        <p className="text-2xl font-bold text-gray-800">{item.count}</p>
                       </div>
                     ))}
                   </div>
@@ -1030,15 +999,15 @@ export default function StockPage() {
         {/* Items Tab */}
         {activeTab === 'items' && (
           <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow">
-              <div className="p-6 border-b border-gray-200">
+            <div className="bg-white rounded-xl border border-gray-100">
+              <div className="px-6 py-4 border-b border-gray-100">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-medium text-gray-900">Productos en Stock</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">Productos en Stock</h3>
                   <div className="flex space-x-3">
                     <select
                       value={selectedItemType}
                       onChange={(e) => setSelectedItemType(e.target.value)}
-                      className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+                      className="border border-accent rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white"
                     >
                       <option value="">Todos los tipos</option>
                       <option value="toner">Tóner</option>
@@ -1048,9 +1017,9 @@ export default function StockPage() {
                     </select>
                     <button
                       onClick={() => setShowItemModal(true)}
-                      className="bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
+                      className="bg-accent text-white px-4 py-1.5 rounded-full text-sm font-medium hover:opacity-90"
                     >
-                      ➕ Nuevo Producto
+                      + Nuevo Producto
                     </button>
                   </div>
                 </div>
@@ -1058,30 +1027,30 @@ export default function StockPage() {
 
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gray-50/50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Código
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Producto
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Tipo
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Stock Actual
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Min/Max
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Estado
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Costo Unitario
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Acciones
                       </th>
                     </tr>
@@ -1090,7 +1059,7 @@ export default function StockPage() {
                     {stockItems.map((item) => {
                       const status = getStockStatus(item);
                       return (
-                        <tr key={item.id} className="hover:bg-gray-50">
+                        <tr key={item.id} className="hover:bg-gray-50/60">
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             {item.item_code}
                           </td>
@@ -1123,7 +1092,7 @@ export default function StockPage() {
                                 setEditingItem(item);
                                 setShowItemModal(true);
                               }}
-                              className="text-blue-600 hover:text-blue-900 mr-3"
+                              className="text-accent hover:opacity-70 mr-3"
                             >
                               ✏️
                             </button>
@@ -1150,43 +1119,43 @@ export default function StockPage() {
         {/* Locations Tab */}
         {activeTab === 'locations' && (
           <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow">
-              <div className="p-6 border-b border-gray-200">
+            <div className="bg-white rounded-xl border border-gray-100">
+              <div className="px-6 py-4 border-b border-gray-100">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-medium text-gray-900">Ubicaciones de Stock</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">Ubicaciones de Stock</h3>
                   <button
                     onClick={() => setShowLocationModal(true)}
-                    className="bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
+                    className="bg-accent text-white px-4 py-1.5 rounded-full text-sm font-medium hover:opacity-90"
                   >
-                    ➕ Nueva Ubicación
+                    + Nueva Ubicación
                   </button>
                 </div>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gray-50/50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Nombre
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Tipo
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Dirección
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Responsable
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Creado
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {stockLocations.map((location) => (
-                      <tr key={location.id} className="hover:bg-gray-50">
+                      <tr key={location.id} className="hover:bg-gray-50/60">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
                             <div className="text-sm font-medium text-gray-900">{location.name}</div>
@@ -1219,16 +1188,16 @@ export default function StockPage() {
         {/* Movements Tab */}
         {activeTab === 'movements' && (
           <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow">
-              <div className="p-6 border-b border-gray-200">
+            <div className="bg-white rounded-xl border border-gray-100">
+              <div className="px-6 py-4 border-b border-gray-100">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-medium text-gray-900">Movimientos de Stock</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">Movimientos de Stock</h3>
                   <button
                     onClick={() => {
                       setSelectedItemForMovement(null);
                       setShowMovementModal(true);
                     }}
-                    className="bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:opacity-90"
+                    className="bg-accent text-white px-4 py-1.5 rounded-full text-sm font-medium hover:opacity-90"
                   >
                     ➕ Nuevo Movimiento
                   </button>
@@ -1237,34 +1206,34 @@ export default function StockPage() {
 
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gray-50/50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Fecha
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Producto
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Tipo
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Cantidad
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Origen/Destino
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Movido por
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                         Costo Total
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {stockMovements.map((movement) => (
-                      <tr key={movement.id} className="hover:bg-gray-50">
+                      <tr key={movement.id} className="hover:bg-gray-50/60">
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {formatDate(movement.movement_date)}
                         </td>
@@ -1278,7 +1247,7 @@ export default function StockPage() {
                           <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                             movement.movement_type === 'in' ? 'bg-green-100 text-green-800' :
                             movement.movement_type === 'out' ? 'bg-red-100 text-red-800' :
-                            movement.movement_type === 'transfer' ? 'bg-blue-100 text-blue-800' :
+                            movement.movement_type === 'transfer' ? 'bg-accent-light text-accent' :
                             'bg-yellow-100 text-yellow-800'
                           }`}>
                             {movement.movement_type === 'in' ? 'Entrada' :
@@ -1380,7 +1349,7 @@ export default function StockPage() {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6">
               <div className="flex items-center space-x-3">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-accent"></div>
                 <span>Cargando...</span>
               </div>
             </div>

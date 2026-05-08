@@ -403,6 +403,21 @@
   .border-accent {
     border-color: var(--accent-color);
   }
+
+  .border-l-accent {
+    border-left-color: var(--accent-color);
+  }
+
+  .focus\:ring-accent:focus {
+    --tw-ring-color: var(--accent-color);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 25%, transparent);
+    outline: none;
+  }
+
+  .focus\:border-accent:focus {
+    border-color: var(--accent-color);
+    outline: none;
+  }
   
   .hover\:bg-accent:hover {
     background-color: var(--accent-color);
@@ -415,4 +430,41 @@
   .dark .bg-accent-light {
     background-color: color-mix(in srgb, var(--accent-color) 20%, transparent);
   }
+}
+
+/* Select & input field typography polish */
+select option {
+  font-size: 0.8125rem; /* 13px */
+  color: #374151; /* gray-700 */
+  font-weight: 400;
+  padding: 6px 8px;
+  background-color: #ffffff;
+}
+
+select option:hover,
+select option:checked {
+  background-color: color-mix(in srgb, var(--accent-color) 10%, white);
+  color: var(--accent-color);
+}
+
+/* Checkbox accent color */
+input[type="checkbox"] {
+  accent-color: var(--accent-color);
+}
+
+/* Remove gray background from all select fields */
+select,
+select option {
+  background-color: #ffffff;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 0.8125rem;
+}
+
+/* Override browser default blue focus outline on form fields */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 25%, transparent);
+  border-color: var(--accent-color);
 }
