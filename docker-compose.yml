@@ -9,11 +9,21 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   api:
     build: ./api
@@ -30,8 +40,10 @@ services:
       DRYPIX_PASSWORD: ${DRYPIX_PASSWORD:-fujifilm}
       SNMP_CONFIG_PATH: ${SNMP_CONFIG_PATH:-/app/config/snmp_credentials.json}
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./api:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -43,7 +55,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_BASE: http://localhost:8000
+      NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://localhost:8000}
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
     depends_on:

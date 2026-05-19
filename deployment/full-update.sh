@@ -71,14 +71,14 @@ echo ""
 
 # 5. Rebuild completo
 echo "🔨 Reconstruyendo imágenes Docker (esto puede tardar varios minutos)..."
-docker compose build --no-cache api
-docker compose build --no-cache web
+docker compose --env-file .env.production build --no-cache api
+docker compose --env-file .env.production build --no-cache web
 echo "✅ Imágenes reconstruidas"
 echo ""
 
 # 6. Iniciar servicios
 echo "▶️  Iniciando servicios..."
-docker compose up -d
+docker compose --env-file .env.production up -d
 echo "✅ Servicios iniciados"
 echo ""
 
