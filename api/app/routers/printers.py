@@ -117,6 +117,7 @@ class PrinterCreate(BaseModel):
     initial_counter_bw: Optional[int] = 0
     initial_counter_color: Optional[int] = 0
     initial_counter_total: Optional[int] = 0
+    ignore_counters: bool = False
     
     # Información adicional
     notes: Optional[str] = None
@@ -176,6 +177,7 @@ class PrinterUpdate(BaseModel):
     initial_counter_bw: Optional[int] = None
     initial_counter_color: Optional[int] = None
     initial_counter_total: Optional[int] = None
+    ignore_counters: Optional[bool] = None
     
     # Información adicional
     notes: Optional[str] = None
@@ -236,6 +238,7 @@ class PrinterResponse(BaseModel):
     initial_counter_bw: Optional[int]
     initial_counter_color: Optional[int]
     initial_counter_total: Optional[int]
+    ignore_counters: bool
     
     # Información adicional
     notes: Optional[str]

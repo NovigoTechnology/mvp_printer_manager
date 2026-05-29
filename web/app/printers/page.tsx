@@ -39,6 +39,7 @@ interface Printer {
   initial_counter_bw: number
   initial_counter_color: number
   initial_counter_total: number
+  ignore_counters?: boolean
   notes?: string
   responsible_person?: string
   cost_center?: string
@@ -1067,6 +1068,31 @@ export default function Printers() {
     } catch (error) {
       console.error('Error updating printer:', error)
       alert('Error al actualizar la impresora')
+    }
+  }
+
+  const toggleIgnoreCounters = async (printer: Printer, ignoreCounters: boolean) => {
+    try {
+      const response = await fetch(`${API_BASE}/printers/${printer.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ignore_counters: ignoreCounters })
+      })
+
+      if (response.ok) {
+        const updated = await response.json()
+        setPrinters(prev => prev.map(p => p.id === printer.id ? updated : p))
+        setSelectedPrinter(updated)
+        if (editingPrinter?.id === printer.id) {
+          setEditingPrinter(updated)
+        }
+      } else {
+        const errorData = await response.json()
+        alert(`No se pudo actualizar la opción de contadores: ${errorData.detail || 'Error desconocido'}`)
+      }
+    } catch (error) {
+      console.error('Error toggling ignore counters:', error)
+      alert('Error al actualizar la opción de contadores')
     }
   }
 
@@ -3074,6 +3100,20 @@ export default function Printers() {
                         <span className="text-gray-700">{selectedPrinter.department}</span>
                       </>
                     )}
+                    {selectedPrinter.status === 'active' && (
+                      <>
+                        <span className="text-gray-400">Toma de contadores</span>
+                        <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                            checked={!!selectedPrinter.ignore_counters}
+                            onChange={(e) => toggleIgnoreCounters(selectedPrinter, e.target.checked)}
+                          />
+                          Ignorar para esta impresora
+                        </label>
+                      </>
+                    )}
                   </div>
 
                   {/* Tags */}
@@ -3667,6 +3707,7 @@ export default function Printers() {
                       hostname: formData.get('hostname') as string,
                       snmp_profile: formData.get('snmp_profile') as string,
                       is_color: formData.get('is_color') === 'true',
+                      ignore_counters: formData.get('ignore_counters') === 'on',
                       location: formData.get('location') as string,
                       sector: formData.get('sector') as string,
                       floor: formData.get('floor') as string,
@@ -3820,6 +3861,21 @@ export default function Printers() {
                             <option value="leased">Arrendado</option>
                             <option value="rented">Alquilado</option>
                           </select>
+                        </div>
+
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                          <label className="inline-flex items-center gap-2 text-sm font-medium text-amber-900 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              name="ignore_counters"
+                              defaultChecked={!!editingPrinter.ignore_counters}
+                              className="h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                            />
+                            Ignorar toma automática de contadores para esta impresora
+                          </label>
+                          <p className="text-xs text-amber-700 mt-1">
+                            Si está activo, esta impresora quedará excluida de las ejecuciones automáticas de contadores.
+                          </p>
                         </div>
 
                         <div>

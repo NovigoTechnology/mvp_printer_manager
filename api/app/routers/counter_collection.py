@@ -173,6 +173,7 @@ def process_single_printer_threaded(printer_dict: Dict, year: int = None, month:
                 db=db,
                 year=year,
                 month=month,
+                location_snapshot=printer_dict.get('location'),
                 previous_counters_cache=previous_counters_cache
             )
             
@@ -390,6 +391,7 @@ def create_or_update_monthly_counter(
     db: Session,
     year: int = None,
     month: int = None,
+    location_snapshot: str = None,
     previous_counters_cache: Dict[int, MonthlyCounter] = None
 ) -> tuple[str, MonthlyCounter]:
     """
@@ -484,6 +486,7 @@ def create_or_update_monthly_counter(
             pages_printed_bw=pages_bw,
             pages_printed_color=pages_color,
             pages_printed_total=pages_total,
+            location_snapshot=location_snapshot,
             notes=f"Contador automático - {now.strftime('%Y-%m-%d %H:%M')}",
             locked=False,  # Por defecto no bloqueado para permitir ajustes
             recorded_at=now
@@ -520,7 +523,10 @@ def collect_all_counters(
     
     try:
         # Obtener impresoras a procesar
-        query = db.query(Printer).filter(Printer.status == "active")
+        query = db.query(Printer).filter(
+            Printer.status == "active",
+            Printer.ignore_counters == False
+        )
         
         # Filtrar por IDs específicos si se proporcionan
         if printer_ids:
@@ -609,7 +615,8 @@ def collect_all_counters(
                 'ip': printer.ip,
                 'brand': printer.brand,
                 'model': printer.model,
-                'snmp_profile': printer.snmp_profile
+                'snmp_profile': printer.snmp_profile,
+                'location': printer.location
             })
         
         # Calcular número óptimo de workers (máximo 10 para no saturar la red)
@@ -717,7 +724,11 @@ def collect_single_printer_counter(
     try:
         # Obtener impresora
         printer = db.query(Printer).filter(
-            and_(Printer.id == printer_id, Printer.status == "active")
+            and_(
+                Printer.id == printer_id,
+                Printer.status == "active",
+                Printer.ignore_counters == False
+            )
         ).first()
         
         if not printer:
@@ -779,7 +790,8 @@ def collect_single_printer_counter(
                 counter_total=counters['total_counter'],
                 db=db,
                 year=year,
-                month=month
+                month=month,
+                location_snapshot=printer.location
             )
             
             result.action_taken = action
@@ -915,6 +927,7 @@ async def create_manual_record(
     try:
         counter_total = counter_total or counter_bw + counter_color
         now = datetime.now()
+        printer = db.query(Printer).filter(Printer.id == printer_id).first()
         
         action, record = create_or_update_monthly_counter(
             printer_id=printer_id,
@@ -923,7 +936,8 @@ async def create_manual_record(
             counter_total=counter_total,
             db=db,
             year=now.year,
-            month=now.month
+            month=now.month,
+            location_snapshot=printer.location if printer else None
         )
         
         if notes and action == "created":

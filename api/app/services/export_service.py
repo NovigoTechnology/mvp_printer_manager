@@ -214,6 +214,63 @@ class ExportService:
         wb.save(buffer)
         buffer.seek(0)
         return buffer
+
+    def export_location_monthly_counters_to_excel(self, rows_data: List[Dict], year: int = None, month: int = None):
+        """Exportar resumen mensual de contadores por ubicación a Excel"""
+        buffer = BytesIO()
+
+        if not rows_data:
+            columns = ['Ubicación', 'Páginas B/N', 'Páginas Color', 'Páginas Totales']
+            df = pd.DataFrame(columns=columns)
+        else:
+            df = pd.DataFrame(rows_data)
+            column_mapping = {
+                'location': 'Ubicación',
+                'total_pages_bw': 'Páginas B/N',
+                'total_pages_color': 'Páginas Color',
+                'total_pages': 'Páginas Totales'
+            }
+            df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns}, inplace=True)
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Contadores x Ubicación"
+
+        period_label = ""
+        if year and month:
+            period_label = f" - {month:02d}/{year}"
+        elif year:
+            period_label = f" - {year}"
+
+        title = f"Resumen Mensual por Ubicación{period_label}"
+        if len(df.columns) > 0:
+            ws.merge_cells(f'A1:{get_column_letter(len(df.columns))}1')
+        else:
+            ws.merge_cells('A1:D1')
+
+        ws['A1'] = title
+        ws['A1'].font = Font(size=16, bold=True)
+        ws['A1'].alignment = self.center_alignment
+        ws['A1'].fill = PatternFill(start_color="ecf0f1", end_color="ecf0f1", fill_type="solid")
+
+        if len(df.columns) > 0:
+            ws.merge_cells(f'A2:{get_column_letter(len(df.columns))}2')
+        else:
+            ws.merge_cells('A2:D2')
+
+        ws['A2'] = f"Generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+        ws['A2'].font = Font(size=10, italic=True)
+        ws['A2'].alignment = self.center_alignment
+
+        for r in dataframe_to_rows(df, index=False, header=True):
+            ws.append(r)
+
+        if len(df.columns) > 0:
+            self._apply_excel_formatting(ws, df, 4)
+
+        wb.save(buffer)
+        buffer.seek(0)
+        return buffer
     
     def export_invoices_to_csv(self, invoices_data: List[Dict]):
         """Exportar facturas a CSV"""

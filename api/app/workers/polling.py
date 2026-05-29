@@ -15,7 +15,7 @@ def poll_all_printers():
     """Poll all printers and save usage reports"""
     db = SessionLocal()
     try:
-        printers = db.query(Printer).all()
+        printers = db.query(Printer).filter(Printer.ignore_counters == False).all()
         snmp_service = SNMPService()
         
         for printer in printers:
@@ -89,6 +89,7 @@ def poll_medical_printers():
         # Get all active DRYPIX printers
         medical_printers = db.query(Printer).filter(
             Printer.status == "active",
+            Printer.ignore_counters == False,
             Printer.model.ilike("%DRYPIX%")
         ).all()
         
@@ -333,19 +334,24 @@ def execute_scheduled_counter_job(schedule_id: int, db: Session):
         
         # Get target printers
         if schedule.target_type == "all":
-            printers = db.query(Printer).filter(Printer.status == "active").all()
+            printers = db.query(Printer).filter(
+                Printer.status == "active",
+                Printer.ignore_counters == False
+            ).all()
         elif schedule.target_type == "selection":
             printer_ids = json.loads(schedule.printer_ids) if schedule.printer_ids else []
             printers = db.query(Printer).filter(
                 Printer.id.in_(printer_ids),
-                Printer.status == "active"
+                Printer.status == "active",
+                Printer.ignore_counters == False
             ).all()
         else:  # single
             printer_ids = json.loads(schedule.printer_ids) if schedule.printer_ids else []
             if printer_ids:
                 printers = db.query(Printer).filter(
                     Printer.id == printer_ids[0],
-                    Printer.status == "active"
+                    Printer.status == "active",
+                    Printer.ignore_counters == False
                 ).all()
             else:
                 printers = []

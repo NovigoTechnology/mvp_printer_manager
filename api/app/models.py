@@ -52,6 +52,7 @@ class Printer(Base):
     initial_counter_bw = Column(Integer, default=0)
     initial_counter_color = Column(Integer, default=0)
     initial_counter_total = Column(Integer, default=0)
+    ignore_counters = Column(Boolean, default=False)
     
     # Información adicional
     notes = Column(Text)
@@ -148,6 +149,7 @@ class MonthlyCounter(Base):
     pages_printed_total = Column(Integer, default=0)
     
     # Additional information
+    location_snapshot = Column(String)  # Printer location when this counter was recorded
     notes = Column(Text)
     locked = Column(Boolean, default=True)  # Locked by default after creation
     recorded_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -526,6 +528,22 @@ class CounterScheduleExecution(Base):
     schedule = relationship("CounterSchedule", back_populates="executions")
 
 
+class CounterLocationExportHistory(Base):
+    __tablename__ = "counter_location_export_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    exported_at = Column(DateTime(timezone=True), server_default=func.now())
+    year = Column(Integer, nullable=True)
+    month = Column(Integer, nullable=True)
+    total_locations = Column(Integer, default=0)
+    total_pages = Column(Integer, default=0)
+    filename = Column(String(255), nullable=True)
+    requested_by = Column(String(100), nullable=True)
+    status = Column(String(20), default="success")  # success, error
+    error_message = Column(Text, nullable=True)
+    filters = Column(Text, nullable=True)  # JSON with request filters
+
+
 class DiscoveryConfig(Base):
     __tablename__ = "discovery_configs"
 
@@ -588,6 +606,7 @@ class CounterReading(Base):
     prints_total_period = Column(Integer, default=0)     # Impresiones totales del período
     
     # Metadatos
+    location_snapshot = Column(String)  # Printer location when this reading was taken
     reading_method = Column(String(20), default="manual") # manual, snmp, automatic
     notes = Column(Text)
     created_by = Column(String(100))
