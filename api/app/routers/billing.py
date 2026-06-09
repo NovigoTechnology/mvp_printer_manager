@@ -59,6 +59,7 @@ class CounterReadingResponse(BaseModel):
     prints_bw_period: int
     prints_color_period: int
     prints_total_period: int
+    location_snapshot: Optional[str] = None
     reading_method: str
     notes: Optional[str]
     created_at: datetime
@@ -269,6 +270,7 @@ def create_counter_reading(
     
     # Crear la lectura
     db_reading = CounterReading(**reading.dict())
+    db_reading.location_snapshot = printer.location
     
     if previous_reading:
         db_reading.counter_bw_previous = previous_reading.counter_bw_current
@@ -571,12 +573,16 @@ def create_snmp_bulk_readings(
         printers = db.query(Printer).filter(
             and_(
                 Printer.id.in_(printer_ids),
-                Printer.status == "active"
+                Printer.status == "active",
+                Printer.ignore_counters == False
             )
         ).all()
     else:
         # Lecturas para todas las impresoras activas
-        printers = db.query(Printer).filter(Printer.status == "active").all()
+        printers = db.query(Printer).filter(
+            Printer.status == "active",
+            Printer.ignore_counters == False
+        ).all()
     
     if not printers:
         raise HTTPException(
@@ -680,6 +686,7 @@ def create_snmp_bulk_readings(
                 counter_bw_current=counter_bw_current,
                 counter_color_current=counter_color_current,
                 counter_total_current=counter_total_current,
+                location_snapshot=printer.location,
                 reading_method="snmp_automatic",
                 notes=f"Lectura automática SNMP - Estado: {snmp_data.get('status', 'unknown')}"
             )
@@ -833,6 +840,7 @@ def create_snmp_single_reading(
         counter_bw_current=counter_bw_current,
         counter_color_current=counter_color_current,
         counter_total_current=counter_total_current,
+        location_snapshot=printer.location,
         reading_method="snmp_automatic",
         notes=f"Lectura automática SNMP - Estado: {snmp_data.get('status', 'unknown')}"
     )
@@ -923,6 +931,10 @@ def get_snmp_readings_for_contract(
             if not printer or not printer.ip:
                 errors.append(f"Impresora {cp.printer_id}: IP no configurada")
                 continue
+
+            if printer.ignore_counters:
+                errors.append(f"Impresora {printer.ip}: configurada para ignorar contadores")
+                continue
             
             # Obtener contadores SNMP
             counters = snmp_service.get_printer_counters(printer.ip)
@@ -953,6 +965,7 @@ def get_snmp_readings_for_contract(
                     counter_bw_current=counters.get('bw_total', 0),
                     counter_color_current=counters.get('color_total', 0),
                     counter_total_current=counters.get('total_pages', 0),
+                    location_snapshot=printer.location,
                     reading_method="snmp_auto",
                     notes="Lectura automática vía SNMP"
                 )
@@ -1074,6 +1087,7 @@ def get_snmp_reading_for_printer(
             counter_bw_current=counters.get('bw_total', 0),
             counter_color_current=counters.get('color_total', 0),
             counter_total_current=counters.get('total_pages', 0),
+            location_snapshot=printer.location,
             reading_method="snmp_auto",
             notes="Lectura automática vía SNMP"
         )
@@ -1464,7 +1478,7 @@ def export_readings_excel(
         reading_dict = {
             'printer_id': reading.printer_id,
             'printer_ip': printer.ip if printer else '',
-            'printer_location': printer.location if printer else '',
+            'printer_location': reading.location_snapshot or (printer.location if printer else ''),
             'contract_id': contract.id if contract else '',
             'contract_name': contract.contract_name if contract else '',
             'reading_date': reading.reading_date.strftime('%Y-%m-%d') if reading.reading_date else '',

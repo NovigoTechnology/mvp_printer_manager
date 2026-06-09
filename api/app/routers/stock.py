@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 from sqlalchemy import func, and_, or_
 from typing import List, Optional
 from datetime import datetime, date
@@ -233,16 +233,18 @@ def list_stock_movements(
     db: Session = Depends(get_db)
 ):
     """List stock movements with filters"""
+    SourceLocation = aliased(StockLocation)
+    DestinationLocation = aliased(StockLocation)
     query = db.query(
         StockMovement,
         StockItem.item_name,
         StockItem.item_code,
-        StockLocation.name.label('source_location_name'),
-        StockLocation.name.label('destination_location_name')
+        SourceLocation.name.label('source_location_name'),
+        DestinationLocation.name.label('destination_location_name')
     ).join(StockItem).outerjoin(
-        StockLocation, StockMovement.source_location_id == StockLocation.id
+        SourceLocation, StockMovement.source_location_id == SourceLocation.id
     ).outerjoin(
-        StockLocation, StockMovement.destination_location_id == StockLocation.id
+        DestinationLocation, StockMovement.destination_location_id == DestinationLocation.id
     )
     
     if item_id:

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
@@ -7,10 +9,12 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import logging
 import traceback
+import json
 
 from ..db import get_db
-from ..models import MonthlyCounter, Printer
+from ..models import MonthlyCounter, Printer, CounterLocationExportHistory
 from ..services.snmp import SNMPService
+from ..services.export_service import ExportService
 
 router = APIRouter()
 
@@ -53,11 +57,29 @@ class MonthlyCounterResponse(BaseModel):
     pages_printed_bw: int
     pages_printed_color: int
     pages_printed_total: int
+    location_snapshot: Optional[str] = None
     notes: Optional[str] = None
     locked: bool = True
     recorded_at: datetime
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class LocationExportHistoryResponse(BaseModel):
+    id: int
+    exported_at: datetime
+    year: Optional[int] = None
+    month: Optional[int] = None
+    total_locations: int
+    total_pages: int
+    filename: Optional[str] = None
+    requested_by: Optional[str] = None
+    status: str
+    error_message: Optional[str] = None
+    filters: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -126,6 +148,7 @@ def get_monthly_counters(
                 pages_printed_bw=counter.pages_printed_bw,
                 pages_printed_color=counter.pages_printed_color,
                 pages_printed_total=counter.pages_printed_total,
+                location_snapshot=counter.location_snapshot,
                 notes=counter.notes,
                 recorded_at=counter.recorded_at,
                 created_at=counter.created_at,
@@ -183,6 +206,7 @@ def create_monthly_counter(counter: MonthlyCounterCreate, db: Session = Depends(
         pages_printed_bw=pages_bw,
         pages_printed_color=pages_color,
         pages_printed_total=pages_total,
+        location_snapshot=printer.location,
         notes=counter.notes
     )
     
@@ -219,6 +243,7 @@ def create_monthly_counter(counter: MonthlyCounterCreate, db: Session = Depends(
         pages_printed_bw=db_counter.pages_printed_bw,
         pages_printed_color=db_counter.pages_printed_color,
         pages_printed_total=db_counter.pages_printed_total,
+        location_snapshot=db_counter.location_snapshot,
         notes=db_counter.notes,
         recorded_at=db_counter.recorded_at,
         created_at=db_counter.created_at,
@@ -299,6 +324,7 @@ def update_monthly_counter(
         pages_printed_bw=db_counter.pages_printed_bw,
         pages_printed_color=db_counter.pages_printed_color,
         pages_printed_total=db_counter.pages_printed_total,
+        location_snapshot=db_counter.location_snapshot,
         notes=db_counter.notes,
         recorded_at=db_counter.recorded_at,
         created_at=db_counter.created_at,
@@ -346,6 +372,153 @@ def get_printer_counter_summary(printer_id: int, db: Session = Depends(get_db)):
         "latest_counter": counters[0] if counters else None
     }
 
+@router.get("/summary-by-location")
+def get_counter_summary_by_location(
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get aggregated printed volume by location snapshot."""
+
+    query = db.query(
+        func.coalesce(MonthlyCounter.location_snapshot, "Sin ubicacion").label("location"),
+        func.sum(MonthlyCounter.pages_printed_bw).label("total_pages_bw"),
+        func.sum(MonthlyCounter.pages_printed_color).label("total_pages_color"),
+        func.sum(MonthlyCounter.pages_printed_total).label("total_pages")
+    )
+
+    if year:
+        query = query.filter(MonthlyCounter.year == year)
+    if month:
+        query = query.filter(MonthlyCounter.month == month)
+
+    rows = query.group_by(
+        func.coalesce(MonthlyCounter.location_snapshot, "Sin ubicacion")
+    ).order_by(
+        func.sum(MonthlyCounter.pages_printed_total).desc()
+    ).all()
+
+    return {
+        "year": year,
+        "month": month,
+        "locations": [
+            {
+                "location": row.location,
+                "total_pages_bw": int(row.total_pages_bw or 0),
+                "total_pages_color": int(row.total_pages_color or 0),
+                "total_pages": int(row.total_pages or 0)
+            }
+            for row in rows
+        ]
+    }
+
+
+@router.get("/summary-by-location/export-excel")
+def export_counter_summary_by_location_excel(
+    year: Optional[int] = Query(None),
+    month: Optional[int] = Query(None, ge=1, le=12),
+    requested_by: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Export location-based monthly counter summary to Excel and save export history."""
+
+    query = db.query(
+        func.coalesce(MonthlyCounter.location_snapshot, "Sin ubicacion").label("location"),
+        func.sum(MonthlyCounter.pages_printed_bw).label("total_pages_bw"),
+        func.sum(MonthlyCounter.pages_printed_color).label("total_pages_color"),
+        func.sum(MonthlyCounter.pages_printed_total).label("total_pages")
+    )
+
+    if year:
+        query = query.filter(MonthlyCounter.year == year)
+    if month:
+        query = query.filter(MonthlyCounter.month == month)
+
+    rows = query.group_by(
+        func.coalesce(MonthlyCounter.location_snapshot, "Sin ubicacion")
+    ).order_by(
+        func.sum(MonthlyCounter.pages_printed_total).desc()
+    ).all()
+
+    rows_data = [
+        {
+            "location": row.location,
+            "total_pages_bw": int(row.total_pages_bw or 0),
+            "total_pages_color": int(row.total_pages_color or 0),
+            "total_pages": int(row.total_pages or 0)
+        }
+        for row in rows
+    ]
+
+    period_suffix = ""
+    if year and month:
+        period_suffix = f"_{year}_{month:02d}"
+    elif year:
+        period_suffix = f"_{year}"
+
+    filename = f"contadores_ubicacion{period_suffix}_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    total_pages = sum(item["total_pages"] for item in rows_data)
+
+    try:
+        export_service = ExportService()
+        excel_buffer = export_service.export_location_monthly_counters_to_excel(rows_data, year=year, month=month)
+
+        history = CounterLocationExportHistory(
+            year=year,
+            month=month,
+            total_locations=len(rows_data),
+            total_pages=total_pages,
+            filename=filename,
+            requested_by=requested_by,
+            status="success",
+            filters=json.dumps({"year": year, "month": month})
+        )
+        db.add(history)
+        db.commit()
+
+        return Response(
+            content=excel_buffer.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+    except Exception as e:
+        db.rollback()
+
+        failed_history = CounterLocationExportHistory(
+            year=year,
+            month=month,
+            total_locations=len(rows_data),
+            total_pages=total_pages,
+            filename=filename,
+            requested_by=requested_by,
+            status="error",
+            error_message=str(e),
+            filters=json.dumps({"year": year, "month": month})
+        )
+        db.add(failed_history)
+        db.commit()
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error exportando resumen por ubicación: {str(e)}"
+        )
+
+
+@router.get("/summary-by-location/export-history", response_model=List[LocationExportHistoryResponse])
+def get_counter_summary_by_location_export_history(
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db)
+):
+    """Get history of exports for monthly counters by location."""
+
+    history = db.query(CounterLocationExportHistory).order_by(
+        CounterLocationExportHistory.exported_at.desc()
+    ).limit(limit).all()
+
+    return history
+
 @router.patch("/{counter_id}/toggle-lock", response_model=MonthlyCounterResponse)
 def toggle_counter_lock(counter_id: int, db: Session = Depends(get_db)):
     """Toggle the lock status of a monthly counter record"""
@@ -390,6 +563,7 @@ def toggle_counter_lock(counter_id: int, db: Session = Depends(get_db)):
         pages_printed_bw=db_counter.pages_printed_bw,
         pages_printed_color=db_counter.pages_printed_color,
         pages_printed_total=db_counter.pages_printed_total,
+        location_snapshot=db_counter.location_snapshot,
         notes=db_counter.notes,
         locked=db_counter.locked,
         recorded_at=db_counter.recorded_at,

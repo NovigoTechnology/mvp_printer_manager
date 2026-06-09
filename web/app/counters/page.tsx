@@ -1287,6 +1287,9 @@ export default function Counters() {
                         <div className="text-xs text-gray-500">
                           S/N: {counter.printer.serial_number || 'N/A'}
                         </div>
+                        <div className="text-xs text-gray-500">
+                          IP: {counter.printer.ip || 'N/A'}
+                        </div>
                       </div>
                     </td>
                     <td className="text-sm text-gray-600">

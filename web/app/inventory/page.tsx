@@ -307,9 +307,23 @@ export default function Inventory() {
     switch (status.toLowerCase()) {
       case 'active': return 'bg-green-100 text-green-800'
       case 'inactive': return 'bg-gray-100 text-gray-800'
+      case 'en_deposito': return 'bg-blue-100 text-blue-800'
+      case 'decomisada': return 'bg-red-100 text-red-800'
       case 'maintenance': return 'bg-yellow-100 text-yellow-800'
       case 'retired': return 'bg-red-100 text-red-800'
       default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const getStatusLabel = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'active': return 'Activa'
+      case 'inactive': return 'Inactiva'
+      case 'en_deposito': return 'En deposito'
+      case 'decomisada': return 'Decomisada'
+      case 'maintenance': return 'En mantenimiento'
+      case 'retired': return 'Retirada'
+      default: return status
     }
   }
 
@@ -380,16 +394,37 @@ export default function Inventory() {
   }
 
   const handleDelete = async (printerId: number, printerName: string) => {
-    if (!confirm(`¿Estás seguro de que deseas eliminar la impresora ${printerName}? Esta acción no se puede deshacer y eliminará también todos los registros relacionados (contadores mensuales, reportes de uso, etc.).`)) {
+    const selectedOption = prompt(
+      `Seleccione el estado de baja para ${printerName}:\n1) Inactiva\n2) En deposito\n3) Decomisada`,
+      '3'
+    )
+
+    if (selectedOption === null) {
+      return
+    }
+
+    const statusMap: Record<string, string> = {
+      '1': 'inactive',
+      '2': 'en_deposito',
+      '3': 'decomisada'
+    }
+
+    const newStatus = statusMap[selectedOption.trim()]
+    if (!newStatus) {
+      alert('Opcion invalida. Debe elegir 1, 2 o 3.')
       return
     }
 
     try {
       const url = `${API_BASE}/printers/${printerId}`
-      console.log('Attempting to delete printer at URL:', url)
+      console.log('Attempting to set baja status at URL:', url)
       
       const response = await fetch(url, {
-        method: 'DELETE',
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: newStatus }),
       })
 
       console.log('Response status:', response.status)
@@ -397,38 +432,26 @@ export default function Inventory() {
 
       if (response.ok) {
         const result = await response.json()
-        console.log('Delete result:', result)
+        console.log('Baja result:', result)
         
         // Refresh the data
         fetchData()
         setSelectedPrinter(null)
-        
-        // Show detailed success message
-        let message = 'Impresora eliminada exitosamente!'
-        if (result.deleted_monthly_counters > 0 || result.deleted_usage_reports > 0) {
-          message += `\n\nSe eliminaron también:`
-          if (result.deleted_monthly_counters > 0) {
-            message += `\n- ${result.deleted_monthly_counters} registros de contadores mensuales`
-          }
-          if (result.deleted_usage_reports > 0) {
-            message += `\n- ${result.deleted_usage_reports} reportes de uso`
-          }
-        }
-        
-        alert(message)
+
+        alert(`Baja aplicada correctamente. Nuevo estado: ${getStatusLabel(newStatus)}`)
       } else {
         const responseText = await response.text()
-        console.error('Delete failed. Response text:', responseText)
+        console.error('Set baja status failed. Response text:', responseText)
         try {
           const errorData = JSON.parse(responseText)
-          alert(`Error al eliminar la impresora: ${errorData.detail || 'Error desconocido'}`)
+          alert(`Error al dar de baja la impresora: ${errorData.detail || 'Error desconocido'}`)
         } catch (parseError) {
-          alert(`Error al eliminar la impresora: ${response.status} - ${responseText}`)
+          alert(`Error al dar de baja la impresora: ${response.status} - ${responseText}`)
         }
       }
     } catch (error: any) {
-      console.error('Error deleting printer:', error)
-      alert(`Error al eliminar la impresora: ${error.message || 'Error de conexión'}`)
+      console.error('Error setting baja status for printer:', error)
+      alert(`Error al dar de baja la impresora: ${error.message || 'Error de conexión'}`)
     }
   }
 
@@ -639,10 +662,12 @@ export default function Inventory() {
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="block w-full px-3 py-1.5 text-sm text-gray-600 border border-accent rounded-md focus:outline-none focus:ring-1 focus:ring-accent bg-white">
                 <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="maintenance">Maintenance</option>
-                <option value="retired">Retired</option>
+                <option value="active">Activa</option>
+                <option value="inactive">Inactiva</option>
+                <option value="en_deposito">En deposito</option>
+                <option value="decomisada">Decomisada</option>
+                <option value="maintenance">En Mantenimiento</option>
+                <option value="retired">Retirada</option>
               </select>
             </div>
             <div>
@@ -907,7 +932,7 @@ export default function Inventory() {
                   </th>
                 )}
                 {visibleColumns.acciones && (
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-28">
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-48 sticky right-0 bg-gray-50 border-l border-gray-200">
                     Acciones
                   </th>
                 )}
@@ -951,7 +976,7 @@ export default function Inventory() {
                     <td className="px-4 py-3">
                       <div className="flex flex-col space-y-1">
                         <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(printer.status)}`}>
-                          {printer.status}
+                          {getStatusLabel(printer.status)}
                         </span>
                         <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium ${getConditionColor(printer.condition)}`}>
                           {printer.condition}
@@ -986,7 +1011,7 @@ export default function Inventory() {
                     </td>
                   )}
                   {visibleColumns.acciones && (
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 sticky right-0 bg-white border-l border-gray-200">
                       <div className="flex items-center justify-center space-x-1">
                         <button
                           onClick={() => setSelectedPrinter(printer)}
@@ -1026,7 +1051,7 @@ export default function Inventory() {
                             handleDelete(printer.id, `${printer.brand} ${printer.model}`)
                           }}
                           className="p-1.5 text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition-all duration-200"
-                          title="Eliminar"
+                          title="Dar de baja"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1188,7 +1213,7 @@ export default function Inventory() {
                           <div>
                             <span className="font-medium">Status:</span> 
                             <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedPrinter.status)}`}>
-                              {selectedPrinter.status}
+                              {getStatusLabel(selectedPrinter.status)}
                             </span>
                           </div>
                           <div>
@@ -1490,7 +1515,7 @@ export default function Inventory() {
                     onClick={() => handleDelete(selectedPrinter.id, `${selectedPrinter.brand} ${selectedPrinter.model}`)}
                     className="px-4 py-1.5 rounded-full border border-red-200 text-red-500 text-sm hover:bg-red-50 transition-colors"
                   >
-                    Eliminar
+                    Dar de baja
                   </button>
                   <button className="px-4 py-1.5 rounded-full border border-emerald-300 text-emerald-600 text-sm hover:bg-emerald-50 transition-colors">
                     Consultar SNMP
@@ -1647,10 +1672,12 @@ export default function Inventory() {
                             onChange={(e) => setEditForm({...editForm, status: e.target.value})}
                             className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                           >
-                            <option value="active">Activo</option>
-                            <option value="inactive">Inactivo</option>
+                            <option value="active">Activa</option>
+                            <option value="inactive">Inactiva</option>
+                            <option value="en_deposito">En deposito</option>
+                            <option value="decomisada">Decomisada</option>
                             <option value="maintenance">En Mantenimiento</option>
-                            <option value="retired">Retirado</option>
+                            <option value="retired">Retirada</option>
                           </select>
                         </div>
                         <div>
@@ -1944,6 +1971,44 @@ export default function Inventory() {
                             className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
                             placeholder="Centro de costo"
                           />
+                        </div>
+                        <div className="md:col-span-2 border border-gray-100 rounded-lg p-4 bg-gray-50">
+                          <h5 className="text-sm font-medium text-gray-800 mb-3">Contadores Iniciales</h5>
+                          <p className="text-xs text-gray-500 mb-3">
+                            Puede completar o corregir estos contadores si no se cargaron durante el alta.
+                          </p>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Contador B/N</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={editForm.initial_counter_bw ?? 0}
+                                onChange={(e) => setEditForm({...editForm, initial_counter_bw: parseInt(e.target.value) || 0})}
+                                className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Contador Color</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={editForm.initial_counter_color ?? 0}
+                                onChange={(e) => setEditForm({...editForm, initial_counter_color: parseInt(e.target.value) || 0})}
+                                className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Contador Total</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={editForm.initial_counter_total ?? 0}
+                                onChange={(e) => setEditForm({...editForm, initial_counter_total: parseInt(e.target.value) || 0})}
+                                className="w-full px-3 py-1.5 text-sm text-gray-700 bg-white border border-accent rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
+                              />
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -2384,6 +2449,8 @@ export default function Inventory() {
                               >
                                 <option value="active">Activa</option>
                                 <option value="inactive">Inactiva</option>
+                                <option value="en_deposito">En deposito</option>
+                                <option value="decomisada">Decomisada</option>
                                 <option value="maintenance">En Mantenimiento</option>
                                 <option value="retired">Retirada</option>
                               </select>

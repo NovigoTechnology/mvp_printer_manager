@@ -659,13 +659,55 @@ export default function SupplyRequestsCompactPage() {
   // Función para cargar usuarios
   const fetchUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE}/auth/users`)
+      const token = localStorage.getItem('token')
+      if (!token) {
+        showNotification('error', 'Sesion requerida', 'Inicia sesion para cargar usuarios del sistema')
+        setUsers([])
+        return
+      }
+
+      const response = await fetch(`${API_BASE}/auth/users`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+
+      if (response.status === 403) {
+        const techResponse = await fetch(`${API_BASE}/auth/technicians`)
+        if (techResponse.ok) {
+          const techData = await techResponse.json()
+          const fallbackUsers = Array.isArray(techData)
+            ? techData.map((tech: any) => ({
+                id: tech.id,
+                name: tech.name,
+                department: tech.specialty || ''
+              }))
+            : []
+          setUsers(fallbackUsers)
+          showNotification('error', 'Permisos limitados', 'Sin rol admin: se cargan solo tecnicos para autocompletar')
+          return
+        }
+      }
+
+      if (response.status === 401) {
+        showNotification('error', 'Sesion expirada', 'Vuelve a iniciar sesion para consultar usuarios')
+        setUsers([])
+        return
+      }
+
       if (response.ok) {
         const data = await response.json()
-        setUsers(data.map((u: any) => ({ id: u.id, name: u.name, department: u.department || '' })))
+        setUsers(
+          data.map((u: any) => ({
+            id: u.id,
+            name: u.full_name || u.username || u.name || `Usuario ${u.id}`,
+            department: u.department || ''
+          }))
+        )
+      } else {
+        showNotification('error', 'Error', 'No se pudo cargar el listado de usuarios')
       }
     } catch (error) {
       console.error('Error fetching users:', error)
+      showNotification('error', 'Error', 'No se pudo consultar usuarios del sistema')
     }
   }
 
@@ -677,15 +719,23 @@ export default function SupplyRequestsCompactPage() {
     }
 
     try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        showNotification('error', 'Sesion requerida', 'Inicia sesion con permisos de administrador para crear usuarios')
+        return
+      }
+
       const response = await fetch(`${API_BASE}/auth/users`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          name: newUserData.name,
+          username: newUserData.name.toLowerCase().trim().replace(/\s+/g, '.'),
           email: `${newUserData.name.toLowerCase().replace(/\s+/g, '.')}@temp.com`,
           password: 'Temporal123',
+          full_name: newUserData.name,
           role: 'requester',
           department: newUserData.department,
           is_active: true
@@ -694,14 +744,22 @@ export default function SupplyRequestsCompactPage() {
 
       if (response.ok) {
         const newUser = await response.json()
-        setUsers([...users, { id: newUser.id, name: newUser.name, department: newUser.department || '' }])
-        setFormData(prev => ({ ...prev, requested_by: newUser.name, department: newUser.department || prev.department }))
-        setUserSearchQuery(newUser.name)
+        const displayName = newUser.full_name || newUser.username || newUser.name || newUserData.name
+        const userDepartment = newUser.department || newUserData.department || ''
+        setUsers([...users, { id: newUser.id, name: displayName, department: userDepartment }])
+        setFormData(prev => ({ ...prev, requested_by: displayName, department: userDepartment || prev.department }))
+        setUserSearchQuery(displayName)
         setNewUserData({ name: '', department: '' })
         setShowNewUserModal(false)
         showNotification('success', 'Usuario creado', 'El usuario ha sido agregado exitosamente')
       } else {
-        showNotification('error', 'Error', 'No se pudo crear el usuario')
+        if (response.status === 403) {
+          showNotification('error', 'Permisos insuficientes', 'Solo un administrador puede crear usuarios')
+        } else if (response.status === 422) {
+          showNotification('error', 'Datos invalidos', 'Revisa los datos del nuevo usuario antes de crear')
+        } else {
+          showNotification('error', 'Error', 'No se pudo crear el usuario')
+        }
       }
     } catch (error) {
       console.error('Error creating user:', error)

@@ -63,6 +63,7 @@ export default function IncidentsPage() {
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [technicians, setTechnicians] = useState<Technician[]>([])
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([])
+  const [usersAccessNotice, setUsersAccessNotice] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
   const [viewType, setViewType] = useState<ViewType>('table')
@@ -91,11 +92,55 @@ export default function IncidentsPage() {
 
   const fetchSystemUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE}/auth/users`)
+      const token = localStorage.getItem('token')
+      if (!token) {
+        setUsersAccessNotice('Sesion no iniciada: no se pudo cargar la lista completa de usuarios.')
+        setSystemUsers([])
+        return
+      }
+
+      const response = await fetch(`${API_BASE}/auth/users`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+
+      if (response.status === 403) {
+        const techResponse = await fetch(`${API_BASE}/auth/technicians`)
+        const techData = await techResponse.json()
+        const fallbackUsers = Array.isArray(techData)
+          ? techData.map((tech: any) => ({
+              id: tech.id,
+              name: tech.name,
+              email: tech.email || null,
+              department: tech.specialty || null,
+              active: tech.active ?? true
+            }))
+          : []
+        setSystemUsers(fallbackUsers)
+        setUsersAccessNotice('Sin permisos de administrador: se muestra solo la lista de tecnicos activos.')
+        return
+      }
+
+      if (response.status === 401) {
+        setUsersAccessNotice('Sesion expirada o invalida. Inicia sesion nuevamente para ver todos los usuarios.')
+        setSystemUsers([])
+        return
+      }
+
       const data = await response.json()
-      setSystemUsers(Array.isArray(data) ? data : [])
+      const normalizedUsers = Array.isArray(data)
+        ? data.map((user: any) => ({
+            id: user.id,
+            name: user.full_name || user.username || user.name || `Usuario ${user.id}`,
+            email: user.email || null,
+            department: user.department || null,
+            active: user.is_active ?? true
+          }))
+        : []
+      setSystemUsers(normalizedUsers)
+      setUsersAccessNotice(null)
     } catch (error) {
       console.error('Error fetching system users:', error)
+      setUsersAccessNotice('No se pudo cargar usuarios para el campo "Reportado por".')
       setSystemUsers([])
     }
   }
@@ -361,6 +406,12 @@ export default function IncidentsPage() {
 
   return (
     <div className="space-y-6">
+      {usersAccessNotice && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {usersAccessNotice}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Gestión de Incidentes</h1>

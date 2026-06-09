@@ -31,7 +31,8 @@ def poll_medical_printers_hourly():
     try:
         # Obtener todas las impresoras médicas
         medical_printers = db.query(Printer).filter(
-            Printer.model.in_(['DRYPIX SMART', 'FCR', 'CR'])
+            Printer.model.in_(['DRYPIX SMART', 'FCR', 'CR']),
+            Printer.ignore_counters == False
         ).all()
         
         print(f"📋 Encontradas {len(medical_printers)} impresoras médicas")

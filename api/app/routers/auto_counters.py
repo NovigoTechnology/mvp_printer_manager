@@ -230,17 +230,28 @@ async def execute_schedule(schedule_id: int, db: Session) -> ScheduleRunResult:
         
         # Get target printers
         if schedule.target_type == "all":
-            printers = db.query(Printer).filter(Printer.status == "active").all()
+            printers = db.query(Printer).filter(
+                Printer.status == "active",
+                Printer.ignore_counters == False
+            ).all()
         elif schedule.target_type == "selection":
             printer_ids = deserialize_printer_ids(schedule.printer_ids)
             printers = db.query(Printer).filter(
-                and_(Printer.id.in_(printer_ids), Printer.status == "active")
+                and_(
+                    Printer.id.in_(printer_ids),
+                    Printer.status == "active",
+                    Printer.ignore_counters == False
+                )
             ).all()
         else:  # single
             printer_ids = deserialize_printer_ids(schedule.printer_ids)
             if printer_ids:
                 printers = db.query(Printer).filter(
-                    and_(Printer.id == printer_ids[0], Printer.status == "active")
+                    and_(
+                        Printer.id == printer_ids[0],
+                        Printer.status == "active",
+                        Printer.ignore_counters == False
+                    )
                 ).all()
             else:
                 printers = []
