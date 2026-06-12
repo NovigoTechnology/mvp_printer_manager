@@ -65,6 +65,22 @@ interface ManualCounterForm {
   recorded_at?: string
 }
 
+interface AutoCounterRuntimeStatus {
+  is_busy: boolean
+  running_jobs: Array<{
+    schedule_id: number
+    schedule_name: string
+    started_at: string
+    status: string
+    printers_total: number
+    printers_processed: number
+    printers_successful: number
+    printers_failed: number
+    current_printer?: string | null
+  }>
+  recent_jobs: any[]
+}
+
 export default function Counters() {
   const [counters, setCounters] = useState<MonthlyCounter[]>([])
   const [printers, setPrinters] = useState<Printer[]>([])
@@ -87,11 +103,17 @@ export default function Counters() {
   const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [showExecutionHistory, setShowExecutionHistory] = useState(false)
   const [executionHistory, setExecutionHistory] = useState<any[]>([])
+  const [autoRuntimeStatus, setAutoRuntimeStatus] = useState<AutoCounterRuntimeStatus>({
+    is_busy: false,
+    running_jobs: [],
+    recent_jobs: []
+  })
   
   // Estados para la ventana de sincronización
   const [showSyncModal, setShowSyncModal] = useState(false)
   const [syncOption, setSyncOption] = useState<'all' | 'contract' | 'selected'>('all')
   const [selectedContract, setSelectedContract] = useState<string>('')
+  const [availableContracts, setAvailableContracts] = useState<{id: number; contract_number: string; contract_name: string}[]>([])
   const [selectedPrinters, setSelectedPrinters] = useState<number[]>([])
   const [syncProgress, setSyncProgress] = useState<{
     current: number
@@ -288,7 +310,40 @@ export default function Counters() {
       fetchComparisonData()
     }
     fetchExecutionHistory() // Cargar historial al inicializar
+    fetchAutoRuntimeStatus()
   }, [selectedYear, selectedMonth, viewMode])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchAutoRuntimeStatus()
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  const fetchAvailableContracts = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/contracts/`)
+      if (response.ok) {
+        const data = await response.json()
+        setAvailableContracts(data)
+      }
+    } catch (error) {
+      console.error('Error fetching contracts:', error)
+    }
+  }
+
+  const fetchAutoRuntimeStatus = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/auto-counters/runtime-status`)
+      if (response.ok) {
+        const data = await response.json()
+        setAutoRuntimeStatus(data)
+      }
+    } catch (error) {
+      console.error('Error fetching auto runtime status:', error)
+    }
+  }
 
   const fetchExecutionHistory = async () => {
     try {
@@ -667,6 +722,10 @@ export default function Counters() {
 
   const executeSync = async () => {
     if (collectingCounters) return
+    if (autoRuntimeStatus.is_busy) {
+      alert('Hay una tarea automatica de toma de contadores en ejecucion. Espere a que termine.')
+      return
+    }
     
     setCollectingCounters(true)
     setSyncProgress({
@@ -1167,8 +1226,8 @@ export default function Counters() {
                   </button>
                   
                   <button
-                    onClick={() => setShowSyncModal(true)}
-                    disabled={collectingCounters}
+                    onClick={() => { setShowSyncModal(true); fetchAvailableContracts() }}
+                    disabled={collectingCounters || autoRuntimeStatus.is_busy}
                     className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-md border border-gray-300 hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Recolectar contadores"
                   >
@@ -1245,6 +1304,30 @@ export default function Counters() {
                 </div>
               )}
             </div>
+
+            {viewMode === 'form' && autoRuntimeStatus.is_busy && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-amber-900">
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9" />
+                    </svg>
+                    <span className="text-sm font-semibold">Toma automatica de contadores en ejecucion</span>
+                  </div>
+                  <span className="text-xs text-amber-700">
+                    Jobs activos: {autoRuntimeStatus.running_jobs.length}
+                  </span>
+                </div>
+                <div className="mt-2 space-y-1">
+                  {autoRuntimeStatus.running_jobs.map(job => (
+                    <div key={job.schedule_id} className="text-xs text-amber-800">
+                      {job.schedule_name}: {job.printers_processed}/{job.printers_total} procesadas
+                      {job.current_printer ? ` - ${job.current_printer}` : ''}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -2146,9 +2229,9 @@ export default function Counters() {
                         className="w-full border border-gray-300 rounded px-3 py-2"
                       >
                         <option value="">Seleccione un contrato</option>
-                        {getUniqueContracts().map(contract => (
-                          <option key={contract} value={contract}>
-                            {contract}
+                        {availableContracts.map(contract => (
+                          <option key={contract.id} value={contract.contract_number}>
+                            {contract.contract_number}{contract.contract_name ? ` - ${contract.contract_name}` : ''}
                           </option>
                         ))}
                       </select>
@@ -2252,9 +2335,9 @@ export default function Counters() {
                     await executeSync()
                   }}
                   className="btn btn-primary"
-                  disabled={collectingCounters || (syncOption === 'contract' && !selectedContract) || (syncOption === 'selected' && selectedPrinters.length === 0)}
+                  disabled={collectingCounters || autoRuntimeStatus.is_busy || (syncOption === 'contract' && !selectedContract) || (syncOption === 'selected' && selectedPrinters.length === 0)}
                 >
-                  {collectingCounters ? 'Sincronizando...' : 'Iniciar Sincronización'}
+                  {collectingCounters ? 'Sincronizando...' : autoRuntimeStatus.is_busy ? 'Esperando tarea automatica...' : 'Iniciar Sincronizacion'}
                 </button>
               </div>
             </div>

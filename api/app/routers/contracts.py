@@ -1,14 +1,37 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from datetime import datetime
 
 from ..db import get_db
-from ..models import LeaseContract, ContractPrinter, Printer, Company, ContractCompany
+from ..models import LeaseContract, ContractPrinter, Printer, Company, ContractCompany, CostCenter
 from ..services.exchange_rate_service import get_current_exchange_rate, get_current_exchange_rate_with_info
 
 router = APIRouter()
+
+
+def _resolve_contract_cost_center(db: Session, cost_center_id: Optional[int], cost_center_code: Optional[str]) -> Tuple[Optional[int], Optional[str]]:
+    """Resolve and validate contract cost center from id/code inputs."""
+    resolved_id = cost_center_id
+    resolved_code = cost_center_code
+
+    if resolved_id is not None:
+        cost_center = db.query(CostCenter).filter(
+            CostCenter.id == resolved_id,
+            CostCenter.deleted_at.is_(None)
+        ).first()
+        if not cost_center:
+            raise HTTPException(status_code=400, detail="Centro de costo no existe o está inactivo")
+        resolved_code = cost_center.code
+
+    return resolved_id, resolved_code
+
+
+def _apply_contract_cost_center_to_printer(printer: Printer, contract: LeaseContract):
+    """Force printer to inherit contract cost center."""
+    printer.cost_center_id = contract.cost_center_id
+    printer.cost_center = contract.cost_center
 
 def generate_contract_number(db: Session) -> str:
     """Generar número de contrato secuencial único"""
@@ -254,6 +277,7 @@ class LeaseContractCreate(BaseModel):
     priority: str = "medium"
     department: Optional[str] = None
     cost_center: Optional[str] = None
+    cost_center_id: Optional[int] = None
     budget_code: Optional[str] = None
     
     # Observaciones y notas
@@ -310,6 +334,7 @@ class LeaseContractResponse(BaseModel):
     priority: Optional[str]
     department: Optional[str]
     cost_center: Optional[str]
+    cost_center_id: Optional[int]
     budget_code: Optional[str]
     internal_notes: Optional[str]
     special_conditions: Optional[str]
@@ -455,6 +480,7 @@ def list_contracts(db: Session = Depends(get_db)):
             priority=contract.priority,
             department=contract.department,
             cost_center=contract.cost_center,
+            cost_center_id=contract.cost_center_id,
             budget_code=contract.budget_code,
             internal_notes=contract.internal_notes,
             special_conditions=contract.special_conditions,
@@ -504,6 +530,12 @@ def create_contract(contract: LeaseContractCreate, db: Session = Depends(get_db)
             status_code=400, 
             detail="Ya existe un contrato con este número"
         )
+
+    resolved_cost_center_id, resolved_cost_center_code = _resolve_contract_cost_center(
+        db=db,
+        cost_center_id=contract.cost_center_id,
+        cost_center_code=contract.cost_center,
+    )
     
     # Verificar que las impresoras seleccionadas no estén ya asignadas a otros contratos
     if contract.printer_ids:
@@ -523,6 +555,8 @@ def create_contract(contract: LeaseContractCreate, db: Session = Depends(get_db)
     contract_dict = contract.dict()
     printer_ids = contract_dict.pop('printer_ids', [])
     companies = contract_dict.pop('companies', [])
+    contract_dict['cost_center_id'] = resolved_cost_center_id
+    contract_dict['cost_center'] = resolved_cost_center_code
     
     db_contract = LeaseContract(**contract_dict)
     db.add(db_contract)
@@ -555,6 +589,7 @@ def create_contract(contract: LeaseContractCreate, db: Session = Depends(get_db)
                 is_active=True
             )
             db.add(contract_printer)
+            _apply_contract_cost_center_to_printer(printer, db_contract)
         
         db.commit()
     
@@ -634,6 +669,7 @@ def create_contract(contract: LeaseContractCreate, db: Session = Depends(get_db)
         priority=db_contract.priority,
         department=db_contract.department,
         cost_center=db_contract.cost_center,
+        cost_center_id=db_contract.cost_center_id,
         budget_code=db_contract.budget_code,
         internal_notes=db_contract.internal_notes,
         special_conditions=db_contract.special_conditions,
@@ -720,8 +756,27 @@ def update_contract(contract_id: int, contract_update: LeaseContractCreate, db: 
                 detail="Ya existe otro contrato con este número"
             )
     
-    for field, value in contract_update.dict().items():
+    resolved_cost_center_id, resolved_cost_center_code = _resolve_contract_cost_center(
+        db=db,
+        cost_center_id=contract_update.cost_center_id,
+        cost_center_code=contract_update.cost_center,
+    )
+
+    update_data = contract_update.dict(exclude={"printer_ids", "companies"})
+    update_data["cost_center_id"] = resolved_cost_center_id
+    update_data["cost_center"] = resolved_cost_center_code
+
+    for field, value in update_data.items():
         setattr(contract, field, value)
+
+    active_assignments = db.query(ContractPrinter).filter(
+        ContractPrinter.contract_id == contract_id,
+        ContractPrinter.is_active == True,
+    ).all()
+    for assignment in active_assignments:
+        printer = db.query(Printer).filter(Printer.id == assignment.printer_id).first()
+        if printer:
+            _apply_contract_cost_center_to_printer(printer, contract)
     
     db.commit()
     db.refresh(contract)
@@ -766,6 +821,7 @@ def update_contract(contract_id: int, contract_update: LeaseContractCreate, db: 
         priority=contract.priority,
         department=contract.department,
         cost_center=contract.cost_center,
+        cost_center_id=contract.cost_center_id,
         budget_code=contract.budget_code,
         internal_notes=contract.internal_notes,
         special_conditions=contract.special_conditions,
@@ -826,6 +882,12 @@ def delete_contract(contract_id: int, force: bool = False, db: Session = Depends
     
     # Si force=true o no hay impresoras activas, proceder con la eliminación
     # Marcar todas las impresoras del contrato como inactivas antes de eliminar
+    for cp in active_contract_printers:
+        printer = db.query(Printer).filter(Printer.id == cp.printer_id).first()
+        if printer and printer.cost_center_id == contract.cost_center_id:
+            printer.cost_center_id = None
+            printer.cost_center = None
+
     db.query(ContractPrinter).filter(
         ContractPrinter.contract_id == contract_id
     ).update({
@@ -882,6 +944,8 @@ def add_printer_to_contract(
         contract_id=contract_id,
         **printer_data.dict()
     )
+
+    _apply_contract_cost_center_to_printer(printer, contract)
     
     db.add(contract_printer)
     db.commit()
@@ -914,6 +978,12 @@ def remove_printer_from_contract(contract_id: int, printer_id: int, db: Session 
     # Marcar como inactiva en lugar de eliminar
     contract_printer.is_active = False
     contract_printer.removal_date = datetime.utcnow()
+
+    contract = db.query(LeaseContract).filter(LeaseContract.id == contract_id).first()
+    printer = db.query(Printer).filter(Printer.id == printer_id).first()
+    if contract and printer and printer.cost_center_id == contract.cost_center_id:
+        printer.cost_center_id = None
+        printer.cost_center = None
     
     db.commit()
     

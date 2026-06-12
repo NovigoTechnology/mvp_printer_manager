@@ -30,7 +30,7 @@ class MedicalPrinterService:
         Returns:
             Dict con los datos obtenidos o None si hay error
         """
-        if not printer.ip_address:
+        if not printer.ip:
             return None
         
         # Determinar tipo de impresora médica por modelo
@@ -44,7 +44,7 @@ class MedicalPrinterService:
     
     def _poll_drypix(self, printer) -> Optional[Dict]:
         """Obtiene contadores del DRYPIX SMART"""
-        scraper = DrypixScraper(printer.ip_address, printer.port or 20051)
+        scraper = DrypixScraper(printer.ip, 20051)
         return scraper.get_counters()
 
 
@@ -320,12 +320,15 @@ def is_medical_printer(printer) -> bool:
     Returns:
         True si es impresora médica
     """
+    if hasattr(printer, "is_medical"):
+        return bool(printer.is_medical)
+
     if not printer.model:
         return False
-    
+
     model = printer.model.upper()
     medical_models = ["DRYPIX", "FCR", "CR", "DI-HL"]
-    
+
     return any(medical_model in model for medical_model in medical_models)
 
 

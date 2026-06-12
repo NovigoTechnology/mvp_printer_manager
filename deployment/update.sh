@@ -24,6 +24,9 @@ docker compose build --no-cache
 echo "▶️  Iniciando servicios..."
 docker compose up -d
 
+echo "🗃️  Ejecutando migraciones de base de datos..."
+docker compose exec -T api python app/migrations/add_cost_center_fk_to_contracts_and_printers.py 2>/dev/null || echo "ℹ️  Migracion de centros de costo ya aplicada o no necesaria"
+
 # Esperar a que los servicios estén listos
 echo "⏳ Esperando a que los servicios inicien..."
 sleep 15

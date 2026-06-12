@@ -13,7 +13,7 @@ import logging
 
 from .config import settings
 from .db import engine, Base, get_db
-from .routers import auth, printers, incidents, reports, counters, contracts, toner_requests, stock, discovery_configs, billing, exchange_rates, companies
+from .routers import auth, printers, incidents, reports, counters, contracts, toner_requests, stock, discovery_configs, billing, exchange_rates, companies, cost_centers
 from .workers.polling import start_scheduler
 
 # Configure logging
@@ -81,6 +81,7 @@ app.include_router(reports.router, prefix="/reports", tags=["reports"])
 app.include_router(counters.router, prefix="/counters", tags=["counters"])
 app.include_router(contracts.router, prefix="/contracts", tags=["contracts"])
 app.include_router(companies.router, prefix="/companies", tags=["companies"])
+app.include_router(cost_centers.router, prefix="/cost-centers", tags=["cost-centers"])
 app.include_router(billing.router, prefix="/api", tags=["billing"])
 app.include_router(toner_requests.router, prefix="/api", tags=["toner-requests"])
 app.include_router(stock.router, prefix="/stock", tags=["stock"])
@@ -106,6 +107,10 @@ app.include_router(medical_printers.router, prefix="/medical-printers", tags=["m
 # Import and include medical_refills router
 from .routers import medical_refills
 app.include_router(medical_refills.router, prefix="/medical-printers", tags=["medical-refills"])
+
+# Import and include alerts router
+from .routers import alerts
+app.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
 
 @app.get("/")
 async def root():

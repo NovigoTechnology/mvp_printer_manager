@@ -1,15 +1,62 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime, timedelta
 import asyncio
+import os
+import socket
 from sqlalchemy.orm import Session
 import json
+from threading import Lock
+from typing import Any, Dict
 
 from ..db import SessionLocal
 from ..models import Printer, UsageReport, CounterSchedule, MedicalPrinterCounter
 from ..services.snmp import SNMPService
 from ..services.medical_printer_service import DrypixScraper
+from ..services.medical_alert_service import record_medical_counter_error
 from ..services.exchange_rate_service import update_exchange_rates_task
 from .hourly_medical_polling import poll_medical_printers_hourly, cleanup_old_snapshots_job
+
+
+_scheduled_collection_lock = Lock()
+_auto_job_execution_lock = Lock()
+_runtime_lock = Lock()
+_running_auto_jobs: Dict[int, Dict[str, Any]] = {}
+_last_auto_jobs: list[Dict[str, Any]] = []
+
+
+def _record_auto_job_finished(job_info: Dict[str, Any]):
+    with _runtime_lock:
+        _last_auto_jobs.insert(0, job_info)
+        # Keep only the last 20 finished jobs in memory.
+        del _last_auto_jobs[20:]
+
+
+def _is_snmp_port_reachable(ip: str, timeout_seconds: float = 0.4) -> bool:
+    """Fast TCP probe to avoid expensive SNMP timeouts on offline printers."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.settimeout(timeout_seconds)
+        return sock.connect_ex((ip, 161)) == 0
+    except Exception:
+        return False
+    finally:
+        try:
+            sock.close()
+        except Exception:
+            pass
+
+
+def get_auto_counter_runtime_status() -> Dict[str, Any]:
+    """Return runtime status for automatic counter jobs for UI indicators."""
+    with _runtime_lock:
+        running_jobs = list(_running_auto_jobs.values())
+        last_jobs = list(_last_auto_jobs)
+
+    return {
+        "is_busy": len(running_jobs) > 0,
+        "running_jobs": running_jobs,
+        "recent_jobs": last_jobs,
+    }
 
 def poll_all_printers():
     """Poll all printers and save usage reports"""
@@ -90,7 +137,7 @@ def poll_medical_printers():
         medical_printers = db.query(Printer).filter(
             Printer.status == "active",
             Printer.ignore_counters == False,
-            Printer.model.ilike("%DRYPIX%")
+            Printer.is_medical == True
         ).all()
         
         if not medical_printers:
@@ -193,12 +240,31 @@ def poll_medical_printers():
                     print(f"Successfully saved counter snapshot for medical printer {printer.id}")
                 else:
                     error_count += 1
-                    print(f"Failed to get counters from medical printer {printer.id}")
+                    error_message = f"Failed to get counters from medical printer {printer.id} ({printer.ip})"
+                    print(error_message)
+                    db.rollback()
+                    record_medical_counter_error(
+                        db=db,
+                        printer=printer,
+                        task_name="poll_medical_printers_daily",
+                        error_message=error_message,
+                        run_context="automatic_daily",
+                    )
+                    db.commit()
                 
             except Exception as e:
                 error_count += 1
-                print(f"Error polling medical printer {printer.id} ({printer.ip}): {str(e)}")
+                error_message = f"Error polling medical printer {printer.id} ({printer.ip}): {str(e)}"
+                print(error_message)
                 db.rollback()
+                record_medical_counter_error(
+                    db=db,
+                    printer=printer,
+                    task_name="poll_medical_printers_daily",
+                    error_message=error_message,
+                    run_context="automatic_daily",
+                )
+                db.commit()
                 continue
         
         print(f"Medical printer polling completed: {success_count} successful, {error_count} errors")
@@ -298,6 +364,10 @@ def start_scheduler(scheduler: AsyncIOScheduler):
 
 def check_scheduled_counters():
     """Check for scheduled counter jobs that need to be executed"""
+    if not _scheduled_collection_lock.acquire(blocking=False):
+        print("Scheduled counter check skipped: another run is still in progress")
+        return
+
     db = SessionLocal()
     try:
         now = datetime.utcnow()
@@ -323,14 +393,41 @@ def check_scheduled_counters():
         print(f"Error in check_scheduled_counters: {str(e)}")
     finally:
         db.close()
+        _scheduled_collection_lock.release()
 
 def execute_scheduled_counter_job(schedule_id: int, db: Session):
     """Execute a specific scheduled counter job"""
+    started_at = datetime.utcnow()
+
+    if not _auto_job_execution_lock.acquire(blocking=False):
+        print(f"Schedule {schedule_id} skipped: another automatic counter job is already running")
+        _record_auto_job_finished({
+            "schedule_id": schedule_id,
+            "started_at": started_at.isoformat(),
+            "finished_at": datetime.utcnow().isoformat(),
+            "status": "skipped",
+            "message": "Another automatic counter job is already running",
+        })
+        return
+
     try:
         schedule = db.query(CounterSchedule).filter(CounterSchedule.id == schedule_id).first()
         if not schedule:
             print(f"Schedule {schedule_id} not found")
             return
+
+        with _runtime_lock:
+            _running_auto_jobs[schedule_id] = {
+                "schedule_id": schedule_id,
+                "schedule_name": schedule.name,
+                "started_at": started_at.isoformat(),
+                "status": "running",
+                "printers_total": 0,
+                "printers_processed": 0,
+                "printers_successful": 0,
+                "printers_failed": 0,
+                "current_printer": None,
+            }
         
         # Get target printers
         if schedule.target_type == "all":
@@ -358,7 +455,32 @@ def execute_scheduled_counter_job(schedule_id: int, db: Session):
         
         if not printers:
             print(f"No active printers found for schedule {schedule_id}")
+            _record_auto_job_finished({
+                "schedule_id": schedule_id,
+                "schedule_name": schedule.name,
+                "started_at": started_at.isoformat(),
+                "finished_at": datetime.utcnow().isoformat(),
+                "status": "completed",
+                "message": "No active printers found",
+                "printers_total": 0,
+                "printers_processed": 0,
+                "printers_successful": 0,
+                "printers_failed": 0,
+            })
             return
+
+        max_printers_per_run = max(1, int(os.getenv("AUTO_COUNTERS_MAX_PRINTERS_PER_RUN", "120")))
+        total_candidates = len(printers)
+        if total_candidates > max_printers_per_run:
+            printers = printers[:max_printers_per_run]
+            print(
+                f"Schedule {schedule_id}: limiting run to {max_printers_per_run} printers "
+                f"(from {total_candidates}) to protect resources"
+            )
+
+        with _runtime_lock:
+            if schedule_id in _running_auto_jobs:
+                _running_auto_jobs[schedule_id]["printers_total"] = len(printers)
         
         # Initialize SNMP service
         snmp_service = SNMPService()
@@ -367,8 +489,23 @@ def execute_scheduled_counter_job(schedule_id: int, db: Session):
         errors = []
         
         # Poll each printer
-        for printer in printers:
+        for idx, printer in enumerate(printers, start=1):
             try:
+                with _runtime_lock:
+                    if schedule_id in _running_auto_jobs:
+                        _running_auto_jobs[schedule_id]["current_printer"] = f"{printer.brand} {printer.model} ({printer.ip})"
+                        _running_auto_jobs[schedule_id]["printers_processed"] = idx - 1
+
+                if not _is_snmp_port_reachable(printer.ip):
+                    error_msg = f"Printer {printer.id} ({printer.ip}) unreachable on SNMP port 161"
+                    errors.append(error_msg)
+                    error_count += 1
+                    print(error_msg)
+                    with _runtime_lock:
+                        if schedule_id in _running_auto_jobs:
+                            _running_auto_jobs[schedule_id]["printers_failed"] = error_count
+                    continue
+
                 # Check if we already have a report for today
                 today = datetime.utcnow().date()
                 existing_report = db.query(UsageReport).filter(
@@ -401,12 +538,18 @@ def execute_scheduled_counter_job(schedule_id: int, db: Session):
                 db.add(usage_report)
                 polled_count += 1
                 print(f"Successfully polled printer {printer.id} ({printer.ip})")
+                with _runtime_lock:
+                    if schedule_id in _running_auto_jobs:
+                        _running_auto_jobs[schedule_id]["printers_successful"] = polled_count
                 
             except Exception as e:
                 error_msg = f"Error polling printer {printer.id} ({printer.ip}): {str(e)}"
                 errors.append(error_msg)
                 error_count += 1
                 print(error_msg)
+                with _runtime_lock:
+                    if schedule_id in _running_auto_jobs:
+                        _running_auto_jobs[schedule_id]["printers_failed"] = error_count
                 continue
         
         # Update schedule statistics
@@ -421,12 +564,38 @@ def execute_scheduled_counter_job(schedule_id: int, db: Session):
             schedule.last_error = None
         
         db.commit()
+
+        with _runtime_lock:
+            running_info = _running_auto_jobs.get(schedule_id, {}).copy()
+
+        _record_auto_job_finished({
+            **running_info,
+            "schedule_id": schedule_id,
+            "schedule_name": schedule.name,
+            "finished_at": datetime.utcnow().isoformat(),
+            "status": "completed",
+            "message": f"{polled_count} success, {error_count} failed",
+            "printers_processed": len(printers),
+            "printers_successful": polled_count,
+            "printers_failed": error_count,
+        })
         
         print(f"Scheduled job {schedule_id} completed: {polled_count} printers polled, {error_count} errors")
         
     except Exception as e:
         print(f"Error in execute_scheduled_counter_job: {str(e)}")
+        _record_auto_job_finished({
+            "schedule_id": schedule_id,
+            "started_at": started_at.isoformat(),
+            "finished_at": datetime.utcnow().isoformat(),
+            "status": "error",
+            "message": str(e),
+        })
         raise
+    finally:
+        with _runtime_lock:
+            _running_auto_jobs.pop(schedule_id, None)
+        _auto_job_execution_lock.release()
 
 def calculate_next_run_time(schedule: CounterSchedule) -> datetime:
     """Calculate the next run time for a schedule"""

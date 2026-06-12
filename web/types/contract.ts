@@ -42,6 +42,7 @@ export interface LeaseContract {
   priority?: string;
   department?: string;
   cost_center?: string;
+  cost_center_id?: number;
   budget_code?: string;
   internal_notes?: string;
   special_conditions?: string;

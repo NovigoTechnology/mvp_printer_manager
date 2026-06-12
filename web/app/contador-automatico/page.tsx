@@ -236,11 +236,7 @@ export default function ContadorAutomatico() {
 
       if (response.ok) {
         const result = await response.json()
-        if (result.success) {
-          alert(`Lectura ejecutada exitosamente: ${result.message}`)
-        } else {
-          alert(`Ejecución completada con errores: ${result.message}`)
-        }
+        alert(`Tarea iniciada: ${result.message}`)
         await fetchData()
       } else {
         const errorData = await response.json()
