@@ -2,13 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 import json
 
-from ..db import get_db
+from ..db import SessionLocal, get_db
 from ..models import CounterSchedule, Printer, MonthlyCounter
 from ..services.snmp import SNMPService
+from ..workers.polling import execute_scheduled_counter_job, get_auto_counter_runtime_status
 
 router = APIRouter()
 
@@ -136,6 +137,12 @@ class ScheduleRunResult(BaseModel):
     errors: List[str]
     execution_time: float
 
+
+class AutoCounterRuntimeStatusResponse(BaseModel):
+    is_busy: bool
+    running_jobs: List[Dict[str, Any]]
+    recent_jobs: List[Dict[str, Any]]
+
 # Helper functions
 def serialize_printer_ids(printer_ids: List[int]) -> str:
     """Convert list of printer IDs to JSON string"""
@@ -203,6 +210,17 @@ def calculate_next_run(schedule: CounterSchedule) -> Optional[datetime]:
             return None
     
     return None
+
+
+def _run_schedule_job_in_background(schedule_id: int):
+    """Run a schedule in background using the same worker path as automatic polling."""
+    db = SessionLocal()
+    try:
+        execute_scheduled_counter_job(schedule_id, db)
+    except Exception as e:
+        print(f"Background schedule execution failed for schedule {schedule_id}: {str(e)}")
+    finally:
+        db.close()
 
 async def execute_schedule(schedule_id: int, db: Session) -> ScheduleRunResult:
     """Execute a counter schedule and poll the specified printers"""
@@ -433,6 +451,13 @@ async def execute_schedule(schedule_id: int, db: Session) -> ScheduleRunResult:
         )
 
 # API Endpoints
+
+@router.get("/runtime-status", response_model=AutoCounterRuntimeStatusResponse)
+def get_runtime_status():
+    """Return whether automatic counter jobs are currently running."""
+    return get_auto_counter_runtime_status()
+
+
 @router.get("/", response_model=List[CounterScheduleResponse])
 def list_schedules(db: Session = Depends(get_db)):
     """List all counter schedules"""
@@ -564,14 +589,28 @@ def delete_schedule(schedule_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{schedule_id}/run", response_model=ScheduleRunResult)
 async def run_schedule_now(schedule_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """Execute a schedule immediately"""
+    """Execute a schedule immediately in background (non-blocking)."""
     schedule = db.query(CounterSchedule).filter(CounterSchedule.id == schedule_id).first()
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule not found")
-    
-    # Execute the schedule
-    result = await execute_schedule(schedule_id, db)
-    return result
+
+    runtime = get_auto_counter_runtime_status()
+    if runtime.get("is_busy"):
+        raise HTTPException(
+            status_code=409,
+            detail="Ya hay una toma automatica en ejecucion. Espere a que finalice.",
+        )
+
+    background_tasks.add_task(_run_schedule_job_in_background, schedule_id)
+
+    return ScheduleRunResult(
+        schedule_id=schedule_id,
+        success=True,
+        message="Ejecucion iniciada en segundo plano",
+        printers_polled=0,
+        errors=[],
+        execution_time=0.0,
+    )
 
 @router.post("/{schedule_id}/toggle")
 def toggle_schedule(schedule_id: int, db: Session = Depends(get_db)):
@@ -645,3 +684,4 @@ async def get_schedule_history(
         "success_rate": success_rate,
         "average_duration": average_duration
     }
+

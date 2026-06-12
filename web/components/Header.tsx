@@ -5,6 +5,52 @@ import { useRouter } from 'next/navigation'
 import Breadcrumbs from './Breadcrumbs'
 import { useAuth } from './AuthProvider'
 
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
+
+interface AlertSummary {
+  id: number
+  printer_id: number
+  printer_brand?: string
+  printer_model?: string
+  printer_ip?: string
+  status: string
+  total_errors: number
+  first_seen_at: string
+  last_seen_at: string
+  last_error_message?: string
+  last_task_name?: string
+}
+
+interface AlertEvent {
+  id: number
+  occurred_at: string
+  task_name: string
+  error_message: string
+  run_context?: string
+}
+
+interface AlertStats {
+  open_alerts: number
+  total_errors_open_alerts: number
+}
+
+interface AutoRuntimeJob {
+  schedule_id: number
+  schedule_name?: string
+  started_at: string
+  printers_total: number
+  printers_processed: number
+  printers_successful: number
+  printers_failed: number
+  current_printer?: string | null
+}
+
+interface AutoRuntimeStatus {
+  is_busy: boolean
+  running_jobs: AutoRuntimeJob[]
+  recent_jobs: AutoRuntimeJob[]
+}
+
 interface HeaderProps {
   isCollapsed: boolean
   onToggleCollapse: () => void
@@ -13,7 +59,19 @@ interface HeaderProps {
 export default function Header({ isCollapsed, onToggleCollapse }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [alertSummaries, setAlertSummaries] = useState<AlertSummary[]>([])
+  const [alertEvents, setAlertEvents] = useState<Record<number, AlertEvent[]>>({})
+  const [resolveNotes, setResolveNotes] = useState<Record<number, string>>({})
+  const [selectedAlertId, setSelectedAlertId] = useState<number | null>(null)
+  const [alertStats, setAlertStats] = useState<AlertStats>({ open_alerts: 0, total_errors_open_alerts: 0 })
+  const [autoRuntimeStatus, setAutoRuntimeStatus] = useState<AutoRuntimeStatus>({
+    is_busy: false,
+    running_jobs: [],
+    recent_jobs: []
+  })
+  const [loadingAlerts, setLoadingAlerts] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
+  const notificationsRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const { user, logout } = useAuth()
 
@@ -23,16 +81,127 @@ export default function Header({ isCollapsed, onToggleCollapse }: HeaderProps) {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setShowUserMenu(false)
       }
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
+        setShowNotifications(false)
+      }
     }
 
-    if (showUserMenu) {
+    if (showUserMenu || showNotifications) {
       document.addEventListener('mousedown', handleClickOutside)
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [showUserMenu])
+  }, [showUserMenu, showNotifications])
+
+  useEffect(() => {
+    fetchAlertStats()
+    fetchAutoRuntimeStatus()
+    const interval = setInterval(fetchAlertStats, 60000)
+    const runtimeInterval = setInterval(fetchAutoRuntimeStatus, 10000)
+    return () => {
+      clearInterval(interval)
+      clearInterval(runtimeInterval)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (showNotifications) {
+      fetchAlertSummaries()
+    }
+  }, [showNotifications])
+
+  const fetchAlertStats = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/alerts/medical-counter-errors/stats`)
+      if (!response.ok) return
+      const data = await response.json()
+      setAlertStats(data)
+    } catch (error) {
+      console.error('Error fetching alert stats:', error)
+    }
+  }
+
+  const fetchAutoRuntimeStatus = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/auto-counters/runtime-status`)
+      if (!response.ok) return
+      const data = await response.json()
+      setAutoRuntimeStatus(data)
+    } catch (error) {
+      console.error('Error fetching auto runtime status:', error)
+    }
+  }
+
+  const fetchAlertSummaries = async () => {
+    try {
+      setLoadingAlerts(true)
+      const response = await fetch(`${API_BASE}/alerts/medical-counter-errors?status=open&limit=20`)
+      if (!response.ok) return
+      const data = await response.json()
+      setAlertSummaries(data)
+      await Promise.all([fetchAlertStats(), fetchAutoRuntimeStatus()])
+    } catch (error) {
+      console.error('Error fetching alerts:', error)
+    } finally {
+      setLoadingAlerts(false)
+    }
+  }
+
+  const fetchAlertEvents = async (alertId: number) => {
+    if (alertEvents[alertId]) {
+      setSelectedAlertId(selectedAlertId === alertId ? null : alertId)
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/alerts/medical-counter-errors/${alertId}/events?limit=20`)
+      if (!response.ok) return
+      const data = await response.json()
+      setAlertEvents(prev => ({ ...prev, [alertId]: data }))
+      setSelectedAlertId(selectedAlertId === alertId ? null : alertId)
+    } catch (error) {
+      console.error('Error fetching alert events:', error)
+    }
+  }
+
+  const resolveAlert = async (alertId: number) => {
+    try {
+      const resolvedNote = (resolveNotes[alertId] || '').trim()
+      const response = await fetch(`${API_BASE}/alerts/medical-counter-errors/${alertId}/resolve`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resolved_by: user?.username || 'ui-user',
+          resolved_notes: resolvedNote || null
+        })
+      })
+
+      if (!response.ok) return
+
+      setAlertSummaries(prev => prev.filter(alert => alert.id !== alertId))
+      setSelectedAlertId(null)
+      setResolveNotes(prev => {
+        const updated = { ...prev }
+        delete updated[alertId]
+        return updated
+      })
+      await fetchAlertStats()
+    } catch (error) {
+      console.error('Error resolving alert:', error)
+    }
+  }
+
+  const formatDateTime = (value: string) => {
+    return new Date(value).toLocaleString('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
 
   const handleLogout = () => {
     logout()
@@ -75,7 +244,7 @@ export default function Header({ isCollapsed, onToggleCollapse }: HeaderProps) {
       {/* Right Actions */}
       <div className="flex items-center gap-4">
         {/* Notifications */}
-        <div className="relative">
+        <div className="relative" ref={notificationsRef}>
           <button
             onClick={() => setShowNotifications(!showNotifications)}
             className="relative rounded-lg p-2 text-gray-400 dark:text-gray-300 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600"
@@ -83,11 +252,124 @@ export default function Header({ isCollapsed, onToggleCollapse }: HeaderProps) {
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
-            <span className="absolute right-1 top-1 flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500"></span>
-            </span>
+            {alertStats.open_alerts > 0 && (
+              <>
+                <span className="absolute right-1 top-1 flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500"></span>
+                </span>
+                <span className="absolute -right-2 -top-1 min-w-[1.1rem] rounded-full bg-red-600 px-1 text-center text-[10px] font-semibold text-white">
+                  {alertStats.open_alerts > 99 ? '99+' : alertStats.open_alerts}
+                </span>
+              </>
+            )}
           </button>
+
+          {showNotifications && (
+            <div className="absolute right-0 top-full mt-2 w-[26rem] rounded-xl border border-gray-200 bg-white shadow-lg z-50">
+              <div className="border-b border-gray-100 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-gray-900">Alertas de contadores médicos</h3>
+                  <button
+                    onClick={fetchAlertSummaries}
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    Actualizar
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  {alertStats.open_alerts} impresoras con alertas abiertas, {alertStats.total_errors_open_alerts} errores acumulados.
+                </p>
+              </div>
+
+              <div className="max-h-[28rem] overflow-y-auto">
+                <div className={`mx-4 mt-3 rounded-lg border px-3 py-2 ${autoRuntimeStatus.is_busy ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
+                  <p className={`text-xs font-semibold ${autoRuntimeStatus.is_busy ? 'text-amber-900' : 'text-emerald-900'}`}>
+                    {autoRuntimeStatus.is_busy ? 'Toma automatica en ejecucion' : 'Sin tareas automaticas activas'}
+                  </p>
+                  <p className={`mt-1 text-[11px] ${autoRuntimeStatus.is_busy ? 'text-amber-800' : 'text-emerald-800'}`}>
+                    {autoRuntimeStatus.is_busy
+                      ? `${autoRuntimeStatus.running_jobs.length} job(s) activos`
+                      : 'El sistema de toma automatica esta estable'}
+                  </p>
+                  {autoRuntimeStatus.is_busy && (
+                    <div className="mt-2 space-y-1">
+                      {autoRuntimeStatus.running_jobs.slice(0, 2).map(job => (
+                        <div key={`${job.schedule_id}-${job.started_at}`} className="text-[11px] text-amber-800">
+                          {(job.schedule_name || `Schedule ${job.schedule_id}`)}: {job.printers_processed}/{job.printers_total}
+                          {job.current_printer ? ` - ${job.current_printer}` : ''}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {loadingAlerts ? (
+                  <div className="p-4 text-sm text-gray-500">Cargando alertas...</div>
+                ) : alertSummaries.length === 0 ? (
+                  <div className="p-4 text-sm text-gray-500">No hay alertas abiertas.</div>
+                ) : (
+                  alertSummaries.map(alert => (
+                    <div key={alert.id} className="border-b border-gray-100 px-4 py-3">
+                      <button
+                        onClick={() => fetchAlertEvents(alert.id)}
+                        className="w-full text-left"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">
+                              {alert.printer_brand || 'Impresora'} {alert.printer_model || ''}
+                            </p>
+                            <p className="text-xs text-gray-500">{alert.printer_ip || 'Sin IP'}</p>
+                          </div>
+                          <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                            {alert.total_errors} errores
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-600">{alert.last_error_message || 'Sin detalle'}</p>
+                        <p className="mt-1 text-[11px] text-gray-400">
+                          Último: {formatDateTime(alert.last_seen_at)} · Tarea: {alert.last_task_name || 'N/A'}
+                        </p>
+                      </button>
+
+                      {selectedAlertId === alert.id && (
+                        <div className="mt-2 rounded-lg bg-gray-50 p-2">
+                          <div className="mb-2">
+                            <label className="mb-1 block text-[11px] font-medium text-gray-600">
+                              Comentario técnico de resolución
+                            </label>
+                            <textarea
+                              value={resolveNotes[alert.id] || ''}
+                              onChange={(e) => setResolveNotes(prev => ({ ...prev, [alert.id]: e.target.value }))}
+                              rows={2}
+                              className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                              placeholder="Ej: reinicio de servicio, credenciales corregidas, conectividad restablecida"
+                            />
+                          </div>
+                          <div className="mb-2 flex justify-end">
+                            <button
+                              onClick={() => resolveAlert(alert.id)}
+                              className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700"
+                            >
+                              Marcar resuelta
+                            </button>
+                          </div>
+                          <div className="max-h-40 overflow-y-auto space-y-2">
+                            {(alertEvents[alert.id] || []).map(event => (
+                              <div key={event.id} className="rounded border border-gray-200 bg-white p-2">
+                                <p className="text-[11px] text-gray-400">{formatDateTime(event.occurred_at)} · {event.task_name}</p>
+                                <p className="text-xs text-gray-700">{event.error_message}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Settings */}

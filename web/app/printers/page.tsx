@@ -40,9 +40,11 @@ interface Printer {
   initial_counter_color: number
   initial_counter_total: number
   ignore_counters?: boolean
+  is_medical?: boolean
   notes?: string
   responsible_person?: string
   cost_center?: string
+  cost_center_id?: number
   toner_black_code?: string
   toner_cyan_code?: string
   toner_magenta_code?: string
@@ -100,6 +102,9 @@ export default function Printers() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingPrinter, setEditingPrinter] = useState<Printer | null>(null)
   const [editActiveTab, setEditActiveTab] = useState<'general' | 'management'>('general')
+  const [allCostCenters, setAllCostCenters] = useState<{id: number; code: string; name: string | null}[]>([])
+  const [editingContractCostCenter, setEditingContractCostCenter] = useState<{id: number; code: string} | null>(null)
+  const [editCostCenterId, setEditCostCenterId] = useState<number | null>(null)
 
   // Estados para el formulario de agregar (igual que inventory)
   const [activeTab, setActiveTab] = useState('basic')
@@ -113,6 +118,7 @@ export default function Printers() {
     network_capable: true, wireless_capable: false, ownership_type: 'owned',
     status: 'active', condition: 'good', equipment_condition: 'new',
     initial_counter_bw: 0, initial_counter_color: 0, initial_counter_total: 0,
+    is_medical: false,
     toner_black_code: '', toner_cyan_code: '', toner_magenta_code: '', toner_yellow_code: '', other_supplies: ''
   })
   const resetAddForm = () => {
@@ -122,6 +128,7 @@ export default function Printers() {
       network_capable: true, wireless_capable: false, ownership_type: 'owned',
       status: 'active', condition: 'good', equipment_condition: 'new',
       initial_counter_bw: 0, initial_counter_color: 0, initial_counter_total: 0,
+      is_medical: false,
       toner_black_code: '', toner_cyan_code: '', toner_magenta_code: '', toner_yellow_code: '', other_supplies: ''
     })
     setActiveTab('basic')
@@ -261,7 +268,8 @@ export default function Printers() {
     department: '',
     supplier: '',
     ownership_type: '',
-    condition: ''
+    condition: '',
+    cost_center_id: ''
   })
 
   // States for discovery config management
@@ -326,6 +334,7 @@ export default function Printers() {
   useEffect(() => {
     fetchPrinters()
     fetchDiscoveryConfigs()
+    fetchCostCenters()
   }, [])
 
   // Temporizador para el tiempo transcurrido durante el descubrimiento
@@ -367,6 +376,18 @@ export default function Printers() {
       console.error('Error fetching printers:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchCostCenters = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/cost-centers/`)
+      if (response.ok) {
+        const data = await response.json()
+        setAllCostCenters(data.map((cc: any) => ({ id: cc.id, code: cc.code, name: cc.name ?? null })))
+      }
+    } catch (error) {
+      console.error('Error fetching cost centers:', error)
     }
   }
 
@@ -915,6 +936,7 @@ export default function Printers() {
         duplex_capable: false,
         network_capable: true,
         wireless_capable: false,
+        is_medical: device.is_medical || false,
         initial_counter_bw: 0,
         initial_counter_color: 0,
         initial_counter_total: 0
@@ -965,6 +987,8 @@ export default function Printers() {
   const openEditModal = async (printer: Printer) => {
     setEditingPrinter(printer)
     setEditActiveTab('general')
+    setEditingContractCostCenter(null)
+    setEditCostCenterId(printer.cost_center_id ?? null)
     setShowEditModal(true)
     
     // Load lease contract data if exists
@@ -973,6 +997,16 @@ export default function Printers() {
       if (response.ok) {
         const contractData = await response.json()
         console.log('Contract data loaded:', contractData)
+        
+        // Store contract's cost center for read-only display
+        if (contractData?.cost_center_id) {
+          const cc = allCostCenters.find(c => c.id === contractData.cost_center_id)
+          setEditingContractCostCenter({
+            id: contractData.cost_center_id,
+            code: cc?.code ?? `CC-${contractData.cost_center_id}`
+          })
+          setEditCostCenterId(contractData.cost_center_id)
+        }
         
         // Auto-populate form fields with contract data
         setTimeout(() => {
@@ -1044,6 +1078,8 @@ export default function Printers() {
     setShowEditModal(false)
     setEditingPrinter(null)
     setEditActiveTab('general')
+    setEditingContractCostCenter(null)
+    setEditCostCenterId(null)
   }
 
   const updatePrinter = async (printerData: any) => {
@@ -1295,7 +1331,8 @@ export default function Printers() {
           serial_number: device.serial_number || '',
           hostname: device.hostname || '',
           snmp_profile: device.snmp_profile || 'public',
-          is_color: device.is_color || false
+          is_color: device.is_color || false,
+          is_medical: device.is_medical || false
         }))
 
       console.log('Agregando dispositivos:', devicesToAdd)
@@ -1416,12 +1453,20 @@ export default function Printers() {
     const matchesSupplier = filters.supplier === '' || (printer.supplier && printer.supplier.toLowerCase().includes(filters.supplier.toLowerCase()))
     const matchesOwnership = filters.ownership_type === '' || printer.ownership_type === filters.ownership_type
     const matchesCondition = filters.condition === '' || printer.condition === filters.condition
+        const matchesCostCenter = filters.cost_center_id === '' || String(printer.cost_center_id || '') === filters.cost_center_id
     
     return matchesSearch && matchesBrand && matchesStatus && matchesLocation && 
-           matchesDepartment && matchesSupplier && matchesOwnership && matchesCondition
+          matchesDepartment && matchesSupplier && matchesOwnership && matchesCondition && matchesCostCenter
   })
 
   const uniqueBrands = Array.from(new Set(printers.map(p => p.brand))).sort()
+  const uniqueCostCenters = Array.from(
+    new Map(
+      printers
+        .filter((p) => p.cost_center_id)
+        .map((p) => [p.cost_center_id as number, p.cost_center || `CC-${p.cost_center_id}`])
+    ).entries()
+  ).sort((a, b) => String(a[1]).localeCompare(String(b[1]), undefined, { sensitivity: 'base' }))
 
   // Tools functionality
   const handleConnectivityTest = async (printer: Printer) => {
@@ -1831,6 +1876,21 @@ export default function Printers() {
                       <option value="poor">Malo</option>
                     </select>
                   </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Centro de costo</label>
+                    <select
+                      value={filters.cost_center_id}
+                      onChange={(e) => setFilters(prev => ({ ...prev, cost_center_id: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      title="Filtrar por centro de costo"
+                    >
+                      <option value="">Todos</option>
+                      {uniqueCostCenters.map(([id, label]) => (
+                        <option key={id} value={String(id)}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div className="mt-3 flex justify-end">
                   <button
@@ -1840,7 +1900,8 @@ export default function Printers() {
                       department: '',
                       supplier: '',
                       ownership_type: '',
-                      condition: ''
+                      condition: '',
+                      cost_center_id: ''
                     })}
                     className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium"
                   >
@@ -1905,6 +1966,11 @@ export default function Printers() {
                         <span className="inline-block text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded mb-1">
                           {printer.brand}
                         </span>
+                        {printer.is_medical && (
+                          <span className="ml-1 inline-block text-[10px] font-semibold text-red-700 bg-red-100 px-2 py-0.5 rounded mb-1">
+                            Medica
+                          </span>
+                        )}
                         <h3 className="font-semibold text-gray-900 text-sm leading-tight truncate">
                           {printer.model}
                         </h3>
@@ -2220,7 +2286,16 @@ export default function Printers() {
                           </td>
                         )}
                         {visibleColumns.model && (
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{printer.model}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <div className="flex items-center gap-2">
+                              <span>{printer.model}</span>
+                              {printer.is_medical && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
+                                  Medica
+                                </span>
+                              )}
+                            </div>
+                          </td>
                         )}
                         {visibleColumns.asset_tag && (
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{printer.asset_tag}</td>
@@ -3514,6 +3589,7 @@ export default function Printers() {
                             <div className="space-y-3">
                               <label className="flex items-center gap-2.5 p-3 border border-gray-100 rounded-lg"><input type="checkbox" checked={addForm.is_color || false} onChange={(e) => setAddForm({...addForm, is_color: e.target.checked})} className="h-4 w-4 border-gray-300 rounded" /><span className="text-sm text-gray-700">Impresión a Color</span></label>
                               <label className="flex items-center gap-2.5 p-3 border border-gray-100 rounded-lg"><input type="checkbox" checked={addForm.duplex_capable || false} onChange={(e) => setAddForm({...addForm, duplex_capable: e.target.checked})} className="h-4 w-4 border-gray-300 rounded" /><span className="text-sm text-gray-700">Impresión Dúplex (Doble Cara)</span></label>
+                              <label className="flex items-center gap-2.5 p-3 border border-red-100 bg-red-50 rounded-lg"><input type="checkbox" checked={addForm.is_medical || false} onChange={(e) => setAddForm({...addForm, is_medical: e.target.checked})} className="h-4 w-4 border-red-300 rounded" /><span className="text-sm text-red-700">Marcar como impresora médica</span></label>
                             </div>
                           </div>
                         </div>
@@ -3549,8 +3625,13 @@ export default function Printers() {
                                 <input type="text" value={addForm.responsible_person || ''} onChange={(e) => setAddForm({...addForm, responsible_person: e.target.value})}
                                   className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="Nombre del responsable" /></div>
                               <div><label className="block text-sm font-medium text-gray-700 mb-2">Centro de Costos</label>
-                                <input type="text" value={addForm.cost_center || ''} onChange={(e) => setAddForm({...addForm, cost_center: e.target.value})}
-                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white" placeholder="CC001, CC-ADM-001..." /></div>
+                                <select value={addForm.cost_center_id ?? ''} onChange={(e) => setAddForm({...addForm, cost_center_id: e.target.value ? Number(e.target.value) : undefined})}
+                                  className="block w-full border border-accent rounded-lg shadow-sm focus:ring-accent focus:border-accent px-3 py-1.5 text-sm text-gray-700 bg-white">
+                                  <option value="">Sin centro de costos</option>
+                                  {allCostCenters.map(cc => (
+                                    <option key={cc.id} value={cc.id}>{cc.code}{cc.name ? ` — ${cc.name}` : ''}</option>
+                                  ))}
+                                </select></div>
                             </div>
                           </div>
                         </div>
@@ -3707,6 +3788,7 @@ export default function Printers() {
                       hostname: formData.get('hostname') as string,
                       snmp_profile: formData.get('snmp_profile') as string,
                       is_color: formData.get('is_color') === 'true',
+                      is_medical: formData.get('is_medical') === 'on',
                       ignore_counters: formData.get('ignore_counters') === 'on',
                       location: formData.get('location') as string,
                       sector: formData.get('sector') as string,
@@ -3724,7 +3806,8 @@ export default function Printers() {
                       cost_per_page_color: formData.get('cost_per_page_color') ? parseFloat(formData.get('cost_per_page_color') as string) : null,
                       contact_name: formData.get('contact_name') as string,
                       contact_email: formData.get('contact_email') as string,
-                      contact_phone: formData.get('contact_phone') as string
+                      contact_phone: formData.get('contact_phone') as string,
+                      cost_center_id: editCostCenterId ?? null
                     }
                     updatePrinter(updatedPrinter)
                   }}>
@@ -3864,6 +3947,18 @@ export default function Printers() {
                         </div>
 
                         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                          <label className="inline-flex items-center gap-2 text-sm font-medium text-amber-900 cursor-pointer mb-2">
+                            <input
+                              type="checkbox"
+                              name="is_medical"
+                              defaultChecked={!!editingPrinter.is_medical}
+                              className="h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                            />
+                            Impresora médica (forzar clasificación manual)
+                          </label>
+                          <p className="text-xs text-amber-700 mb-3">
+                            Úselo para corregir falsos positivos o para marcar una impresora médica no detectada.
+                          </p>
                           <label className="inline-flex items-center gap-2 text-sm font-medium text-amber-900 cursor-pointer">
                             <input
                               type="checkbox"
@@ -3881,6 +3976,29 @@ export default function Printers() {
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Proveedor</label>
                           <input type="text" name="supplier" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" defaultValue={editingPrinter.supplier || ''} placeholder="Nombre del proveedor" />
+                        </div>
+
+                        {/* Centro de Costos */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Centro de Costos</label>
+                          {editingContractCostCenter ? (
+                            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-md">
+                              <span className="text-xs text-blue-500">🔒</span>
+                              <span className="text-sm text-blue-800 font-medium">{editingContractCostCenter.code}</span>
+                              <span className="text-xs text-blue-500 ml-auto">Asignado por contrato</span>
+                            </div>
+                          ) : (
+                            <select
+                              value={editCostCenterId ?? ''}
+                              onChange={(e) => setEditCostCenterId(e.target.value ? Number(e.target.value) : null)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                            >
+                              <option value="">Sin centro de costos</option>
+                              {allCostCenters.map(cc => (
+                                <option key={cc.id} value={cc.id}>{cc.code}{cc.name ? ` — ${cc.name}` : ''}</option>
+                              ))}
+                            </select>
+                          )}
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

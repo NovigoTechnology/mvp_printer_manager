@@ -1,0 +1,1409 @@
+from datetime import datetime
+import json
+import re
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, joinedload
+
+from ..db import get_db
+from ..models import (
+    Area,
+    Branch,
+    Company,
+    CostCenter,
+    CostCenterAudit,
+    Department,
+    OrganizationalUnit,
+)
+
+router = APIRouter()
+
+
+def _normalize_token(value: Optional[str], fallback: str) -> str:
+    if not value:
+        return fallback
+    token = re.sub(r"[^A-Z0-9]", "", value.upper())
+    if not token:
+        return fallback
+    return token[:3]
+
+
+def _build_cost_center_code(org_unit: OrganizationalUnit, sequence_number: int) -> str:
+    company_token = _normalize_token(org_unit.company.name if org_unit.company else None, "EMP")
+    branch_token = _normalize_token(org_unit.branch.code if org_unit.branch else None, "BRA")
+    department_token = _normalize_token(org_unit.department.code if org_unit.department else None, "DEP")
+    area_token = _normalize_token(org_unit.area.code if org_unit.area else None, "ARE")
+    return f"{company_token}-{branch_token}-{department_token}-{area_token}-{sequence_number:04d}"
+
+
+def _serialize_org_unit(org_unit: OrganizationalUnit) -> dict:
+    return {
+        "id": org_unit.id,
+        "company_id": org_unit.company_id,
+        "branch_id": org_unit.branch_id,
+        "department_id": org_unit.department_id,
+        "area_id": org_unit.area_id,
+        "is_active": org_unit.is_active,
+        "created_at": org_unit.created_at,
+        "updated_at": org_unit.updated_at,
+        "company_name": org_unit.company.name if org_unit.company else None,
+        "branch_name": org_unit.branch.name if org_unit.branch else None,
+        "branch_code": org_unit.branch.code if org_unit.branch else None,
+        "department_name": org_unit.department.name if org_unit.department else None,
+        "department_code": org_unit.department.code if org_unit.department else None,
+        "area_name": org_unit.area.name if org_unit.area else None,
+        "area_code": org_unit.area.code if org_unit.area else None,
+    }
+
+
+def _serialize_cost_center(cost_center: CostCenter) -> dict:
+    ou = cost_center.organizational_unit
+    return {
+        "id": cost_center.id,
+        "organizational_unit_id": cost_center.organizational_unit_id,
+        "sequence_number": cost_center.sequence_number,
+        "code": cost_center.code,
+        "name": cost_center.name,
+        "description": cost_center.description,
+        "status": cost_center.status,
+        "is_active": cost_center.is_active,
+        "created_at": cost_center.created_at,
+        "updated_at": cost_center.updated_at,
+        "organizational_unit": _serialize_org_unit(ou) if ou else None,
+    }
+
+
+class BranchCreate(BaseModel):
+    code: str
+    name: str
+    address: Optional[str] = None
+    status: str = "active"
+
+
+class BranchUpdate(BaseModel):
+    code: Optional[str] = None
+    name: Optional[str] = None
+    address: Optional[str] = None
+    status: Optional[str] = None
+
+
+class DepartmentCreate(BaseModel):
+    code: str
+    name: str
+    status: str = "active"
+
+
+class DepartmentUpdate(BaseModel):
+    code: Optional[str] = None
+    name: Optional[str] = None
+    status: Optional[str] = None
+
+
+class AreaCreate(BaseModel):
+    code: str
+    name: str
+    status: str = "active"
+
+
+class AreaUpdate(BaseModel):
+    code: Optional[str] = None
+    name: Optional[str] = None
+    status: Optional[str] = None
+
+
+class OrganizationalUnitCreate(BaseModel):
+    company_id: int
+    branch_id: int
+    department_id: int
+    area_id: int
+    is_active: bool = True
+
+
+class OrganizationalUnitUpdate(BaseModel):
+    company_id: Optional[int] = None
+    branch_id: Optional[int] = None
+    department_id: Optional[int] = None
+    area_id: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class CostCenterCreate(BaseModel):
+    organizational_unit_id: int
+    name: Optional[str] = None
+    description: Optional[str] = None
+    status: str = "active"
+    created_by: Optional[str] = "ui-user"
+
+
+class CostCenterUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    is_active: Optional[bool] = None
+    changed_by: Optional[str] = "ui-user"
+    change_reason: Optional[str] = None
+
+
+@router.get("/lookups")
+def get_lookups(db: Session = Depends(get_db)):
+    companies = db.query(Company).filter(Company.status == "active").order_by(Company.name).all()
+    branches = db.query(Branch).filter(Branch.deleted_at.is_(None)).order_by(Branch.name).all()
+    departments = db.query(Department).filter(Department.deleted_at.is_(None)).order_by(Department.name).all()
+    areas = db.query(Area).filter(Area.deleted_at.is_(None)).order_by(Area.name).all()
+
+    return {
+        "companies": [{"id": c.id, "name": c.name} for c in companies],
+        "branches": [{"id": b.id, "code": b.code, "name": b.name, "status": b.status} for b in branches],
+        "departments": [{"id": d.id, "code": d.code, "name": d.name, "status": d.status} for d in departments],
+        "areas": [{"id": a.id, "code": a.code, "name": a.name, "status": a.status} for a in areas],
+    }
+
+
+@router.get("/branches")
+def list_branches(db: Session = Depends(get_db)):
+    branches = db.query(Branch).filter(Branch.deleted_at.is_(None)).order_by(Branch.name).all()
+    return branches
+
+
+@router.post("/branches")
+def create_branch(payload: BranchCreate, db: Session = Depends(get_db)):
+    item = Branch(
+        code=payload.code.strip().upper(),
+        name=payload.name.strip(),
+        address=payload.address,
+        status=payload.status,
+    )
+    try:
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+        return item
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Codigo o nombre de sucursal ya existe")
+
+
+@router.put("/branches/{branch_id}")
+def update_branch(branch_id: int, payload: BranchUpdate, db: Session = Depends(get_db)):
+    item = db.query(Branch).filter(Branch.id == branch_id, Branch.deleted_at.is_(None)).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Sucursal no encontrada")
+
+    update_data = payload.dict(exclude_unset=True)
+    if "code" in update_data and update_data["code"] is not None:
+        update_data["code"] = update_data["code"].strip().upper()
+    if "name" in update_data and update_data["name"] is not None:
+        update_data["name"] = update_data["name"].strip()
+
+    for field, value in update_data.items():
+        setattr(item, field, value)
+
+    try:
+        db.commit()
+        db.refresh(item)
+        return item
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Codigo o nombre de sucursal ya existe")
+
+
+@router.delete("/branches/{branch_id}")
+def delete_branch(branch_id: int, db: Session = Depends(get_db)):
+    item = db.query(Branch).filter(Branch.id == branch_id, Branch.deleted_at.is_(None)).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Sucursal no encontrada")
+
+    has_links = db.query(OrganizationalUnit).filter(
+        OrganizationalUnit.branch_id == branch_id,
+        OrganizationalUnit.deleted_at.is_(None),
+    ).count()
+    if has_links > 0:
+        raise HTTPException(status_code=400, detail="No se puede eliminar: hay unidades organizativas asociadas")
+
+    item.deleted_at = datetime.utcnow()
+    item.status = "inactive"
+    db.commit()
+    return {"message": "Sucursal eliminada"}
+
+
+@router.get("/departments")
+def list_departments(db: Session = Depends(get_db)):
+    items = db.query(Department).filter(Department.deleted_at.is_(None)).order_by(Department.name).all()
+    return items
+
+
+@router.post("/departments")
+def create_department(payload: DepartmentCreate, db: Session = Depends(get_db)):
+    item = Department(code=payload.code.strip().upper(), name=payload.name.strip(), status=payload.status)
+    try:
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+        return item
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Codigo o nombre de departamento ya existe")
+
+
+@router.put("/departments/{department_id}")
+def update_department(department_id: int, payload: DepartmentUpdate, db: Session = Depends(get_db)):
+    item = db.query(Department).filter(Department.id == department_id, Department.deleted_at.is_(None)).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Departamento no encontrado")
+
+    update_data = payload.dict(exclude_unset=True)
+    if "code" in update_data and update_data["code"] is not None:
+        update_data["code"] = update_data["code"].strip().upper()
+    if "name" in update_data and update_data["name"] is not None:
+        update_data["name"] = update_data["name"].strip()
+
+    for field, value in update_data.items():
+        setattr(item, field, value)
+
+    try:
+        db.commit()
+        db.refresh(item)
+        return item
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Codigo o nombre de departamento ya existe")
+
+
+@router.delete("/departments/{department_id}")
+def delete_department(department_id: int, db: Session = Depends(get_db)):
+    item = db.query(Department).filter(Department.id == department_id, Department.deleted_at.is_(None)).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Departamento no encontrado")
+
+    has_links = db.query(OrganizationalUnit).filter(
+        OrganizationalUnit.department_id == department_id,
+        OrganizationalUnit.deleted_at.is_(None),
+    ).count()
+    if has_links > 0:
+        raise HTTPException(status_code=400, detail="No se puede eliminar: hay unidades organizativas asociadas")
+
+    item.deleted_at = datetime.utcnow()
+    item.status = "inactive"
+    db.commit()
+    return {"message": "Departamento eliminado"}
+
+
+@router.get("/areas")
+def list_areas(db: Session = Depends(get_db)):
+    items = db.query(Area).filter(Area.deleted_at.is_(None)).order_by(Area.name).all()
+    return items
+
+
+@router.post("/areas")
+def create_area(payload: AreaCreate, db: Session = Depends(get_db)):
+    item = Area(code=payload.code.strip().upper(), name=payload.name.strip(), status=payload.status)
+    try:
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+        return item
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Codigo o nombre de area ya existe")
+
+
+@router.put("/areas/{area_id}")
+def update_area(area_id: int, payload: AreaUpdate, db: Session = Depends(get_db)):
+    item = db.query(Area).filter(Area.id == area_id, Area.deleted_at.is_(None)).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Area no encontrada")
+
+    update_data = payload.dict(exclude_unset=True)
+    if "code" in update_data and update_data["code"] is not None:
+        update_data["code"] = update_data["code"].strip().upper()
+    if "name" in update_data and update_data["name"] is not None:
+        update_data["name"] = update_data["name"].strip()
+
+    for field, value in update_data.items():
+        setattr(item, field, value)
+
+    try:
+        db.commit()
+        db.refresh(item)
+        return item
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Codigo o nombre de area ya existe")
+
+
+@router.delete("/areas/{area_id}")
+def delete_area(area_id: int, db: Session = Depends(get_db)):
+    item = db.query(Area).filter(Area.id == area_id, Area.deleted_at.is_(None)).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Area no encontrada")
+
+    has_links = db.query(OrganizationalUnit).filter(
+        OrganizationalUnit.area_id == area_id,
+        OrganizationalUnit.deleted_at.is_(None),
+    ).count()
+    if has_links > 0:
+        raise HTTPException(status_code=400, detail="No se puede eliminar: hay unidades organizativas asociadas")
+
+    item.deleted_at = datetime.utcnow()
+    item.status = "inactive"
+    db.commit()
+    return {"message": "Area eliminada"}
+
+
+@router.get("/organizational-units")
+def list_organizational_units(db: Session = Depends(get_db)):
+    rows = (
+        db.query(OrganizationalUnit)
+        .options(
+            joinedload(OrganizationalUnit.company),
+            joinedload(OrganizationalUnit.branch),
+            joinedload(OrganizationalUnit.department),
+            joinedload(OrganizationalUnit.area),
+        )
+        .filter(OrganizationalUnit.deleted_at.is_(None))
+        .order_by(OrganizationalUnit.id.desc())
+        .all()
+    )
+    return [_serialize_org_unit(row) for row in rows]
+
+
+@router.post("/organizational-units")
+def create_organizational_unit(payload: OrganizationalUnitCreate, db: Session = Depends(get_db)):
+    company = db.query(Company).filter(Company.id == payload.company_id, Company.status == "active").first()
+    branch = db.query(Branch).filter(Branch.id == payload.branch_id, Branch.deleted_at.is_(None)).first()
+    department = db.query(Department).filter(Department.id == payload.department_id, Department.deleted_at.is_(None)).first()
+    area = db.query(Area).filter(Area.id == payload.area_id, Area.deleted_at.is_(None)).first()
+
+    if not company or not branch or not department or not area:
+        raise HTTPException(status_code=400, detail="Datos de unidad organizativa invalidos")
+
+    item = OrganizationalUnit(**payload.dict())
+    try:
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="La combinacion ya existe")
+
+    row = (
+        db.query(OrganizationalUnit)
+        .options(
+            joinedload(OrganizationalUnit.company),
+            joinedload(OrganizationalUnit.branch),
+            joinedload(OrganizationalUnit.department),
+            joinedload(OrganizationalUnit.area),
+        )
+        .filter(OrganizationalUnit.id == item.id)
+        .first()
+    )
+    return _serialize_org_unit(row)
+
+
+@router.put("/organizational-units/{org_unit_id}")
+def update_organizational_unit(org_unit_id: int, payload: OrganizationalUnitUpdate, db: Session = Depends(get_db)):
+    item = db.query(OrganizationalUnit).filter(
+        OrganizationalUnit.id == org_unit_id,
+        OrganizationalUnit.deleted_at.is_(None),
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Unidad organizativa no encontrada")
+
+    update_data = payload.dict(exclude_unset=True)
+
+    if "company_id" in update_data:
+        company = db.query(Company).filter(Company.id == update_data["company_id"], Company.status == "active").first()
+        if not company:
+            raise HTTPException(status_code=400, detail="Empresa invalida")
+    if "branch_id" in update_data:
+        branch = db.query(Branch).filter(Branch.id == update_data["branch_id"], Branch.deleted_at.is_(None)).first()
+        if not branch:
+            raise HTTPException(status_code=400, detail="Sucursal invalida")
+    if "department_id" in update_data:
+        department = db.query(Department).filter(Department.id == update_data["department_id"], Department.deleted_at.is_(None)).first()
+        if not department:
+            raise HTTPException(status_code=400, detail="Departamento invalido")
+    if "area_id" in update_data:
+        area = db.query(Area).filter(Area.id == update_data["area_id"], Area.deleted_at.is_(None)).first()
+        if not area:
+            raise HTTPException(status_code=400, detail="Area invalida")
+
+    for field, value in update_data.items():
+        setattr(item, field, value)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="La combinacion ya existe")
+
+    row = (
+        db.query(OrganizationalUnit)
+        .options(
+            joinedload(OrganizationalUnit.company),
+            joinedload(OrganizationalUnit.branch),
+            joinedload(OrganizationalUnit.department),
+            joinedload(OrganizationalUnit.area),
+        )
+        .filter(OrganizationalUnit.id == item.id)
+        .first()
+    )
+    return _serialize_org_unit(row)
+
+
+@router.delete("/organizational-units/{org_unit_id}")
+def delete_organizational_unit(org_unit_id: int, db: Session = Depends(get_db)):
+    item = db.query(OrganizationalUnit).filter(
+        OrganizationalUnit.id == org_unit_id,
+        OrganizationalUnit.deleted_at.is_(None),
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Unidad organizativa no encontrada")
+
+    active_cost_centers = db.query(CostCenter).filter(
+        CostCenter.organizational_unit_id == org_unit_id,
+        CostCenter.deleted_at.is_(None),
+    ).count()
+    if active_cost_centers > 0:
+        raise HTTPException(status_code=400, detail="No se puede eliminar: hay centros de costos asociados")
+
+    item.deleted_at = datetime.utcnow()
+    item.is_active = False
+    db.commit()
+    return {"message": "Unidad organizativa eliminada"}
+
+
+@router.get("/")
+def list_cost_centers(
+    status: Optional[str] = None,
+    organizational_unit_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    query = (
+        db.query(CostCenter)
+        .options(
+            joinedload(CostCenter.organizational_unit).joinedload(OrganizationalUnit.company),
+            joinedload(CostCenter.organizational_unit).joinedload(OrganizationalUnit.branch),
+            joinedload(CostCenter.organizational_unit).joinedload(OrganizationalUnit.department),
+            joinedload(CostCenter.organizational_unit).joinedload(OrganizationalUnit.area),
+        )
+        .filter(CostCenter.deleted_at.is_(None))
+    )
+
+    if status:
+        query = query.filter(CostCenter.status == status)
+    if organizational_unit_id:
+        query = query.filter(CostCenter.organizational_unit_id == organizational_unit_id)
+
+    rows = query.order_by(CostCenter.id.desc()).all()
+    return [_serialize_cost_center(row) for row in rows]
+
+
+@router.post("/")
+def create_cost_center(payload: CostCenterCreate, db: Session = Depends(get_db)):
+    ou = (
+        db.query(OrganizationalUnit)
+        .options(
+            joinedload(OrganizationalUnit.company),
+            joinedload(OrganizationalUnit.branch),
+            joinedload(OrganizationalUnit.department),
+            joinedload(OrganizationalUnit.area),
+        )
+        .filter(
+            OrganizationalUnit.id == payload.organizational_unit_id,
+            OrganizationalUnit.deleted_at.is_(None),
+            OrganizationalUnit.is_active == True,
+        )
+        .with_for_update()
+        .first()
+    )
+
+    if not ou:
+        raise HTTPException(status_code=404, detail="Unidad organizativa no encontrada")
+
+    current_max = (
+        db.query(func.max(CostCenter.sequence_number))
+        .filter(
+            CostCenter.organizational_unit_id == payload.organizational_unit_id,
+            CostCenter.deleted_at.is_(None),
+        )
+        .scalar()
+        or 0
+    )
+
+    sequence_number = current_max + 1
+    code = _build_cost_center_code(ou, sequence_number)
+
+    item = CostCenter(
+        organizational_unit_id=payload.organizational_unit_id,
+        sequence_number=sequence_number,
+        code=code,
+        name=payload.name,
+        description=payload.description,
+        status=payload.status,
+        is_active=payload.status == "active",
+    )
+
+    db.add(item)
+    try:
+        db.commit()
+        db.refresh(item)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="No se pudo generar un correlativo unico. Reintente")
+
+    audit = CostCenterAudit(
+        cost_center_id=item.id,
+        action="CREATE",
+        changed_by=payload.created_by,
+        change_reason="Creacion manual",
+        changed_fields=json.dumps(
+            {
+                "code": code,
+                "sequence_number": sequence_number,
+                "organizational_unit_id": payload.organizational_unit_id,
+            }
+        ),
+    )
+    db.add(audit)
+    db.commit()
+
+    row = (
+        db.query(CostCenter)
+        .options(
+            joinedload(CostCenter.organizational_unit).joinedload(OrganizationalUnit.company),
+            joinedload(CostCenter.organizational_unit).joinedload(OrganizationalUnit.branch),
+            joinedload(CostCenter.organizational_unit).joinedload(OrganizationalUnit.department),
+            joinedload(CostCenter.organizational_unit).joinedload(OrganizationalUnit.area),
+        )
+        .filter(CostCenter.id == item.id)
+        .first()
+    )
+    return _serialize_cost_center(row)
+
+
+@router.put("/{cost_center_id}")
+def update_cost_center(cost_center_id: int, payload: CostCenterUpdate, db: Session = Depends(get_db)):
+    item = db.query(CostCenter).filter(CostCenter.id == cost_center_id, CostCenter.deleted_at.is_(None)).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Centro de costo no encontrado")
+
+    old_data = {
+        "name": item.name,
+        "description": item.description,
+        "status": item.status,
+        "is_active": item.is_active,
+    }
+
+    update_data = payload.dict(exclude_unset=True)
+    changed_by = update_data.pop("changed_by", "ui-user")
+    change_reason = update_data.pop("change_reason", None)
+
+    for field, value in update_data.items():
+        setattr(item, field, value)
+
+    if "status" in update_data:
+        item.is_active = update_data["status"] == "active"
+
+    db.commit()
+    db.refresh(item)
+
+    new_data = {
+        "name": item.name,
+        "description": item.description,
+        "status": item.status,
+        "is_active": item.is_active,
+    }
+
+    audit = CostCenterAudit(
+        cost_center_id=item.id,
+        action="UPDATE",
+        changed_by=changed_by,
+        change_reason=change_reason,
+        changed_fields=json.dumps({"old": old_data, "new": new_data}),
+    )
+    db.add(audit)
+    db.commit()
+
+    row = (
+        db.query(CostCenter)
+        .options(
+            joinedload(CostCenter.organizational_unit).joinedload(OrganizationalUnit.company),
+            joinedload(CostCenter.organizational_unit).joinedload(OrganizationalUnit.branch),
+            joinedload(CostCenter.organizational_unit).joinedload(OrganizationalUnit.department),
+            joinedload(CostCenter.organizational_unit).joinedload(OrganizationalUnit.area),
+        )
+        .filter(CostCenter.id == item.id)
+        .first()
+    )
+    return _serialize_cost_center(row)
+
+
+@router.delete("/{cost_center_id}")
+def delete_cost_center(cost_center_id: int, changed_by: str = "ui-user", db: Session = Depends(get_db)):
+    item = db.query(CostCenter).filter(CostCenter.id == cost_center_id, CostCenter.deleted_at.is_(None)).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Centro de costo no encontrado")
+
+    item.deleted_at = datetime.utcnow()
+    item.status = "inactive"
+    item.is_active = False
+    db.commit()
+
+    audit = CostCenterAudit(
+        cost_center_id=item.id,
+        action="DELETE",
+        changed_by=changed_by,
+        change_reason="Borrado logico",
+    )
+    db.add(audit)
+    db.commit()
+
+    return {"message": "Centro de costo eliminado"}
+from datetime import datetime
+import json
+import re
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import and_, func
+from sqlalchemy.orm import Session
+
+from ..db import get_db
+from ..models import (
+    Area,
+    Branch,
+    Company,
+    CostCenter,
+    CostCenterAudit,
+    Department,
+    OrganizationalUnit,
+)
+
+router = APIRouter()
+
+
+class BranchBase(BaseModel):
+    code: str
+    name: str
+    address: Optional[str] = None
+    status: str = "active"
+
+
+class BranchUpdate(BaseModel):
+    code: Optional[str] = None
+    name: Optional[str] = None
+    address: Optional[str] = None
+    status: Optional[str] = None
+
+
+class BranchResponse(BaseModel):
+    id: int
+    code: str
+    name: str
+    address: Optional[str]
+    status: str
+
+    class Config:
+        from_attributes = True
+
+
+class DepartmentBase(BaseModel):
+    code: str
+    name: str
+    status: str = "active"
+
+
+class DepartmentUpdate(BaseModel):
+    code: Optional[str] = None
+    name: Optional[str] = None
+    status: Optional[str] = None
+
+
+class DepartmentResponse(BaseModel):
+    id: int
+    code: str
+    name: str
+    status: str
+
+    class Config:
+        from_attributes = True
+
+
+class AreaBase(BaseModel):
+    code: str
+    name: str
+    status: str = "active"
+
+
+class AreaUpdate(BaseModel):
+    code: Optional[str] = None
+    name: Optional[str] = None
+    status: Optional[str] = None
+
+
+class AreaResponse(BaseModel):
+    id: int
+    code: str
+    name: str
+    status: str
+
+    class Config:
+        from_attributes = True
+
+
+class OrganizationalUnitCreate(BaseModel):
+    company_id: int
+    branch_id: int
+    department_id: int
+    area_id: int
+    is_active: bool = True
+
+
+class OrganizationalUnitUpdate(BaseModel):
+    company_id: Optional[int] = None
+    branch_id: Optional[int] = None
+    department_id: Optional[int] = None
+    area_id: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class OrganizationalUnitResponse(BaseModel):
+    id: int
+    company_id: int
+    branch_id: int
+    department_id: int
+    area_id: int
+    is_active: bool
+    company_name: str
+    branch_name: str
+    department_name: str
+    area_name: str
+
+
+class CostCenterCreate(BaseModel):
+    organizational_unit_id: int
+    name: Optional[str] = None
+    description: Optional[str] = None
+    status: str = "active"
+    created_by: Optional[str] = None
+
+
+class CostCenterUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    is_active: Optional[bool] = None
+    updated_by: Optional[str] = None
+    change_reason: Optional[str] = None
+
+
+class CostCenterResponse(BaseModel):
+    id: int
+    organizational_unit_id: int
+    sequence_number: int
+    code: str
+    name: Optional[str]
+    description: Optional[str]
+    status: str
+    is_active: bool
+    company_name: str
+    branch_name: str
+    department_name: str
+    area_name: str
+
+
+class CostCenterAuditResponse(BaseModel):
+    id: int
+    cost_center_id: int
+    action: str
+    changed_by: Optional[str]
+    change_reason: Optional[str]
+    changed_fields: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class LookupResponse(BaseModel):
+    companies: List[dict]
+    branches: List[dict]
+    departments: List[dict]
+    areas: List[dict]
+
+
+
+def _normalize_code(code: str) -> str:
+    return re.sub(r"[^A-Z0-9]", "", code.upper())
+
+
+
+def _company_token(name: str) -> str:
+    normalized = _normalize_code(name)
+    return (normalized[:3] if normalized else "EMP")
+
+
+
+def _build_cost_center_code(org_unit: OrganizationalUnit, sequence_number: int) -> str:
+    company_code = _company_token(org_unit.company.name)
+    branch_code = _normalize_code(org_unit.branch.code)[:4] or "SUC"
+    department_code = _normalize_code(org_unit.department.code)[:4] or "DEP"
+    area_code = _normalize_code(org_unit.area.code)[:4] or "ARE"
+    return f"{company_code}-{branch_code}-{department_code}-{area_code}-{sequence_number:04d}"
+
+
+
+def _serialize_org_unit(ou: OrganizationalUnit) -> OrganizationalUnitResponse:
+    return OrganizationalUnitResponse(
+        id=ou.id,
+        company_id=ou.company_id,
+        branch_id=ou.branch_id,
+        department_id=ou.department_id,
+        area_id=ou.area_id,
+        is_active=ou.is_active,
+        company_name=ou.company.name,
+        branch_name=ou.branch.name,
+        department_name=ou.department.name,
+        area_name=ou.area.name,
+    )
+
+
+
+def _serialize_cost_center(cc: CostCenter) -> CostCenterResponse:
+    ou = cc.organizational_unit
+    return CostCenterResponse(
+        id=cc.id,
+        organizational_unit_id=cc.organizational_unit_id,
+        sequence_number=cc.sequence_number,
+        code=cc.code,
+        name=cc.name,
+        description=cc.description,
+        status=cc.status,
+        is_active=cc.is_active,
+        company_name=ou.company.name,
+        branch_name=ou.branch.name,
+        department_name=ou.department.name,
+        area_name=ou.area.name,
+    )
+
+
+
+def _create_audit(
+    db: Session,
+    cost_center_id: int,
+    action: str,
+    changed_by: Optional[str] = None,
+    change_reason: Optional[str] = None,
+    changed_fields: Optional[dict] = None,
+):
+    db.add(
+        CostCenterAudit(
+            cost_center_id=cost_center_id,
+            action=action,
+            changed_by=changed_by,
+            change_reason=change_reason,
+            changed_fields=json.dumps(changed_fields) if changed_fields else None,
+        )
+    )
+
+
+@router.get("/lookups", response_model=LookupResponse)
+def get_lookups(db: Session = Depends(get_db)):
+    companies = db.query(Company).filter(Company.status == "active").order_by(Company.name).all()
+    branches = db.query(Branch).filter(Branch.deleted_at.is_(None)).order_by(Branch.name).all()
+    departments = db.query(Department).filter(Department.deleted_at.is_(None)).order_by(Department.name).all()
+    areas = db.query(Area).filter(Area.deleted_at.is_(None)).order_by(Area.name).all()
+
+    return LookupResponse(
+        companies=[{"id": c.id, "name": c.name} for c in companies],
+        branches=[{"id": b.id, "code": b.code, "name": b.name} for b in branches],
+        departments=[{"id": d.id, "code": d.code, "name": d.name} for d in departments],
+        areas=[{"id": a.id, "code": a.code, "name": a.name} for a in areas],
+    )
+
+
+@router.get("/branches", response_model=List[BranchResponse])
+def list_branches(db: Session = Depends(get_db)):
+    return (
+        db.query(Branch)
+        .filter(Branch.deleted_at.is_(None))
+        .order_by(Branch.name.asc())
+        .all()
+    )
+
+
+@router.post("/branches", response_model=BranchResponse)
+def create_branch(payload: BranchBase, db: Session = Depends(get_db)):
+    branch = Branch(
+        code=_normalize_code(payload.code),
+        name=payload.name.strip(),
+        address=payload.address,
+        status=payload.status,
+    )
+    db.add(branch)
+    try:
+        db.commit()
+        db.refresh(branch)
+        return branch
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error creating branch: {str(exc)}")
+
+
+@router.put("/branches/{branch_id}", response_model=BranchResponse)
+def update_branch(branch_id: int, payload: BranchUpdate, db: Session = Depends(get_db)):
+    branch = db.query(Branch).filter(and_(Branch.id == branch_id, Branch.deleted_at.is_(None))).first()
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+
+    for field, value in payload.dict(exclude_unset=True).items():
+        if field == "code" and value:
+            setattr(branch, field, _normalize_code(value))
+        elif field == "name" and value:
+            setattr(branch, field, value.strip())
+        else:
+            setattr(branch, field, value)
+
+    try:
+        db.commit()
+        db.refresh(branch)
+        return branch
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error updating branch: {str(exc)}")
+
+
+@router.delete("/branches/{branch_id}")
+def delete_branch(branch_id: int, db: Session = Depends(get_db)):
+    branch = db.query(Branch).filter(and_(Branch.id == branch_id, Branch.deleted_at.is_(None))).first()
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+
+    in_use = db.query(func.count(OrganizationalUnit.id)).filter(
+        and_(OrganizationalUnit.branch_id == branch_id, OrganizationalUnit.deleted_at.is_(None))
+    ).scalar()
+    if in_use:
+        raise HTTPException(status_code=400, detail="Branch is used by organizational units")
+
+    branch.deleted_at = datetime.utcnow()
+    branch.status = "inactive"
+    db.commit()
+    return {"message": "Branch deleted"}
+
+
+@router.get("/departments", response_model=List[DepartmentResponse])
+def list_departments(db: Session = Depends(get_db)):
+    return (
+        db.query(Department)
+        .filter(Department.deleted_at.is_(None))
+        .order_by(Department.name.asc())
+        .all()
+    )
+
+
+@router.post("/departments", response_model=DepartmentResponse)
+def create_department(payload: DepartmentBase, db: Session = Depends(get_db)):
+    department = Department(
+        code=_normalize_code(payload.code),
+        name=payload.name.strip(),
+        status=payload.status,
+    )
+    db.add(department)
+    try:
+        db.commit()
+        db.refresh(department)
+        return department
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error creating department: {str(exc)}")
+
+
+@router.put("/departments/{department_id}", response_model=DepartmentResponse)
+def update_department(department_id: int, payload: DepartmentUpdate, db: Session = Depends(get_db)):
+    department = (
+        db.query(Department)
+        .filter(and_(Department.id == department_id, Department.deleted_at.is_(None)))
+        .first()
+    )
+    if not department:
+        raise HTTPException(status_code=404, detail="Department not found")
+
+    for field, value in payload.dict(exclude_unset=True).items():
+        if field == "code" and value:
+            setattr(department, field, _normalize_code(value))
+        elif field == "name" and value:
+            setattr(department, field, value.strip())
+        else:
+            setattr(department, field, value)
+
+    try:
+        db.commit()
+        db.refresh(department)
+        return department
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error updating department: {str(exc)}")
+
+
+@router.delete("/departments/{department_id}")
+def delete_department(department_id: int, db: Session = Depends(get_db)):
+    department = (
+        db.query(Department)
+        .filter(and_(Department.id == department_id, Department.deleted_at.is_(None)))
+        .first()
+    )
+    if not department:
+        raise HTTPException(status_code=404, detail="Department not found")
+
+    in_use = db.query(func.count(OrganizationalUnit.id)).filter(
+        and_(OrganizationalUnit.department_id == department_id, OrganizationalUnit.deleted_at.is_(None))
+    ).scalar()
+    if in_use:
+        raise HTTPException(status_code=400, detail="Department is used by organizational units")
+
+    department.deleted_at = datetime.utcnow()
+    department.status = "inactive"
+    db.commit()
+    return {"message": "Department deleted"}
+
+
+@router.get("/areas", response_model=List[AreaResponse])
+def list_areas(db: Session = Depends(get_db)):
+    return db.query(Area).filter(Area.deleted_at.is_(None)).order_by(Area.name.asc()).all()
+
+
+@router.post("/areas", response_model=AreaResponse)
+def create_area(payload: AreaBase, db: Session = Depends(get_db)):
+    area = Area(
+        code=_normalize_code(payload.code),
+        name=payload.name.strip(),
+        status=payload.status,
+    )
+    db.add(area)
+    try:
+        db.commit()
+        db.refresh(area)
+        return area
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error creating area: {str(exc)}")
+
+
+@router.put("/areas/{area_id}", response_model=AreaResponse)
+def update_area(area_id: int, payload: AreaUpdate, db: Session = Depends(get_db)):
+    area = db.query(Area).filter(and_(Area.id == area_id, Area.deleted_at.is_(None))).first()
+    if not area:
+        raise HTTPException(status_code=404, detail="Area not found")
+
+    for field, value in payload.dict(exclude_unset=True).items():
+        if field == "code" and value:
+            setattr(area, field, _normalize_code(value))
+        elif field == "name" and value:
+            setattr(area, field, value.strip())
+        else:
+            setattr(area, field, value)
+
+    try:
+        db.commit()
+        db.refresh(area)
+        return area
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error updating area: {str(exc)}")
+
+
+@router.delete("/areas/{area_id}")
+def delete_area(area_id: int, db: Session = Depends(get_db)):
+    area = db.query(Area).filter(and_(Area.id == area_id, Area.deleted_at.is_(None))).first()
+    if not area:
+        raise HTTPException(status_code=404, detail="Area not found")
+
+    in_use = db.query(func.count(OrganizationalUnit.id)).filter(
+        and_(OrganizationalUnit.area_id == area_id, OrganizationalUnit.deleted_at.is_(None))
+    ).scalar()
+    if in_use:
+        raise HTTPException(status_code=400, detail="Area is used by organizational units")
+
+    area.deleted_at = datetime.utcnow()
+    area.status = "inactive"
+    db.commit()
+    return {"message": "Area deleted"}
+
+
+@router.get("/organizational-units", response_model=List[OrganizationalUnitResponse])
+def list_organizational_units(db: Session = Depends(get_db)):
+    units = (
+        db.query(OrganizationalUnit)
+        .join(Company)
+        .join(Branch)
+        .join(Department)
+        .join(Area)
+        .filter(OrganizationalUnit.deleted_at.is_(None))
+        .order_by(Company.name.asc(), Branch.name.asc(), Department.name.asc(), Area.name.asc())
+        .all()
+    )
+    return [_serialize_org_unit(unit) for unit in units]
+
+
+@router.post("/organizational-units", response_model=OrganizationalUnitResponse)
+def create_organizational_unit(payload: OrganizationalUnitCreate, db: Session = Depends(get_db)):
+    company = db.query(Company).filter(Company.id == payload.company_id).first()
+    branch = db.query(Branch).filter(and_(Branch.id == payload.branch_id, Branch.deleted_at.is_(None))).first()
+    department = (
+        db.query(Department)
+        .filter(and_(Department.id == payload.department_id, Department.deleted_at.is_(None)))
+        .first()
+    )
+    area = db.query(Area).filter(and_(Area.id == payload.area_id, Area.deleted_at.is_(None))).first()
+
+    if not company or not branch or not department or not area:
+        raise HTTPException(status_code=400, detail="Invalid company/branch/department/area reference")
+
+    unit = OrganizationalUnit(**payload.dict())
+    db.add(unit)
+    try:
+        db.commit()
+        db.refresh(unit)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error creating organizational unit: {str(exc)}")
+
+    db.refresh(unit, attribute_names=["company", "branch", "department", "area"])
+    return _serialize_org_unit(unit)
+
+
+@router.put("/organizational-units/{unit_id}", response_model=OrganizationalUnitResponse)
+def update_organizational_unit(unit_id: int, payload: OrganizationalUnitUpdate, db: Session = Depends(get_db)):
+    unit = (
+        db.query(OrganizationalUnit)
+        .filter(and_(OrganizationalUnit.id == unit_id, OrganizationalUnit.deleted_at.is_(None)))
+        .first()
+    )
+    if not unit:
+        raise HTTPException(status_code=404, detail="Organizational unit not found")
+
+    update_data = payload.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(unit, field, value)
+
+    try:
+        db.commit()
+        db.refresh(unit)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error updating organizational unit: {str(exc)}")
+
+    db.refresh(unit, attribute_names=["company", "branch", "department", "area"])
+    return _serialize_org_unit(unit)
+
+
+@router.delete("/organizational-units/{unit_id}")
+def delete_organizational_unit(unit_id: int, db: Session = Depends(get_db)):
+    unit = (
+        db.query(OrganizationalUnit)
+        .filter(and_(OrganizationalUnit.id == unit_id, OrganizationalUnit.deleted_at.is_(None)))
+        .first()
+    )
+    if not unit:
+        raise HTTPException(status_code=404, detail="Organizational unit not found")
+
+    in_use = db.query(func.count(CostCenter.id)).filter(
+        and_(CostCenter.organizational_unit_id == unit_id, CostCenter.deleted_at.is_(None))
+    ).scalar()
+    if in_use:
+        raise HTTPException(status_code=400, detail="Organizational unit has cost centers associated")
+
+    unit.deleted_at = datetime.utcnow()
+    unit.is_active = False
+    db.commit()
+    return {"message": "Organizational unit deleted"}
+
+
+@router.get("/", response_model=List[CostCenterResponse])
+def list_cost_centers(
+    status: Optional[str] = None,
+    organizational_unit_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    query = (
+        db.query(CostCenter)
+        .join(OrganizationalUnit)
+        .join(Company)
+        .join(Branch)
+        .join(Department)
+        .join(Area)
+        .filter(CostCenter.deleted_at.is_(None), OrganizationalUnit.deleted_at.is_(None))
+    )
+
+    if status:
+        query = query.filter(CostCenter.status == status)
+    if organizational_unit_id:
+        query = query.filter(CostCenter.organizational_unit_id == organizational_unit_id)
+
+    cost_centers = query.order_by(CostCenter.code.asc()).all()
+    return [_serialize_cost_center(cc) for cc in cost_centers]
+
+
+@router.post("/", response_model=CostCenterResponse)
+def create_cost_center(payload: CostCenterCreate, db: Session = Depends(get_db)):
+    org_unit = (
+        db.query(OrganizationalUnit)
+        .join(Company)
+        .join(Branch)
+        .join(Department)
+        .join(Area)
+        .filter(
+            and_(
+                OrganizationalUnit.id == payload.organizational_unit_id,
+                OrganizationalUnit.deleted_at.is_(None),
+                OrganizationalUnit.is_active.is_(True),
+            )
+        )
+        .with_for_update()
+        .first()
+    )
+    if not org_unit:
+        raise HTTPException(status_code=404, detail="Organizational unit not found or inactive")
+
+    current_max = (
+        db.query(func.max(CostCenter.sequence_number))
+        .filter(
+            and_(
+                CostCenter.organizational_unit_id == payload.organizational_unit_id,
+                CostCenter.deleted_at.is_(None),
+            )
+        )
+        .scalar()
+        or 0
+    )
+
+    next_sequence = current_max + 1
+    code = _build_cost_center_code(org_unit, next_sequence)
+
+    cost_center = CostCenter(
+        organizational_unit_id=payload.organizational_unit_id,
+        sequence_number=next_sequence,
+        code=code,
+        name=payload.name,
+        description=payload.description,
+        status=payload.status,
+        is_active=payload.status == "active",
+    )
+
+    db.add(cost_center)
+    try:
+        db.flush()
+        _create_audit(
+            db=db,
+            cost_center_id=cost_center.id,
+            action="CREATE",
+            changed_by=payload.created_by,
+            change_reason="Initial creation",
+            changed_fields={"code": code, "sequence_number": next_sequence},
+        )
+        db.commit()
+        db.refresh(cost_center)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error creating cost center: {str(exc)}")
+
+    db.refresh(
+        cost_center,
+        attribute_names=["organizational_unit", "organizational_unit.company", "organizational_unit.branch", "organizational_unit.department", "organizational_unit.area"],
+    )
+    return _serialize_cost_center(cost_center)
+
+
+@router.put("/{cost_center_id}", response_model=CostCenterResponse)
+def update_cost_center(cost_center_id: int, payload: CostCenterUpdate, db: Session = Depends(get_db)):
+    cost_center = (
+        db.query(CostCenter)
+        .join(OrganizationalUnit)
+        .join(Company)
+        .join(Branch)
+        .join(Department)
+        .join(Area)
+        .filter(CostCenter.id == cost_center_id, CostCenter.deleted_at.is_(None))
+        .first()
+    )
+    if not cost_center:
+        raise HTTPException(status_code=404, detail="Cost center not found")
+
+    before = {
+        "name": cost_center.name,
+        "description": cost_center.description,
+        "status": cost_center.status,
+        "is_active": cost_center.is_active,
+    }
+
+    update_data = payload.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        if field not in {"updated_by", "change_reason"}:
+            setattr(cost_center, field, value)
+
+    if payload.status is not None:
+        cost_center.is_active = payload.status == "active"
+
+    try:
+        _create_audit(
+            db=db,
+            cost_center_id=cost_center.id,
+            action="UPDATE",
+            changed_by=payload.updated_by,
+            change_reason=payload.change_reason,
+            changed_fields={"before": before, "after": {
+                "name": cost_center.name,
+                "description": cost_center.description,
+                "status": cost_center.status,
+                "is_active": cost_center.is_active,
+            }},
+        )
+        db.commit()
+        db.refresh(cost_center)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error updating cost center: {str(exc)}")
+
+    return _serialize_cost_center(cost_center)
+
+
+@router.delete("/{cost_center_id}")
+def delete_cost_center(cost_center_id: int, changed_by: Optional[str] = None, db: Session = Depends(get_db)):
+    cost_center = db.query(CostCenter).filter(CostCenter.id == cost_center_id, CostCenter.deleted_at.is_(None)).first()
+    if not cost_center:
+        raise HTTPException(status_code=404, detail="Cost center not found")
+
+    cost_center.deleted_at = datetime.utcnow()
+    cost_center.status = "inactive"
+    cost_center.is_active = False
+
+    _create_audit(
+        db=db,
+        cost_center_id=cost_center.id,
+        action="DELETE",
+        changed_by=changed_by,
+        change_reason="Soft delete",
+    )
+
+    db.commit()
+    return {"message": "Cost center deleted"}
+
+
+@router.get("/{cost_center_id}/audits", response_model=List[CostCenterAuditResponse])
+def list_cost_center_audits(cost_center_id: int, db: Session = Depends(get_db)):
+    exists = db.query(CostCenter.id).filter(CostCenter.id == cost_center_id).first()
+    if not exists:
+        raise HTTPException(status_code=404, detail="Cost center not found")
+
+    return (
+        db.query(CostCenterAudit)
+        .filter(CostCenterAudit.cost_center_id == cost_center_id)
+        .order_by(CostCenterAudit.created_at.desc())
+        .all()
+    )

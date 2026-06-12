@@ -118,11 +118,13 @@ class PrinterCreate(BaseModel):
     initial_counter_color: Optional[int] = 0
     initial_counter_total: Optional[int] = 0
     ignore_counters: bool = False
+    is_medical: bool = False
     
     # Información adicional
     notes: Optional[str] = None
     responsible_person: Optional[str] = None
     cost_center: Optional[str] = None
+    cost_center_id: Optional[int] = None
     
     # Información de insumos
     toner_black_code: Optional[str] = None
@@ -178,11 +180,13 @@ class PrinterUpdate(BaseModel):
     initial_counter_color: Optional[int] = None
     initial_counter_total: Optional[int] = None
     ignore_counters: Optional[bool] = None
+    is_medical: Optional[bool] = None
     
     # Información adicional
     notes: Optional[str] = None
     responsible_person: Optional[str] = None
     cost_center: Optional[str] = None
+    cost_center_id: Optional[int] = None
     
     # Información de insumos
     toner_black_code: Optional[str] = None
@@ -239,11 +243,13 @@ class PrinterResponse(BaseModel):
     initial_counter_color: Optional[int]
     initial_counter_total: Optional[int]
     ignore_counters: bool
+    is_medical: bool
     
     # Información adicional
     notes: Optional[str]
     responsible_person: Optional[str]
     cost_center: Optional[str]
+    cost_center_id: Optional[int]
     
     # Información de insumos
     toner_black_code: Optional[str]
@@ -278,9 +284,12 @@ def list_available_printers(db: Session = Depends(get_db)):
     return available_printers
 
 @router.get("/", response_model=List[PrinterResponse])
-def list_printers(db: Session = Depends(get_db)):
+def list_printers(cost_center_id: Optional[int] = None, db: Session = Depends(get_db)):
     """List all printers"""
-    printers = db.query(Printer).all()
+    query = db.query(Printer)
+    if cost_center_id is not None:
+        query = query.filter(Printer.cost_center_id == cost_center_id)
+    printers = query.all()
     return printers
 
 @router.post("/", response_model=PrinterResponse)
@@ -1723,7 +1732,8 @@ def add_discovered_printers(
                 location=device_data.get('location', 'Descubierto automáticamente'),
                 status='active',
                 condition='good',
-                equipment_condition='used'  # Asumimos que es usado ya que fue descubierto
+                equipment_condition='used',  # Asumimos que es usado ya que fue descubierto
+                is_medical=device_data.get('is_medical', False)
             )
             
             # Procesar cada impresora individualmente
@@ -1813,7 +1823,8 @@ async def get_printer_lease_contract(printer_id: int, db: Session = Depends(get_
             "installation_date": contract_printer.installation_date or contract.start_date,
             "warranty_expiry": contract.end_date,
             "lease_contract": contract.contract_number,
-            "cost_center": contract.cost_center
+            "cost_center": contract.cost_center,
+            "cost_center_id": contract.cost_center_id
         },
         "contract_details": {
             "start_date": contract.start_date,

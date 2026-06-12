@@ -4,6 +4,7 @@ Ejecuta cada 1 hora para crear snapshots y detectar cambios de cartucho
 """
 
 import logging
+import os
 from datetime import datetime
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,7 @@ from ..db import SessionLocal
 from ..models import Printer
 from ..services.medical_printer_service import DrypixScraper
 from ..services.cartridge_detection_service import CartridgeDetectionService
+from ..services.medical_alert_service import record_medical_counter_error
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +33,8 @@ def poll_medical_printers_hourly():
     try:
         # Obtener todas las impresoras médicas
         medical_printers = db.query(Printer).filter(
-            Printer.model.in_(['DRYPIX SMART', 'FCR', 'CR']),
+            Printer.is_medical == True,
+            Printer.status == "active",
             Printer.ignore_counters == False
         ).all()
         
@@ -61,7 +64,16 @@ def poll_medical_printers_hourly():
                 counters = scraper.get_counters()
                 
                 if not counters or 'trays' not in counters:
-                    logger.warning(f"No se pudieron obtener contadores de printer {printer.id}")
+                    error_message = f"No se pudieron obtener contadores de printer {printer.id} ({printer.ip})"
+                    logger.warning(error_message)
+                    record_medical_counter_error(
+                        db=db,
+                        printer=printer,
+                        task_name="poll_medical_printers_hourly",
+                        error_message=error_message,
+                        run_context="automatic_hourly",
+                    )
+                    db.commit()
                     continue
                 
                 # Crear snapshot para cada bandeja (trays es un diccionario {Tray1: {available, printed}, ...})
@@ -88,7 +100,17 @@ def poll_medical_printers_hourly():
                         total_changes += 1
                 
             except Exception as e:
-                logger.error(f"Error polling printer {printer.id}: {str(e)}")
+                error_message = f"Error polling printer {printer.id} ({printer.ip}): {str(e)}"
+                logger.error(error_message)
+                db.rollback()
+                record_medical_counter_error(
+                    db=db,
+                    printer=printer,
+                    task_name="poll_medical_printers_hourly",
+                    error_message=error_message,
+                    run_context="automatic_hourly",
+                )
+                db.commit()
                 continue
         
         print(f"✅ POLLING HORARIO COMPLETADO: {total_snapshots} snapshots, {total_changes} cambios detectados")

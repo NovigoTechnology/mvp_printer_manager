@@ -144,6 +144,17 @@ export default function Sidebar({ isCollapsed }: SidebarProps) {
             </Link>
 
             <Link
+              href="/cost-centers"
+              className={getNavClasses('/cost-centers')}
+              title="Cost Centers"
+            >
+              <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M6 7V5a1 1 0 011-1h2a1 1 0 011 1v2m4 0V5a1 1 0 011-1h2a1 1 0 011 1v2M6 11h12M6 15h12M6 19h12" />
+              </svg>
+              {!isCollapsed && <span>Cost Centers</span>}
+            </Link>
+
+            <Link
               href="/supply-requests"
               className={getNavClasses('/supply-requests')}
               title="Supply Requests"

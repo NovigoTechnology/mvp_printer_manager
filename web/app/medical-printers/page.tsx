@@ -24,6 +24,7 @@ interface MedicalPrinter {
   ownership_type?: string
   network_capable?: boolean
   wireless_capable?: boolean
+  is_medical?: boolean
   created_at?: string
 }
 
@@ -114,9 +115,9 @@ export default function MedicalPrinters() {
       const response = await fetch(`${API_BASE}/printers/`)
       const allPrinters = await response.json()
       
-      // Filtrar solo impresoras médicas (con tecnología DICOM)
+      // Filtrar impresoras médicas por flag manual con fallback a tecnología DICOM.
       const medicalPrinters = allPrinters.filter((p: MedicalPrinter) => 
-        p.print_technology && p.print_technology.toLowerCase() === 'dicom'
+        p.is_medical === true || (p.print_technology && p.print_technology.toLowerCase() === 'dicom')
       )
       
       setPrinters(medicalPrinters)

@@ -22,6 +22,21 @@ from ..services.medical_printer_service import (
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+_collection_lock = Lock()
+_collection_state_lock = Lock()
+_collection_runtime_state: Dict[str, Any] = {
+    "is_running": False,
+    "started_at": None,
+    "mode": None,
+    "printers_total": 0,
+    "printers_processed": 0,
+    "printers_successful": 0,
+    "printers_failed": 0,
+}
+
+MAX_COLLECTION_WORKERS = 6
+MAX_PRINTERS_PER_COLLECTION = 200
+
 class CounterCollectionResult(BaseModel):
     success: bool
     message: str
@@ -47,6 +62,22 @@ class PrinterCounterData(BaseModel):
     error_message: Optional[str] = None
     action_taken: Optional[str] = None  # 'created', 'updated', 'skipped'
     ping_check: Optional[bool] = None  # True if ping successful, False if failed
+
+
+class CollectionRuntimeStatus(BaseModel):
+    is_running: bool
+    started_at: Optional[str] = None
+    mode: Optional[str] = None
+    printers_total: int
+    printers_processed: int
+    printers_successful: int
+    printers_failed: int
+
+
+@router.get("/runtime-status", response_model=CollectionRuntimeStatus)
+def get_collection_runtime_status():
+    with _collection_state_lock:
+        return CollectionRuntimeStatus(**_collection_runtime_state)
 
 def ping_printer(ip: str, timeout: float = 0.5, ports: List[int] = None) -> Dict[str, Any]:
     """
@@ -512,6 +543,12 @@ def collect_all_counters(
     Recolecta contadores de todas las impresoras activas (o las especificadas) vía SNMP
     y crea/actualiza registros MonthlyCounter
     """
+    if not _collection_lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=409,
+            detail="Ya hay una recoleccion de contadores en ejecucion. Espere a que finalice.",
+        )
+
     start_time = datetime.now()
     errors = []
     results = []
@@ -522,6 +559,17 @@ def collect_all_counters(
     counters_updated = 0
     
     try:
+        with _collection_state_lock:
+            _collection_runtime_state.update({
+                "is_running": True,
+                "started_at": start_time.isoformat(),
+                "mode": "manual_collect",
+                "printers_total": 0,
+                "printers_processed": 0,
+                "printers_successful": 0,
+                "printers_failed": 0,
+            })
+
         # Obtener impresoras a procesar
         query = db.query(Printer).filter(
             Printer.status == "active",
@@ -581,6 +629,15 @@ def collect_all_counters(
         elif lease_contract:
             filter_info = f" (filtered by lease contract: {lease_contract})"
         
+        if len(printers) > MAX_PRINTERS_PER_COLLECTION:
+            errors.append(
+                f"Run limited to first {MAX_PRINTERS_PER_COLLECTION} printers to protect resources"
+            )
+            printers = printers[:MAX_PRINTERS_PER_COLLECTION]
+
+        with _collection_state_lock:
+            _collection_runtime_state["printers_total"] = len(printers)
+
         logger.info(f"Starting PARALLEL counter collection for {len(printers)} printers{filter_info}")
         
         # PRE-CARGA: Obtener todos los contadores anteriores en una sola consulta optimizada
@@ -620,7 +677,7 @@ def collect_all_counters(
             })
         
         # Calcular número óptimo de workers (máximo 10 para no saturar la red)
-        max_workers = min(len(printers), 10)
+        max_workers = min(len(printers), MAX_COLLECTION_WORKERS)
         logger.info(f"Using {max_workers} parallel workers for processing")
         
         # Procesamiento paralelo con ThreadPoolExecutor
@@ -653,6 +710,11 @@ def collect_all_counters(
                     
                     results.append(printer_result.dict())
                     logger.info(f"Completed printer {printer_data['id']}: success={printer_result.success}")
+
+                    with _collection_state_lock:
+                        _collection_runtime_state["printers_processed"] = printers_processed
+                        _collection_runtime_state["printers_successful"] = printers_successful
+                        _collection_runtime_state["printers_failed"] = printers_failed
                     
                 except Exception as e:
                     # Error en el futuro
@@ -670,6 +732,10 @@ def collect_all_counters(
                         error_message=error_msg
                     )
                     results.append(failed_result.dict())
+                    with _collection_state_lock:
+                        _collection_runtime_state["printers_processed"] = printers_processed
+                        _collection_runtime_state["printers_successful"] = printers_successful
+                        _collection_runtime_state["printers_failed"] = printers_failed
         
         end_time = datetime.now()
         execution_time = (end_time - start_time).total_seconds()
@@ -710,6 +776,14 @@ def collect_all_counters(
             execution_time=execution_time,
             results=results
         )
+    finally:
+        with _collection_state_lock:
+            _collection_runtime_state.update({
+                "is_running": False,
+                "started_at": None,
+                "mode": None,
+            })
+        _collection_lock.release()
 
 @router.post("/collect/{printer_id}", response_model=PrinterCounterData)
 def collect_single_printer_counter(

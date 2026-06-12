@@ -53,11 +53,13 @@ class Printer(Base):
     initial_counter_color = Column(Integer, default=0)
     initial_counter_total = Column(Integer, default=0)
     ignore_counters = Column(Boolean, default=False)
+    is_medical = Column(Boolean, default=False, nullable=False)
     
     # Información adicional
     notes = Column(Text)
     responsible_person = Column(String)  # Persona responsable
     cost_center = Column(String)         # Centro de costo
+    cost_center_id = Column(Integer, ForeignKey("cost_centers.id"), nullable=True, index=True)
     
     # Información de insumos
     toner_black_code = Column(String)    # Código del tóner negro
@@ -250,6 +252,7 @@ class LeaseContract(Base):
     priority = Column(String, default="medium")  # low, medium, high, critical
     department = Column(String)
     cost_center = Column(String)
+    cost_center_id = Column(Integer, ForeignKey("cost_centers.id"), nullable=True, index=True)
     budget_code = Column(String)
     
     # Observaciones y notas
@@ -526,6 +529,43 @@ class CounterScheduleExecution(Base):
     
     # Relationships
     schedule = relationship("CounterSchedule", back_populates="executions")
+
+
+class MedicalCounterAlert(Base):
+    __tablename__ = "medical_counter_alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    printer_id = Column(Integer, ForeignKey("printers.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String(20), default="open", nullable=False)  # open, resolved
+    total_errors = Column(Integer, default=0, nullable=False)
+    first_seen_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_seen_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_error_message = Column(Text)
+    last_task_name = Column(String(100))
+    resolved_at = Column(DateTime(timezone=True))
+    resolved_by = Column(String(100))
+    resolved_notes = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    printer = relationship("Printer")
+    events = relationship("MedicalCounterAlertEvent", back_populates="alert", cascade="all, delete-orphan")
+
+
+class MedicalCounterAlertEvent(Base):
+    __tablename__ = "medical_counter_alert_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    alert_id = Column(Integer, ForeignKey("medical_counter_alerts.id", ondelete="CASCADE"), nullable=False, index=True)
+    printer_id = Column(Integer, ForeignKey("printers.id", ondelete="CASCADE"), nullable=False, index=True)
+    occurred_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    task_name = Column(String(100), nullable=False)
+    error_message = Column(Text, nullable=False)
+    run_context = Column(String(100))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    alert = relationship("MedicalCounterAlert", back_populates="events")
+    printer = relationship("Printer")
 
 
 class CounterLocationExportHistory(Base):
@@ -815,6 +855,128 @@ class Company(Base):
     
     # Relationships
     contract_companies = relationship("ContractCompany", back_populates="company")
+    organizational_units = relationship("OrganizationalUnit", back_populates="company")
+
+
+class Branch(Base):
+    __tablename__ = "branches"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(20), unique=True, nullable=False, index=True)
+    name = Column(String(120), unique=True, nullable=False, index=True)
+    address = Column(Text, nullable=True)
+    status = Column(String(20), default="active")
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    organizational_units = relationship("OrganizationalUnit", back_populates="branch")
+
+
+class Department(Base):
+    __tablename__ = "departments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(20), unique=True, nullable=False, index=True)
+    name = Column(String(120), unique=True, nullable=False, index=True)
+    status = Column(String(20), default="active")
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    organizational_units = relationship("OrganizationalUnit", back_populates="department")
+
+
+class Area(Base):
+    __tablename__ = "areas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(20), unique=True, nullable=False, index=True)
+    name = Column(String(120), unique=True, nullable=False, index=True)
+    status = Column(String(20), default="active")
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    organizational_units = relationship("OrganizationalUnit", back_populates="area")
+
+
+class OrganizationalUnit(Base):
+    __tablename__ = "organizational_units"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    branch_id = Column(Integer, ForeignKey("branches.id"), nullable=True, index=True)
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=True, index=True)
+    area_id = Column(Integer, ForeignKey("areas.id"), nullable=True, index=True)
+    is_active = Column(Boolean, default=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    company = relationship("Company", back_populates="organizational_units")
+    branch = relationship("Branch", back_populates="organizational_units")
+    department = relationship("Department", back_populates="organizational_units")
+    area = relationship("Area", back_populates="organizational_units")
+    cost_centers = relationship("CostCenter", back_populates="organizational_unit")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id",
+            "branch_id",
+            "department_id",
+            "area_id",
+            name="uq_organizational_unit_tuple",
+        ),
+    )
+
+
+class CostCenter(Base):
+    __tablename__ = "cost_centers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    organizational_unit_id = Column(
+        Integer,
+        ForeignKey("organizational_units.id"),
+        nullable=False,
+        index=True,
+    )
+    parent_cost_center_id = Column(Integer, ForeignKey("cost_centers.id"), nullable=True, index=True)
+    sequence_number = Column(Integer, nullable=False)
+    code = Column(String(120), unique=True, nullable=False, index=True)
+    name = Column(String(160), nullable=True)
+    description = Column(Text, nullable=True)
+    status = Column(String(20), default="active")
+    is_active = Column(Boolean, default=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    organizational_unit = relationship("OrganizationalUnit", back_populates="cost_centers")
+    parent = relationship("CostCenter", remote_side=[id], backref="children")
+    audits = relationship("CostCenterAudit", back_populates="cost_center")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organizational_unit_id",
+            "sequence_number",
+            name="uq_cost_center_org_sequence",
+        ),
+    )
+
+
+class CostCenterAudit(Base):
+    __tablename__ = "cost_center_audits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cost_center_id = Column(Integer, ForeignKey("cost_centers.id"), nullable=False, index=True)
+    action = Column(String(20), nullable=False)
+    changed_by = Column(String(100), nullable=True)
+    change_reason = Column(Text, nullable=True)
+    changed_fields = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    cost_center = relationship("CostCenter", back_populates="audits")
 
 class ContractCompany(Base):
     """Tabla intermedia para relación muchos-a-muchos entre contratos y empresas"""

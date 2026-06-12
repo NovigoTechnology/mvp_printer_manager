@@ -6,10 +6,23 @@ import { LeaseContract, ContractStats } from '../../types/contract'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
 
+interface CostCenterOption {
+  id: number
+  code: string
+  name: string
+  organizational_unit?: {
+    company_name?: string
+    branch_name?: string
+    department_name?: string
+    area_name?: string
+  } | null
+}
+
 export default function Contracts() {
   const router = useRouter()
   const [contracts, setContracts] = useState<LeaseContract[]>([])
   const [printers, setPrinters] = useState<any[]>([])
+  const [costCenters, setCostCenters] = useState<CostCenterOption[]>([])
   const [selectedPrinters, setSelectedPrinters] = useState<number[]>([])
   const [stats, setStats] = useState<ContractStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -74,6 +87,7 @@ export default function Contracts() {
     priority: 'medium',
     department: '',
     cost_center: '',
+    cost_center_id: null as number | null,
     budget_code: '',
     internal_notes: '',
     special_conditions: '',
@@ -140,6 +154,7 @@ export default function Contracts() {
         priority: editingContract.priority || 'medium',
         department: editingContract.department || '',
         cost_center: editingContract.cost_center || '',
+        cost_center_id: editingContract.cost_center_id ?? null,
         budget_code: editingContract.budget_code || '',
         internal_notes: editingContract.internal_notes || '',
         special_conditions: editingContract.special_conditions || '',
@@ -197,6 +212,13 @@ export default function Contracts() {
       if (printersResponse.ok) {
         const printersData = await printersResponse.json()
         setPrinters(printersData)
+      }
+
+      // Fetch cost centers
+      const costCentersResponse = await fetch(`${API_BASE}/cost-centers/`)
+      if (costCentersResponse.ok) {
+        const costCentersData = await costCentersResponse.json()
+        setCostCenters(costCentersData)
       }
     } catch (error) {
       console.error('Error fetching data:', error)
@@ -316,6 +338,7 @@ export default function Contracts() {
           priority: 'medium',
           department: '',
           cost_center: '',
+          cost_center_id: null,
           budget_code: '',
           internal_notes: '',
           special_conditions: '',
@@ -416,6 +439,7 @@ export default function Contracts() {
       priority: 'medium',
       department: '',
       cost_center: '',
+      cost_center_id: null,
       budget_code: '',
       internal_notes: '',
       special_conditions: '',
@@ -1317,13 +1341,32 @@ export default function Contracts() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Centro de Costo</label>
-                      <input
-                        type="text"
-                        value={addForm.cost_center}
-                        onChange={(e) => setAddForm(prev => ({ ...prev, cost_center: e.target.value }))}
+                      <select
+                        value={addForm.cost_center_id ?? ''}
+                        onChange={(e) => {
+                          const selectedId = e.target.value ? Number(e.target.value) : null
+                          const selectedCostCenter = costCenters.find(cc => cc.id === selectedId)
+                          setAddForm(prev => ({
+                            ...prev,
+                            cost_center_id: selectedId,
+                            cost_center: selectedCostCenter?.code || ''
+                          }))
+                        }}
                         className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
-                        placeholder="CC-001"
-                      />
+                      >
+                        <option value="">Sin centro de costo</option>
+                        {costCenters.map((center) => {
+                          const ou = center.organizational_unit
+                          const contextLabel = [ou?.company_name, ou?.branch_name, ou?.department_name, ou?.area_name]
+                            .filter(Boolean)
+                            .join(' / ')
+                          return (
+                            <option key={center.id} value={center.id}>
+                              {center.code} - {center.name}{contextLabel ? ` (${contextLabel})` : ''}
+                            </option>
+                          )
+                        })}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Código de Presupuesto</label>
@@ -2231,13 +2274,32 @@ export default function Contracts() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Centro de Costo</label>
-                      <input
-                        type="text"
-                        value={addForm.cost_center}
-                        onChange={(e) => setAddForm(prev => ({ ...prev, cost_center: e.target.value }))}
+                      <select
+                        value={addForm.cost_center_id ?? ''}
+                        onChange={(e) => {
+                          const selectedId = e.target.value ? Number(e.target.value) : null
+                          const selectedCostCenter = costCenters.find(cc => cc.id === selectedId)
+                          setAddForm(prev => ({
+                            ...prev,
+                            cost_center_id: selectedId,
+                            cost_center: selectedCostCenter?.code || ''
+                          }))
+                        }}
                         className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
-                        placeholder="CC-001"
-                      />
+                      >
+                        <option value="">Sin centro de costo</option>
+                        {costCenters.map((center) => {
+                          const ou = center.organizational_unit
+                          const contextLabel = [ou?.company_name, ou?.branch_name, ou?.department_name, ou?.area_name]
+                            .filter(Boolean)
+                            .join(' / ')
+                          return (
+                            <option key={center.id} value={center.id}>
+                              {center.code} - {center.name}{contextLabel ? ` (${contextLabel})` : ''}
+                            </option>
+                          )
+                        })}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Código de Presupuesto</label>
