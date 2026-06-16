@@ -13,7 +13,7 @@ import logging
 
 from .config import settings
 from .db import engine, Base, get_db
-from .routers import auth, printers, incidents, reports, counters, contracts, toner_requests, stock, discovery_configs, billing, exchange_rates, companies, cost_centers
+from .routers import auth, printers, incidents, reports, counters, contracts, toner_requests, stock, discovery_configs, billing, exchange_rates, companies, cost_centers, settings as settings_router
 from .workers.polling import start_scheduler
 
 # Configure logging
@@ -87,6 +87,7 @@ app.include_router(toner_requests.router, prefix="/api", tags=["toner-requests"]
 app.include_router(stock.router, prefix="/stock", tags=["stock"])
 app.include_router(discovery_configs.router, prefix="/discovery", tags=["discovery-configs"])
 app.include_router(exchange_rates.router, prefix="/exchange-rates", tags=["exchange-rates"])
+app.include_router(settings_router.router, tags=["settings"])
 
 # Import and include auto_counters router
 from .routers import auto_counters
