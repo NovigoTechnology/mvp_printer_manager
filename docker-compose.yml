@@ -34,7 +34,7 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
       JWT_EXPIRY_MINUTES: ${JWT_EXPIRY_MINUTES:-120}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://10.10.10.193:3000}
       POLL_COMMUNITY: ${POLL_COMMUNITY:-public}
       DRYPIX_LOGIN: ${DRYPIX_LOGIN:-dryprinter}
       DRYPIX_PASSWORD: ${DRYPIX_PASSWORD:-fujifilm}
