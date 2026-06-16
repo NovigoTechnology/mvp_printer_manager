@@ -135,19 +135,37 @@ async def test_smtp_connection(
 ):
     """
     Test SMTP connection with current configuration
+    Doesn't require config to be enabled - just tests if credentials work
     """
     import smtplib
     
     try:
         config = db.query(SMTPConfig).filter(SMTPConfig.id == 1).first()
         
-        if not config or not config.enabled:
-            raise HTTPException(status_code=400, detail="SMTP is not enabled")
+        if not config:
+            raise HTTPException(status_code=400, detail="SMTP configuration not found. Save configuration first.")
         
-        password = decrypt_secret(config.password)
-
-        if not all([config.host, config.port, config.username, password]):
-            raise HTTPException(status_code=400, detail="SMTP configuration is incomplete")
+        if not config.password:
+            raise HTTPException(status_code=400, detail="SMTP password not configured. Save password first.")
+        
+        try:
+            password = decrypt_secret(config.password)
+        except Exception as e:
+            logger.error(f"Error decrypting password: {e}")
+            raise HTTPException(status_code=400, detail="Invalid SMTP password configuration")
+        
+        missing_fields = []
+        if not config.host:
+            missing_fields.append("host")
+        if not config.port:
+            missing_fields.append("port")
+        if not config.username:
+            missing_fields.append("username")
+        if not password:
+            missing_fields.append("password")
+        
+        if missing_fields:
+            raise HTTPException(status_code=400, detail=f"SMTP configuration incomplete. Missing: {', '.join(missing_fields)}")
         
         # Test connection
         with smtplib.SMTP(config.host, config.port, timeout=10) as server:

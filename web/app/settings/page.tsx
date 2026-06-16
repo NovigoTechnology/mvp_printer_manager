@@ -177,8 +177,9 @@ export default function Settings() {
         throw new Error('Solo administradores pueden probar la configuración SMTP')
       }
 
+      // Ensure SMTP is enabled before testing
       const smtpConfig = {
-        enabled: settings.smtp_enabled,
+        enabled: true,  // Force enabled for test
         host: settings.smtp_host,
         port: settings.smtp_port,
         use_tls: settings.smtp_use_tls,
@@ -188,6 +189,8 @@ export default function Settings() {
         from_name: settings.smtp_from_name
       }
 
+      console.log('Saving SMTP config before test:', smtpConfig)
+      
       const saveResponse = await fetch(`${API_BASE}/api/settings/smtp`, {
         method: 'POST',
         headers: {
@@ -202,6 +205,8 @@ export default function Settings() {
         throw new Error(error.detail || 'Error al guardar SMTP antes de probar')
       }
 
+      console.log('SMTP config saved. Testing connection...')
+
       const response = await fetch(`${API_BASE}/api/settings/smtp/test`, {
         method: 'POST',
         headers: {
@@ -211,9 +216,11 @@ export default function Settings() {
 
       if (response.ok) {
         const result = await response.json()
+        console.log('SMTP test successful:', result)
         setMessage({ type: 'success', text: `✅ Conexión SMTP exitosa: ${result.host}:${result.port}` })
       } else {
         const error = await response.json()
+        console.error('SMTP test failed:', error)
         setMessage({ type: 'error', text: `❌ Error de conexión SMTP: ${error.detail}` })
       }
 
