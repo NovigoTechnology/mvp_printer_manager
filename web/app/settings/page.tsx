@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent, Button, Input, Select, Badge 
 import UsersManagement from '@/components/UsersManagement'
 import { useTheme } from '@/contexts/ThemeContext'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
+import { API_BASE } from '@/lib/config'
 
 interface AppSettings {
   // General

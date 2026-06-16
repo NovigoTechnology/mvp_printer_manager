@@ -1,10 +1,10 @@
-﻿'use client'
+'use client'
 
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { LeaseContract, ContractStats } from '../../types/contract'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
+import { API_BASE } from '@/lib/config'
 
 interface CostCenterOption {
   id: number

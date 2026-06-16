@@ -8,10 +8,18 @@
 /**
  * URL base de la API del backend
  * 
- * En desarrollo: http://localhost:8000
- * En producción: Se debe configurar via NEXT_PUBLIC_API_BASE en .env
+ * En desarrollo local: http://localhost:8000
+ * En red/producción: usa el mismo host desde donde se abrió el frontend y puerto 8000
  */
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
+const getDefaultApiBase = () => {
+	if (typeof window === 'undefined') {
+		return 'http://localhost:8000'
+	}
+
+	return `${window.location.protocol}//${window.location.hostname}:8000`
+}
+
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || getDefaultApiBase()
 
 /**
  * Configuración de timeouts para requests HTTP (en milisegundos)
