@@ -119,8 +119,7 @@ export default function Settings() {
             from_name: settings.smtp_from_name
           }
 
-          const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-          const response = await fetch(`${apiUrl}/api/settings/smtp`, {
+          const response = await fetch(`${API_BASE}/api/settings/smtp`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -173,8 +172,32 @@ export default function Settings() {
         throw new Error('No authentication token found')
       }
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${apiUrl}/api/settings/smtp/test`, {
+      const smtpConfig = {
+        enabled: settings.smtp_enabled,
+        host: settings.smtp_host,
+        port: settings.smtp_port,
+        use_tls: settings.smtp_use_tls,
+        username: settings.smtp_username,
+        password: settings.smtp_password,
+        from_email: settings.smtp_from_email,
+        from_name: settings.smtp_from_name
+      }
+
+      const saveResponse = await fetch(`${API_BASE}/api/settings/smtp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(smtpConfig)
+      })
+
+      if (!saveResponse.ok) {
+        const error = await saveResponse.json()
+        throw new Error(error.detail || 'Error al guardar SMTP antes de probar')
+      }
+
+      const response = await fetch(`${API_BASE}/api/settings/smtp/test`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -218,8 +241,7 @@ export default function Settings() {
           return
         }
 
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-        const response = await fetch(`${apiUrl}/api/settings/smtp`, {
+        const response = await fetch(`${API_BASE}/api/settings/smtp`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`

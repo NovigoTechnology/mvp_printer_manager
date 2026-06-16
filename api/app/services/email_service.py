@@ -13,7 +13,7 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 
 from app.models import SMTPConfig
-from app.db import get_db
+from app.services.crypto import decrypt_secret
 
 logger = logging.getLogger("email_service")
 
@@ -112,12 +112,16 @@ class EmailService:
             if bcc:
                 recipients.extend(bcc)
             
-            # Connect to SMTP server and send
+            password = decrypt_secret(config.password)
+            if not password:
+                logger.error("SMTP password is not configured")
+                return False
+
             with smtplib.SMTP(config.host, config.port, timeout=10) as server:
                 if config.use_tls:
                     server.starttls()
                 
-                server.login(config.username, config.password)
+                server.login(config.username, password)
                 server.send_message(msg, from_addr=config.from_email, to_addrs=recipients)
             
             logger.info(f"Email sent successfully to {to_email}")

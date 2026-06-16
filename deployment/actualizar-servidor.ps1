@@ -37,6 +37,7 @@ if (-not $NoMigration) {
         "echo '$Password' | sudo -S docker compose exec -T api python migrations/add_user_tracking_to_incidents.py || true",
         "echo '$Password' | sudo -S docker compose exec -T api python app/migrations/add_cost_center_fk_to_contracts_and_printers.py || true",
         "echo '$Password' | sudo -S docker compose exec -T api python app/migrations/add_medical_alerts_and_manual_flag.py || true",
+        "echo '$Password' | sudo -S docker compose exec -T api python app/migrations/add_smtp_config.py || true",
         "echo 'Migraciones ejecutadas'"
     )
 }

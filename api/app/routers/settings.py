@@ -3,35 +3,47 @@ Router for SMTP configuration settings
 Handles GET/POST/PUT operations for email/SMTP settings
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from typing import Optional
-from datetime import datetime
 import logging
 
 from app.db import get_db
 from app.models import SMTPConfig, User
 from app.routers.auth import get_current_admin_user
+from app.services.crypto import decrypt_secret, encrypt_secret
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 logger = logging.getLogger(__name__)
 
 
-class SMTPConfigResponse:
-    """Response model for SMTP configuration"""
-    def __init__(self, config: SMTPConfig):
-        self.id = config.id
-        self.enabled = config.enabled
-        self.host = config.host
-        self.port = config.port
-        self.use_tls = config.use_tls
-        self.username = config.username
-        self.password = "***REDACTED***" if config.password else None
-        self.from_email = config.from_email
-        self.from_name = config.from_name
-        self.created_at = config.created_at
-        self.updated_at = config.updated_at
-        self.updated_by = config.updated_by
+class SMTPConfigUpdate(BaseModel):
+    enabled: bool = False
+    host: str = ""
+    port: int = Field(default=587, ge=1, le=65535)
+    use_tls: bool = True
+    username: str = ""
+    password: str | None = None
+    from_email: str = ""
+    from_name: str = "Printer Fleet Manager"
+
+
+def _serialize_config(config: SMTPConfig):
+    return {
+        "id": config.id,
+        "enabled": config.enabled,
+        "host": config.host or "",
+        "port": config.port or 587,
+        "use_tls": config.use_tls if config.use_tls is not None else True,
+        "username": config.username or "",
+        "password": None,
+        "from_email": config.from_email or "",
+        "from_name": config.from_name or "Printer Fleet Manager",
+        "created_at": config.created_at,
+        "updated_at": config.updated_at,
+        "updated_by": config.updated_by,
+        "password_configured": bool(config.password),
+    }
 
 
 @router.get("/smtp")
@@ -57,23 +69,11 @@ async def get_smtp_config(
                 "username": "",
                 "password": None,
                 "from_email": "",
-                "from_name": "Printer Fleet Manager"
+                "from_name": "Printer Fleet Manager",
+                "password_configured": False,
             }
         
-        return {
-            "id": config.id,
-            "enabled": config.enabled,
-            "host": config.host,
-            "port": config.port,
-            "use_tls": config.use_tls,
-            "username": config.username,
-            "password": None,  # Never return password
-            "from_email": config.from_email,
-            "from_name": config.from_name,
-            "created_at": config.created_at,
-            "updated_at": config.updated_at,
-            "updated_by": config.updated_by
-        }
+        return _serialize_config(config)
     except Exception as e:
         logger.error(f"Error retrieving SMTP config: {e}")
         raise HTTPException(status_code=500, detail="Error retrieving SMTP configuration")
@@ -81,7 +81,7 @@ async def get_smtp_config(
 
 @router.post("/smtp")
 async def create_smtp_config(
-    config_data: dict,
+    config_data: SMTPConfigUpdate,
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db)
 ):
@@ -97,19 +97,17 @@ async def create_smtp_config(
             db.add(config)
         
         # Update fields
-        config.enabled = config_data.get('enabled', False)
-        config.host = config_data.get('host', '')
-        config.port = config_data.get('port', 587)
-        config.use_tls = config_data.get('use_tls', True)
-        config.username = config_data.get('username', '')
+        config.enabled = config_data.enabled
+        config.host = config_data.host.strip()
+        config.port = config_data.port
+        config.use_tls = config_data.use_tls
+        config.username = config_data.username.strip()
         
-        # Only update password if provided and not redacted
-        if 'password' in config_data and config_data['password'] and config_data['password'] != '***REDACTED***':
-            config.password = config_data['password']
+        if config_data.password and config_data.password != '***REDACTED***':
+            config.password = encrypt_secret(config_data.password)
         
-        config.from_email = config_data.get('from_email', '')
-        config.from_name = config_data.get('from_name', 'Printer Fleet Manager')
-        config.updated_at = datetime.utcnow()
+        config.from_email = config_data.from_email.strip()
+        config.from_name = config_data.from_name.strip() or 'Printer Fleet Manager'
         config.updated_by = current_user.username
         
         db.commit()
@@ -120,7 +118,8 @@ async def create_smtp_config(
             "message": "SMTP configuration updated successfully",
             "enabled": config.enabled,
             "host": config.host,
-            "from_email": config.from_email
+            "from_email": config.from_email,
+            "password_configured": bool(config.password),
         }
         
     except Exception as e:
@@ -145,7 +144,9 @@ async def test_smtp_connection(
         if not config or not config.enabled:
             raise HTTPException(status_code=400, detail="SMTP is not enabled")
         
-        if not all([config.host, config.port, config.username, config.password]):
+        password = decrypt_secret(config.password)
+
+        if not all([config.host, config.port, config.username, password]):
             raise HTTPException(status_code=400, detail="SMTP configuration is incomplete")
         
         # Test connection
@@ -153,7 +154,7 @@ async def test_smtp_connection(
             if config.use_tls:
                 server.starttls()
             
-            server.login(config.username, config.password)
+            server.login(config.username, password)
         
         logger.info(f"SMTP connection test successful by {current_user.username}")
         
@@ -172,6 +173,8 @@ async def test_smtp_connection(
     except smtplib.SMTPException as e:
         logger.error(f"SMTP error: {e}")
         raise HTTPException(status_code=400, detail=f"SMTP error: {str(e)}")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error testing SMTP connection: {e}")
         raise HTTPException(status_code=500, detail="Error testing SMTP connection")
@@ -179,7 +182,7 @@ async def test_smtp_connection(
 
 @router.put("/smtp")
 async def update_smtp_config(
-    config_data: dict,
+    config_data: SMTPConfigUpdate,
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db)
 ):
