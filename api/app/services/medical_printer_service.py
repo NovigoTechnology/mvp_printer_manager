@@ -93,6 +93,17 @@ class DrypixScraper:
         except Exception as e:
             print(f"Error en autenticación DRYPIX: {e}")
             return False
+
+    def _close_http_session(self):
+        """Cierra la sesión HTTP local para evitar sesiones colgadas."""
+        try:
+            self.session.close()
+        except Exception:
+            pass
+
+    def close_session(self):
+        """Método público para cerrar sesión HTTP cuando no hubo login de mantenimiento."""
+        self._close_http_session()
     
     def logout(self) -> bool:
         """
@@ -104,9 +115,7 @@ class DrypixScraper:
         try:
             logout_url = f"{self.base_url}/USER/chkout"
             response = self.session.get(logout_url, timeout=5)
-            
-            # Cerrar la sesión de requests
-            self.session.close()
+            self._close_http_session()
             
             if response.status_code == 200:
                 print(f"✅ Logout exitoso de DRYPIX en {self.base_url}")
@@ -115,11 +124,7 @@ class DrypixScraper:
             
         except Exception as e:
             print(f"Error en logout DRYPIX: {e}")
-            # Intentar cerrar la sesión de todos modos
-            try:
-                self.session.close()
-            except:
-                pass
+            self._close_http_session()
             return False
     
     def get_counters(self) -> Optional[Dict]:
@@ -129,10 +134,12 @@ class DrypixScraper:
         Returns:
             Dict con información de contadores o None si hay error
         """
+        authenticated = False
         try:
             # Autenticar
             if not self.authenticate():
                 return None
+            authenticated = True
             
             # Acceder a la página Setting2 que contiene los contadores
             setting2_url = f"{self.base_url}/SETTING/?settingMode=5"
@@ -180,19 +187,16 @@ class DrypixScraper:
                 "pages_printed": total_printed,  # Equivalente a films impresos
                 "is_online": True
             }
-            
-            # Cerrar sesión antes de retornar
-            self.logout()
             return result
             
         except Exception as e:
             print(f"Error obteniendo contadores DRYPIX: {e}")
-            # Intentar hacer logout incluso si hay error
-            try:
-                self.logout()
-            except:
-                pass
             return None
+        finally:
+            if authenticated:
+                self.logout()
+            else:
+                self._close_http_session()
     
     def _parse_counters(self, html: str) -> Optional[Dict[str, int]]:
         """
@@ -254,10 +258,12 @@ class DrypixScraper:
         Returns:
             Dict con información del dispositivo o None si hay error
         """
+        authenticated = False
         try:
             # Autenticar
             if not self.authenticate():
                 return None
+            authenticated = True
             
             info = {}
             
@@ -290,24 +296,19 @@ class DrypixScraper:
                                 if len(serial) > 3 and serial not in ['VALUE', 'TEXT', 'INPUT']:
                                     info['serial_number'] = serial
                                     print(f"✅ Serial encontrado para {self.base_url}: {serial}")
-                                    # Cerrar sesión antes de retornar
-                                    self.logout()
                                     return info
                 except Exception as e:
                     continue
-            
-            # Cerrar sesión antes de retornar
-            self.logout()
             return info if info else None
             
         except Exception as e:
             print(f"Error obteniendo información del dispositivo: {e}")
-            # Intentar hacer logout incluso si hay error
-            try:
-                self.logout()
-            except:
-                pass
             return None
+        finally:
+            if authenticated:
+                self.logout()
+            else:
+                self._close_http_session()
 
 
 def is_medical_printer(printer) -> bool:
@@ -398,26 +399,24 @@ def check_drypix_web_interface(ip: str, port: int = 20051, timeout: int = 3) -> 
                 
                 # Intentar autenticación para confirmar
                 scraper = DrypixScraper(ip, port)
-                if scraper.authenticate():
-                    device_info['authenticated'] = True
-                    
-                    # Intentar obtener número de serie
-                    try:
-                        info = scraper.get_device_info()
-                        if info and 'serial_number' in info:
-                            device_info['serial_number'] = info['serial_number']
-                    except Exception as e:
-                        print(f"No se pudo obtener serial de {ip}: {e}")
-                    
-                    # Intentar obtener información del modelo desde la interfaz
-                    try:
-                        # Intentar obtener contadores para validar funcionalidad
-                        counters = scraper.get_counters()
-                        if counters:
-                            device_info['counters_available'] = True
-                            device_info['trays'] = len(counters.get('trays', {}))
-                    except:
-                        pass
+                # Cada operación gestiona su propio ciclo login/logout
+                # para garantizar cierre de sesión en la impresora.
+                try:
+                    info = scraper.get_device_info()
+                    if info and 'serial_number' in info:
+                        device_info['serial_number'] = info['serial_number']
+                        device_info['authenticated'] = True
+                except Exception as e:
+                    print(f"No se pudo obtener serial de {ip}: {e}")
+
+                try:
+                    counters = scraper.get_counters()
+                    if counters:
+                        device_info['counters_available'] = True
+                        device_info['trays'] = len(counters.get('trays', {}))
+                        device_info['authenticated'] = True
+                except Exception:
+                    pass
                 
                 return device_info
                 
