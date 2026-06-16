@@ -168,8 +168,13 @@ export default function Settings() {
       setSaving(true)
       setMessage(null)
 
-      if (!token || !isAdminUser) {
-        throw new Error('No authentication token found')
+      if (!token) {
+        throw new Error('No estás autenticado. Por favor inicia sesión.')
+      }
+
+      const isAdmin = user?.is_admin || user?.role === 'admin'
+      if (!isAdmin) {
+        throw new Error('Solo administradores pueden probar la configuración SMTP')
       }
 
       const smtpConfig = {
@@ -215,7 +220,7 @@ export default function Settings() {
       setTimeout(() => setMessage(null), 5000)
     } catch (error) {
       console.error('Error testing SMTP connection:', error)
-      setMessage({ type: 'error', text: 'Error al probar conexión SMTP' })
+      setMessage({ type: 'error', text: `Error: ${error instanceof Error ? error.message : 'Error al probar conexión SMTP'}` })
       setTimeout(() => setMessage(null), 5000)
     } finally {
       setSaving(false)
@@ -787,14 +792,21 @@ export default function Settings() {
                         </ul>
                       </div>
 
-                      <div className="flex gap-2">
+                      <div className="space-y-2">
                         <button
                           onClick={handleTestSmtpConnection}
-                          disabled={saving || !settings.smtp_host || !settings.smtp_username || !settings.smtp_from_email}
+                          disabled={saving || !settings.smtp_host || !settings.smtp_from_email}
                           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition"
+                          title={!settings.smtp_host ? 'Completa el Host SMTP' : !settings.smtp_from_email ? 'Completa el Email Remitente' : 'Probar conexión SMTP'}
                         >
                           {saving ? 'Probando...' : '🧪 Probar Conexión'}
                         </button>
+                        {(!settings.smtp_host || !settings.smtp_from_email) && (
+                          <p className="text-xs text-red-600">
+                            {!settings.smtp_host && '• Host SMTP requerido\n'}
+                            {!settings.smtp_from_email && '• Email Remitente requerido\n'}
+                          </p>
+                        )}
                       </div>
                     </>
                   )}
