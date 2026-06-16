@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Select, Badge } from '@/components/ui'
 import UsersManagement from '@/components/UsersManagement'
 import { useTheme } from '@/contexts/ThemeContext'
+import { useAuth } from '@/components/AuthProvider'
 
 import { API_BASE } from '@/lib/config'
 
@@ -59,6 +60,7 @@ interface MedicalScheduleConfig {
 
 export default function Settings() {
   const { theme, accentColor, setTheme, setAccentColor } = useTheme()
+  const { token, user, logout } = useAuth()
   
   const [settings, setSettings] = useState<AppSettings>({
     company_name: 'Printer Fleet Manager',
@@ -103,8 +105,7 @@ export default function Settings() {
       // Save SMTP configuration to backend if in notifications tab
       if (activeTab === 'notifications') {
         try {
-          const token = localStorage.getItem('token')
-          if (!token) {
+          if (!token || !isAdminUser) {
             throw new Error('No authentication token found')
           }
 
@@ -167,8 +168,7 @@ export default function Settings() {
       setSaving(true)
       setMessage(null)
 
-      const token = localStorage.getItem('token')
-      if (!token) {
+      if (!token || !isAdminUser) {
         throw new Error('No authentication token found')
       }
 
@@ -222,6 +222,8 @@ export default function Settings() {
     }
   }
 
+  const isAdminUser = Boolean(user?.is_admin || user?.role === 'admin')
+
   useEffect(() => {
     const saved = localStorage.getItem('app_settings')
     if (saved) {
@@ -231,13 +233,12 @@ export default function Settings() {
         console.error('Error loading settings:', error)
       }
     }
+  }, [])
 
-    // Load SMTP configuration from backend
+  useEffect(() => {
     const loadSmtpConfig = async () => {
       try {
-        const token = localStorage.getItem('token')
-        if (!token) {
-          console.log('No authentication token, skipping SMTP config load')
+        if (activeTab !== 'notifications' || !token || !isAdminUser) {
           return
         }
 
@@ -262,6 +263,8 @@ export default function Settings() {
             smtp_from_name: smtpConfig.from_name || 'Printer Fleet Manager'
           }))
           console.log('SMTP configuration loaded from backend')
+        } else if (response.status === 401) {
+          logout()
         } else {
           console.log('Could not load SMTP config from backend, using local defaults')
         }
@@ -272,7 +275,7 @@ export default function Settings() {
     }
 
     loadSmtpConfig()
-  }, [])
+  }, [activeTab, token, isAdminUser, logout])
 
   const tabs = [
     { id: 'general', label: 'General' },
