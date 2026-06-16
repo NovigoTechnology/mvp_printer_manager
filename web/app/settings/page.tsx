@@ -177,14 +177,19 @@ export default function Settings() {
         throw new Error('Solo administradores pueden probar la configuración SMTP')
       }
 
-      // Ensure SMTP is enabled before testing
+      // Validate required fields
+      if (!settings.smtp_host) {
+        throw new Error('Host SMTP es requerido')
+      }
+
+      // Build config - username and password are optional for open relays
       const smtpConfig = {
         enabled: true,  // Force enabled for test
         host: settings.smtp_host,
         port: settings.smtp_port,
         use_tls: settings.smtp_use_tls,
-        username: settings.smtp_username,
-        password: settings.smtp_password,
+        username: settings.smtp_username || '',  // Allow empty
+        password: settings.smtp_password || '',  // Allow empty
         from_email: settings.smtp_from_email,
         from_name: settings.smtp_from_name
       }
@@ -217,7 +222,7 @@ export default function Settings() {
       if (response.ok) {
         const result = await response.json()
         console.log('SMTP test successful:', result)
-        setMessage({ type: 'success', text: `✅ Conexión SMTP exitosa: ${result.host}:${result.port}` })
+        setMessage({ type: 'success', text: `✅ Conexión SMTP exitosa: ${result.host}:${result.port} (${result.auth_method})` })
       } else {
         const error = await response.json()
         console.error('SMTP test failed:', error)
@@ -802,18 +807,20 @@ export default function Settings() {
                       <div className="space-y-2">
                         <button
                           onClick={handleTestSmtpConnection}
-                          disabled={saving || !settings.smtp_host || !settings.smtp_from_email}
+                          disabled={saving || !settings.smtp_host}
                           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition"
-                          title={!settings.smtp_host ? 'Completa el Host SMTP' : !settings.smtp_from_email ? 'Completa el Email Remitente' : 'Probar conexión SMTP'}
+                          title={!settings.smtp_host ? 'Se requiere el Host SMTP' : 'Probar conexión SMTP'}
                         >
                           {saving ? 'Probando...' : '🧪 Probar Conexión'}
                         </button>
-                        {(!settings.smtp_host || !settings.smtp_from_email) && (
+                        {!settings.smtp_host && (
                           <p className="text-xs text-red-600">
-                            {!settings.smtp_host && '• Host SMTP requerido\n'}
-                            {!settings.smtp_from_email && '• Email Remitente requerido\n'}
+                            • Host SMTP requerido
                           </p>
                         )}
+                        <p className="text-xs text-gray-500 mt-1">
+                          💡 Tip: Usuario y contraseña son opcionales para relés SMTP abiertos (puerto 25)
+                        </p>
                       </div>
                     </>
                   )}

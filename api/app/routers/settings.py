@@ -22,8 +22,8 @@ class SMTPConfigUpdate(BaseModel):
     host: str = ""
     port: int = Field(default=587, ge=1, le=65535)
     use_tls: bool = True
-    username: str = ""
-    password: str | None = None
+    username: str = ""  # Optional - for open relays
+    password: str | None = None  # Optional - for open relays
     from_email: str = ""
     from_name: str = "Printer Fleet Manager"
 
@@ -98,16 +98,21 @@ async def create_smtp_config(
         
         # Update fields
         config.enabled = config_data.enabled
-        config.host = config_data.host.strip()
+        config.host = config_data.host.strip() if config_data.host else ""
         config.port = config_data.port
         config.use_tls = config_data.use_tls
-        config.username = config_data.username.strip()
+        config.username = config_data.username.strip() if config_data.username else ""
         
+        # Handle password: only set if provided and not redacted
+        # Allow empty password for open relays
         if config_data.password and config_data.password != '***REDACTED***':
             config.password = encrypt_secret(config_data.password)
+        elif not config_data.password:
+            # If password is explicitly empty, clear it (for open relay support)
+            config.password = None
         
-        config.from_email = config_data.from_email.strip()
-        config.from_name = config_data.from_name.strip() or 'Printer Fleet Manager'
+        config.from_email = config_data.from_email.strip() if config_data.from_email else ""
+        config.from_name = config_data.from_name.strip() if config_data.from_name else 'Printer Fleet Manager'
         config.updated_by = current_user.username
         
         db.commit()
@@ -135,7 +140,7 @@ async def test_smtp_connection(
 ):
     """
     Test SMTP connection with current configuration
-    Doesn't require config to be enabled - just tests if credentials work
+    Supports both authenticated and open SMTP relays
     """
     import smtplib
     
@@ -145,27 +150,63 @@ async def test_smtp_connection(
         if not config:
             raise HTTPException(status_code=400, detail="SMTP configuration not found. Save configuration first.")
         
-        if not config.password:
-            raise HTTPException(status_code=400, detail="SMTP password not configured. Save password first.")
-        
-        try:
-            password = decrypt_secret(config.password)
-        except Exception as e:
-            logger.error(f"Error decrypting password: {e}")
-            raise HTTPException(status_code=400, detail="Invalid SMTP password configuration")
-        
-        missing_fields = []
+        # Check required fields
         if not config.host:
-            missing_fields.append("host")
+            raise HTTPException(status_code=400, detail="SMTP host is required")
         if not config.port:
-            missing_fields.append("port")
-        if not config.username:
-            missing_fields.append("username")
-        if not password:
-            missing_fields.append("password")
+            raise HTTPException(status_code=400, detail="SMTP port is required")
         
-        if missing_fields:
-            raise HTTPException(status_code=400, detail=f"SMTP configuration incomplete. Missing: {', '.join(missing_fields)}")
+        # Password is optional for open relays
+        password = None
+        if config.password:
+            try:
+                password = decrypt_secret(config.password)
+            except Exception as e:
+                logger.error(f"Error decrypting password: {e}")
+                raise HTTPException(status_code=400, detail="Invalid SMTP password configuration")
+        
+        # Test connection
+        try:
+            with smtplib.SMTP(config.host, config.port, timeout=10) as server:
+                if config.use_tls and config.port != 25:  # Usually 25 is for open relay
+                    server.starttls()
+                
+                # Only attempt login if credentials are provided
+                if config.username and password:
+                    server.login(config.username, password)
+                    auth_method = "with authentication"
+                elif config.username:
+                    auth_method = "with username (no password)"
+                else:
+                    auth_method = "without authentication (open relay)"
+            
+            logger.info(f"SMTP connection test successful ({auth_method}) by {current_user.username}")
+            
+            return {
+                "message": f"SMTP connection successful {auth_method}",
+                "host": config.host,
+                "port": config.port,
+                "auth_method": auth_method
+            }
+            
+        except smtplib.SMTPAuthenticationError:
+            logger.error(f"SMTP authentication failed")
+            raise HTTPException(
+                status_code=400,
+                detail="SMTP authentication failed. Check username and password."
+            )
+        except smtplib.SMTPException as e:
+            logger.error(f"SMTP error: {e}")
+            raise HTTPException(status_code=400, detail=f"SMTP error: {str(e)}")
+        except Exception as e:
+            logger.error(f"Connection error: {e}")
+            raise HTTPException(status_code=400, detail=f"Connection error: {str(e)}")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error testing SMTP connection: {e}")
+        raise HTTPException(status_code=500, detail="Error testing SMTP connection")
         
         # Test connection
         with smtplib.SMTP(config.host, config.port, timeout=10) as server:
