@@ -1163,3 +1163,29 @@ class MedicalPrinterSnapshot(Base):
     # Relationships
     printer = relationship("Printer", back_populates="snapshots")
     refill = relationship("MedicalPrinterRefill", back_populates="snapshots")
+
+
+class SMTPConfig(Base):
+    """
+    Configuración SMTP para envío de notificaciones por email
+    """
+    __tablename__ = "smtp_config"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    enabled = Column(Boolean, default=False)
+    host = Column(String, nullable=True)
+    port = Column(Integer, default=587)
+    use_tls = Column(Boolean, default=True)
+    username = Column(String, nullable=True)
+    password = Column(String, nullable=True)  # Encriptada en producción
+    from_email = Column(String, nullable=True)
+    from_name = Column(String, default='Printer Fleet Manager')
+    
+    # Metadata
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_by = Column(String)  # Usuario que realizó la última actualización
+    
+    __table_args__ = (
+        UniqueConstraint('id', name='unique_smtp_config'),  # Solo una configuración
+    )

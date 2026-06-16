@@ -32,6 +32,16 @@ interface AppSettings {
   notification_email: string
   low_toner_threshold: number
   
+  // SMTP Configuration
+  smtp_enabled: boolean
+  smtp_host: string
+  smtp_port: number
+  smtp_use_tls: boolean
+  smtp_username: string
+  smtp_password: string
+  smtp_from_email: string
+  smtp_from_name: string
+  
   // System - Printers
   max_concurrent_snmp_requests: number
   log_level: string
@@ -65,6 +75,14 @@ export default function Settings() {
     email_notifications_enabled: false,
     notification_email: '',
     low_toner_threshold: 20,
+    smtp_enabled: false,
+    smtp_host: '',
+    smtp_port: 587,
+    smtp_use_tls: true,
+    smtp_username: '',
+    smtp_password: '',
+    smtp_from_email: '',
+    smtp_from_name: 'Printer Fleet Manager',
     max_concurrent_snmp_requests: 5,
     log_level: 'INFO'
   })
@@ -79,7 +97,53 @@ export default function Settings() {
       setSaving(true)
       setMessage(null)
       
+      // Save to localStorage
       localStorage.setItem('app_settings', JSON.stringify(settings))
+      
+      // Save SMTP configuration to backend if in notifications tab
+      if (activeTab === 'notifications') {
+        try {
+          const token = localStorage.getItem('token')
+          if (!token) {
+            throw new Error('No authentication token found')
+          }
+
+          const smtpConfig = {
+            enabled: settings.smtp_enabled,
+            host: settings.smtp_host,
+            port: settings.smtp_port,
+            use_tls: settings.smtp_use_tls,
+            username: settings.smtp_username,
+            password: settings.smtp_password,
+            from_email: settings.smtp_from_email,
+            from_name: settings.smtp_from_name
+          }
+
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+          const response = await fetch(`${apiUrl}/api/settings/smtp`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(smtpConfig)
+          })
+
+          if (!response.ok) {
+            const error = await response.json()
+            console.error('SMTP API error:', error)
+            throw new Error(error.detail || 'Error saving SMTP configuration')
+          }
+
+          console.log('SMTP configuration saved to backend')
+        } catch (smtpError) {
+          console.error('Error saving SMTP config to backend:', smtpError)
+          setMessage({ type: 'error', text: 'Configuración local guardada pero error en backend SMTP' })
+          setTimeout(() => setMessage(null), 5000)
+          setSaving(false)
+          return
+        }
+      }
       
       setMessage({ type: 'success', text: 'Configuración guardada exitosamente' })
       
@@ -99,6 +163,42 @@ export default function Settings() {
     }
   }
 
+  const handleTestSmtpConnection = async () => {
+    try {
+      setSaving(true)
+      setMessage(null)
+
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('No authentication token found')
+      }
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}/api/settings/smtp/test`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        setMessage({ type: 'success', text: `✅ Conexión SMTP exitosa: ${result.host}:${result.port}` })
+      } else {
+        const error = await response.json()
+        setMessage({ type: 'error', text: `❌ Error de conexión SMTP: ${error.detail}` })
+      }
+
+      setTimeout(() => setMessage(null), 5000)
+    } catch (error) {
+      console.error('Error testing SMTP connection:', error)
+      setMessage({ type: 'error', text: 'Error al probar conexión SMTP' })
+      setTimeout(() => setMessage(null), 5000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   useEffect(() => {
     const saved = localStorage.getItem('app_settings')
     if (saved) {
@@ -108,6 +208,48 @@ export default function Settings() {
         console.error('Error loading settings:', error)
       }
     }
+
+    // Load SMTP configuration from backend
+    const loadSmtpConfig = async () => {
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) {
+          console.log('No authentication token, skipping SMTP config load')
+          return
+        }
+
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const response = await fetch(`${apiUrl}/api/settings/smtp`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+
+        if (response.ok) {
+          const smtpConfig = await response.json()
+          setSettings(prev => ({
+            ...prev,
+            smtp_enabled: smtpConfig.enabled,
+            smtp_host: smtpConfig.host || '',
+            smtp_port: smtpConfig.port || 587,
+            smtp_use_tls: smtpConfig.use_tls !== undefined ? smtpConfig.use_tls : true,
+            smtp_username: smtpConfig.username || '',
+            smtp_password: '', // Don't load password from backend for security
+            smtp_from_email: smtpConfig.from_email || '',
+            smtp_from_name: smtpConfig.from_name || 'Printer Fleet Manager'
+          }))
+          console.log('SMTP configuration loaded from backend')
+        } else {
+          console.log('Could not load SMTP config from backend, using local defaults')
+        }
+      } catch (error) {
+        console.error('Error loading SMTP config from backend:', error)
+        // Silent fail - continue with local settings
+      }
+    }
+
+    loadSmtpConfig()
   }, [])
 
   const tabs = [
@@ -477,35 +619,162 @@ export default function Settings() {
 
           {/* Notifications Tab */}
           {activeTab === 'notifications' && (
-            <div className="space-y-6 min-h-[400px]">
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={settings.email_notifications_enabled}
-                  onChange={(e) => setSettings(prev => ({ ...prev, email_notifications_enabled: e.target.checked }))}
-                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <label className="text-sm font-medium text-gray-700">Notificaciones por Email</label>
+            <div className="space-y-8 min-h-[400px]">
+              {/* Email Notifications Section */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  <h3 className="text-lg font-semibold text-gray-900">Notificaciones por Email</h3>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={settings.email_notifications_enabled}
+                      onChange={(e) => setSettings(prev => ({ ...prev, email_notifications_enabled: e.target.checked }))}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <label className="text-sm font-medium text-gray-700">Habilitar notificaciones por email</label>
+                  </div>
+
+                  {settings.email_notifications_enabled && (
+                    <>
+                      <Input
+                        label="Email para Notificaciones"
+                        type="email"
+                        value={settings.notification_email}
+                        onChange={(e) => setSettings(prev => ({ ...prev, notification_email: e.target.value }))}
+                        placeholder="admin@empresa.com"
+                      />
+
+                      <Input
+                        label="Umbral de Tóner Bajo (%)"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={settings.low_toner_threshold.toString()}
+                        onChange={(e) => setSettings(prev => ({ ...prev, low_toner_threshold: parseInt(e.target.value) || 20 }))}
+                        helperText="Porcentaje mínimo de tóner antes de notificar"
+                      />
+                    </>
+                  )}
+                </div>
               </div>
 
-              <Input
-                label="Email de Notificaciones"
-                type="email"
-                value={settings.notification_email}
-                onChange={(e) => setSettings(prev => ({ ...prev, notification_email: e.target.value }))}
-                disabled={!settings.email_notifications_enabled}
-                placeholder="admin@empresa.com"
-              />
+              {/* SMTP Configuration Section */}
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <svg className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m7 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <h3 className="text-lg font-semibold text-gray-900">Configuración SMTP</h3>
+                </div>
 
-              <Input
-                label="Umbral de Tóner Bajo (%)"
-                type="number"
-                min="0"
-                max="100"
-                value={settings.low_toner_threshold.toString()}
-                onChange={(e) => setSettings(prev => ({ ...prev, low_toner_threshold: parseInt(e.target.value) || 20 }))}
-                helperText="Porcentaje mínimo de tóner antes de notificar"
-              />
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <input
+                      type="checkbox"
+                      checked={settings.smtp_enabled}
+                      onChange={(e) => setSettings(prev => ({ ...prev, smtp_enabled: e.target.checked }))}
+                      className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                    />
+                    <label className="text-sm font-medium text-gray-700">Usar configuración SMTP personalizada</label>
+                  </div>
+
+                  {settings.smtp_enabled && (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <Input
+                          label="Host SMTP"
+                          value={settings.smtp_host}
+                          onChange={(e) => setSettings(prev => ({ ...prev, smtp_host: e.target.value }))}
+                          placeholder="smtp.gmail.com"
+                          helperText="Servidor SMTP (ej: smtp.gmail.com, smtp.office365.com)"
+                        />
+
+                        <Input
+                          label="Puerto SMTP"
+                          type="number"
+                          value={settings.smtp_port.toString()}
+                          onChange={(e) => setSettings(prev => ({ ...prev, smtp_port: parseInt(e.target.value) || 587 }))}
+                          placeholder="587"
+                          helperText="Puerto (587 para TLS, 465 para SSL, 25 para conexión plana)"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={settings.smtp_use_tls}
+                          onChange={(e) => setSettings(prev => ({ ...prev, smtp_use_tls: e.target.checked }))}
+                          className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                        />
+                        <label className="text-sm font-medium text-gray-700">Usar TLS/SSL</label>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <Input
+                          label="Usuario SMTP"
+                          value={settings.smtp_username}
+                          onChange={(e) => setSettings(prev => ({ ...prev, smtp_username: e.target.value }))}
+                          placeholder="tu-email@gmail.com"
+                          helperText="Nombre de usuario para autenticación"
+                        />
+
+                        <Input
+                          label="Contraseña SMTP"
+                          type="password"
+                          value={settings.smtp_password}
+                          onChange={(e) => setSettings(prev => ({ ...prev, smtp_password: e.target.value }))}
+                          placeholder="••••••••"
+                          helperText="Contraseña de aplicación (no la contraseña de tu cuenta)"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <Input
+                          label="Email Remitente"
+                          type="email"
+                          value={settings.smtp_from_email}
+                          onChange={(e) => setSettings(prev => ({ ...prev, smtp_from_email: e.target.value }))}
+                          placeholder="noreply@empresa.com"
+                          helperText="Dirección de correo del remitente"
+                        />
+
+                        <Input
+                          label="Nombre del Remitente"
+                          value={settings.smtp_from_name}
+                          onChange={(e) => setSettings(prev => ({ ...prev, smtp_from_name: e.target.value }))}
+                          placeholder="Printer Fleet Manager"
+                          helperText="Nombre que aparecerá en el remitente"
+                        />
+                      </div>
+
+                      <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                        <p className="font-medium">⚠️ Nota importante:</p>
+                        <ul className="mt-2 list-disc list-inside space-y-1 text-xs">
+                          <li>Para Gmail: usa una <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline">contraseña de aplicación</a></li>
+                          <li>Para Office 365: usa tu correo empresarial y contraseña</li>
+                          <li>Los datos SMTP se guardarán en el servidor de forma encriptada</li>
+                        </ul>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleTestSmtpConnection}
+                          disabled={saving || !settings.smtp_host || !settings.smtp_username || !settings.smtp_from_email}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition"
+                        >
+                          {saving ? 'Probando...' : '🧪 Probar Conexión'}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
