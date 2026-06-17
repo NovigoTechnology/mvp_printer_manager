@@ -269,6 +269,25 @@ class LeaseContract(Base):
     contract_printers = relationship("ContractPrinter", back_populates="contract")
     invoices = relationship("Invoice", back_populates="contract")
     contract_companies = relationship("ContractCompany", back_populates="contract")
+    change_history = relationship("ContractChangeHistory", back_populates="contract", cascade="all, delete-orphan")
+
+
+class ContractChangeHistory(Base):
+    __tablename__ = "contract_change_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contract_id = Column(Integer, ForeignKey("lease_contracts.id"), nullable=False, index=True)
+    action = Column(String(30), nullable=False)
+    changed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    changed_by_name = Column(String(150), nullable=True)
+    change_note = Column(Text, nullable=False)
+    changed_fields = Column(Text, nullable=True)
+    previous_values = Column(Text, nullable=True)
+    new_values = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    contract = relationship("LeaseContract", back_populates="change_history")
+    changed_by = relationship("User")
 
 class ContractPrinter(Base):
     __tablename__ = "contract_printers"

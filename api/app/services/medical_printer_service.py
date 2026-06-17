@@ -6,6 +6,7 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import re
+from urllib.parse import urljoin
 from datetime import datetime
 from typing import Dict, Optional, List
 import socket
@@ -54,6 +55,8 @@ class DrypixScraper:
     # Constantes de configuración
     DEFAULT_LANGUAGE = "en"
     TRAY_CAPACITY = 100
+    LOGOUT_TIMEOUT_SECONDS = 3
+    LOGOUT_MAX_ATTEMPTS = 2
     
     def __init__(self, ip_address: str, port: int = 20051,
                  login: str = None, password: str = None):
@@ -71,6 +74,33 @@ class DrypixScraper:
         self.login = login if login is not None else settings.drypix_login
         self.password = password if password is not None else settings.drypix_password
         self.session = requests.Session()
+        self._logout_urls = [
+            f"{self.base_url}/USER/chkout",
+            f"{self.base_url}/USER/chkout?Language={self.DEFAULT_LANGUAGE}",
+            f"{self.base_url}/USER/chkout&Language={self.DEFAULT_LANGUAGE}",
+        ]
+
+    def _extract_logout_urls(self, html: str) -> List[str]:
+        """Extrae posibles URLs de logout desde el HTML de respuesta."""
+        if not html:
+            return []
+
+        candidates = []
+        seen = set()
+
+        for raw_url in re.findall(r'href=["\']([^"\']*chkout[^"\']*)["\']', html, re.IGNORECASE):
+            absolute_url = urljoin(f"{self.base_url}/", raw_url)
+            if absolute_url not in seen:
+                seen.add(absolute_url)
+                candidates.append(absolute_url)
+
+        for raw_url in re.findall(r'location\.href\s*=\s*["\']([^"\']*chkout[^"\']*)["\']', html, re.IGNORECASE):
+            absolute_url = urljoin(f"{self.base_url}/", raw_url)
+            if absolute_url not in seen:
+                seen.add(absolute_url)
+                candidates.append(absolute_url)
+
+        return candidates
     
     def authenticate(self) -> bool:
         """
@@ -87,6 +117,12 @@ class DrypixScraper:
             
             # Verificar si el login fue exitoso
             if response.status_code == 200 and "main" in response.text.lower():
+                dynamic_logout_urls = self._extract_logout_urls(response.text)
+                if dynamic_logout_urls:
+                    # Priorizar URLs descubiertas en tiempo de ejecución para mayor compatibilidad.
+                    self._logout_urls = dynamic_logout_urls + [
+                        url for url in self._logout_urls if url not in dynamic_logout_urls
+                    ]
                 return True
             return False
             
@@ -112,20 +148,39 @@ class DrypixScraper:
         Returns:
             True si el logout fue exitoso
         """
+        logout_success = False
         try:
-            logout_url = f"{self.base_url}/USER/chkout"
-            response = self.session.get(logout_url, timeout=5)
-            self._close_http_session()
-            
-            if response.status_code == 200:
+            # Algunos firmwares exponen rutas de salida distintas; probar varias opciones
+            # reduce sesiones de mantenimiento colgadas.
+            for _ in range(self.LOGOUT_MAX_ATTEMPTS):
+                for logout_url in self._logout_urls:
+                    try:
+                        response = self.session.get(
+                            logout_url,
+                            timeout=self.LOGOUT_TIMEOUT_SECONDS,
+                            allow_redirects=False,
+                        )
+                        if response.status_code in (200, 301, 302, 303):
+                            logout_success = True
+                            break
+                    except Exception:
+                        continue
+
+                if logout_success:
+                    break
+
+            if logout_success:
                 print(f"✅ Logout exitoso de DRYPIX en {self.base_url}")
-                return True
-            return False
-            
-        except Exception as e:
-            print(f"Error en logout DRYPIX: {e}")
+            else:
+                attempted = ", ".join(self._logout_urls)
+                print(
+                    f"⚠️ No se pudo confirmar logout de DRYPIX en {self.base_url}. "
+                    f"Rutas intentadas: {attempted}"
+                )
+
+            return logout_success
+        finally:
             self._close_http_session()
-            return False
     
     def get_counters(self) -> Optional[Dict]:
         """

@@ -46,27 +46,37 @@ export const WizardStep1: React.FC<Step1Props> = ({
     <div className="space-y-6">
       <Card className="p-6">
         <h4 className="text-lg font-medium text-gray-900 mb-4">📅 Seleccionar Período de Facturación</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {periods.map(period => (
-            <div
-              key={period.id}
-              onClick={() => onPeriodSelect(period)}
-              className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                selectedPeriod?.id === period.id
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              <h5 className="font-medium text-gray-900">{period.name}</h5>
-              <p className="text-sm text-gray-600">
-                {period.start_date} - {period.end_date}
-              </p>
-              <span className="inline-block px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full mt-2">
-                Cerrado
-              </span>
-            </div>
-          ))}
-        </div>
+        {periods.length === 0 ? (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-yellow-800 text-sm">
+            No hay periodos disponibles para seleccionar. Crea o habilita un periodo desde el modulo de Facturacion.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {periods.map(period => (
+              <div
+                key={period.id}
+                onClick={() => onPeriodSelect(period)}
+                className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                  selectedPeriod?.id === period.id
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <h5 className="font-medium text-gray-900">{period.name}</h5>
+                <p className="text-sm text-gray-600">
+                  {period.start_date} - {period.end_date}
+                </p>
+                <span className={`inline-block px-2 py-1 text-xs rounded-full mt-2 ${
+                  period.status === 'closed'
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-blue-100 text-blue-800'
+                }`}>
+                  {period.status === 'closed' ? 'Cerrado' : 'Abierto'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       {selectedPeriod && (

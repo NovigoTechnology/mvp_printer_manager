@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { LeaseContract, ContractStats } from '../../types/contract'
 
@@ -16,6 +16,17 @@ interface CostCenterOption {
     department_name?: string
     area_name?: string
   } | null
+}
+
+interface ContractHistoryEntry {
+  id: number
+  action: string
+  changed_by_name?: string
+  change_note: string
+  changed_fields: string[]
+  previous_values: Record<string, any>
+  new_values: Record<string, any>
+  created_at: string
 }
 
 export default function Contracts() {
@@ -38,6 +49,11 @@ export default function Contracts() {
   const [activeTab, setActiveTab] = useState('basic')
   const [editActiveTab, setEditActiveTab] = useState('basic')
   const [isLoadingContractNumber, setIsLoadingContractNumber] = useState(false)
+  const [equipmentSearchTerm, setEquipmentSearchTerm] = useState('')
+  const [changeNote, setChangeNote] = useState('')
+  const [contractHistory, setContractHistory] = useState<ContractHistoryEntry[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
   
   // Tabs configuration for the modal
   const tabs = [
@@ -47,6 +63,11 @@ export default function Contracts() {
     { id: 'companies', label: 'Empresas', icon: '🏢' },
     { id: 'dates', label:'Fechas', icon: '📅' },
     { id: 'contact', label: 'Contacto', icon: '📞' }
+  ]
+
+  const detailTabs = [
+    ...tabs,
+    { id: 'history', label: 'Historia', icon: 'H' }
   ]
   
   const [addForm, setAddForm] = useState({
@@ -112,9 +133,41 @@ export default function Contracts() {
     fetchExchangeRates()
   }, [])
 
+  useEffect(() => {
+    if (showDetails && selectedContract) {
+      fetchContractHistory(selectedContract.id)
+    }
+  }, [showDetails, selectedContract])
+
+  const getAuthHeaders = (): Record<string, string> => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  }
+
+  const fetchContractHistory = async (contractId: number) => {
+    setLoadingHistory(true)
+    try {
+      const response = await fetch(`${API_BASE}/contracts/${contractId}/history`, {
+        headers: getAuthHeaders(),
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setContractHistory(data)
+      } else {
+        setContractHistory([])
+      }
+    } catch (error) {
+      console.error('Error loading contract history:', error)
+      setContractHistory([])
+    } finally {
+      setLoadingHistory(false)
+    }
+  }
+
   // Cargar datos del contrato cuando se abre el modal de edición
   useEffect(() => {
     if (editingContract && showEditForm) {
+      setChangeNote('')
       // Precargar el formulario con los datos del contrato
       setAddForm({
         contract_number: editingContract.contract_number,
@@ -165,20 +218,140 @@ export default function Contracts() {
       // Cargar las impresoras asociadas al contrato
       const loadContractPrinters = async () => {
         try {
+          setSelectedPrinters([])
           const response = await fetch(`${API_BASE}/contracts/${editingContract.id}/printers`)
           if (response.ok) {
             const contractPrintersData = await response.json()
-            const printerIds = contractPrintersData.map((p: any) => p.id)
+            const printerIds: number[] = Array.from(new Set<number>(contractPrintersData
+              .map((p: any) => p?.printer_id ?? p?.printer?.id ?? p?.id)
+              .filter((id: any) => typeof id === 'number')))
             setSelectedPrinters(printerIds)
+          } else {
+            setSelectedPrinters([])
           }
         } catch (error) {
           console.error('Error loading contract printers:', error)
+          setSelectedPrinters([])
         }
       }
       
       loadContractPrinters()
     }
   }, [editingContract, showEditForm])
+
+  useEffect(() => {
+    if (showAddForm || showEditForm) {
+      setEquipmentSearchTerm('')
+    }
+  }, [showAddForm, showEditForm])
+
+  useEffect(() => {
+    if (!successMessage) return
+
+    const timeout = window.setTimeout(() => setSuccessMessage(''), 4500)
+    return () => window.clearTimeout(timeout)
+  }, [successMessage])
+
+  useEffect(() => {
+    const selectedPrinterSet = new Set(selectedPrinters)
+    const selectedPrinterObjects = printers.filter((printer: any) => selectedPrinterSet.has(printer.id))
+
+    const totalPrinters = selectedPrinterObjects.length
+    const printersBwOnly = selectedPrinterObjects.filter((printer: any) => !printer.is_color).length
+    const printersColor = selectedPrinterObjects.filter((printer: any) => printer.is_color).length
+    const multifunctionDevices = selectedPrinterObjects.filter(
+      (printer: any) => printer.model && String(printer.model).toLowerCase().includes('mf')
+    ).length
+
+    setAddForm((prev) => {
+      if (
+        prev.total_printers === totalPrinters &&
+        prev.printers_bw_only === printersBwOnly &&
+        prev.printers_color === printersColor &&
+        prev.multifunction_devices === multifunctionDevices
+      ) {
+        return prev
+      }
+
+      return {
+        ...prev,
+        total_printers: totalPrinters,
+        printers_bw_only: printersBwOnly,
+        printers_color: printersColor,
+        multifunction_devices: multifunctionDevices,
+      }
+    })
+  }, [selectedPrinters, printers])
+
+  const printerAssignments = useMemo(() => {
+    const map = new Map<number, Array<{ contractId: number; contractNumber: string; supplier?: string }>>()
+
+    contracts.forEach((contract: any) => {
+      const relations = Array.isArray(contract.contract_printers) ? contract.contract_printers : []
+      relations.forEach((relation: any) => {
+        if (relation?.is_active === false) return
+
+        const printerId = relation?.printer_id ?? relation?.printer?.id
+        if (!printerId) return
+
+        const current = map.get(printerId) || []
+        current.push({
+          contractId: contract.id,
+          contractNumber: contract.contract_number,
+          supplier: contract.supplier,
+        })
+        map.set(printerId, current)
+      })
+    })
+
+    return map
+  }, [contracts])
+
+  const getFilteredPrinters = () => {
+    const term = equipmentSearchTerm.trim().toLowerCase()
+    if (!term) return printers
+
+    return printers.filter((printer: any) => {
+      const haystack = [
+        printer.brand,
+        printer.model,
+        printer.asset_tag,
+        printer.location,
+        printer.ip,
+        printer.ip_address,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+
+      return haystack.includes(term)
+    })
+  }
+
+  const getAssignmentsForPrinter = (
+    printer: any,
+    currentContractId?: number,
+    currentContractNumber?: string
+  ) => {
+    const fromRelations = (printerAssignments.get(printer.id) || []).filter(
+      (assignment) => assignment.contractId !== currentContractId
+    )
+
+    if (fromRelations.length > 0) return fromRelations
+
+    // Fallback para instalaciones antiguas que usan lease_contract en impresora.
+    if (printer.lease_contract && printer.lease_contract !== (currentContractNumber || '')) {
+      return [
+        {
+          contractId: -1,
+          contractNumber: printer.lease_contract,
+          supplier: undefined,
+        },
+      ]
+    }
+
+    return []
+  }
 
   const fetchExchangeRates = async () => {
     try {
@@ -240,6 +413,70 @@ export default function Contracts() {
     })
   }
 
+  const getStatusCount = (status: string) => {
+    return stats?.status_distribution.find(s => s.status === status)?.count || 0
+  }
+
+  const isContractExpiringSoon = (contract: LeaseContract) => {
+    if (contract.status !== 'active' || !contract.end_date) return false
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const endDate = new Date(contract.end_date)
+    endDate.setHours(0, 0, 0, 0)
+
+    const noticeDays = contract.renewal_notice_days || 30
+    const noticeLimit = new Date(today)
+    noticeLimit.setDate(today.getDate() + noticeDays)
+
+    return endDate >= today && endDate <= noticeLimit
+  }
+
+  const getEffectiveContractStatus = (contract: LeaseContract) => {
+    return isContractExpiringSoon(contract) ? 'expiring_soon' : contract.status
+  }
+
+  const getContractStatusLabel = (status: string) => {
+    if (status === 'expiring_soon') return 'Próximo a vencer'
+    if (status === 'active') return 'Activo'
+    if (status === 'expired') return 'Vencido'
+    if (status === 'cancelled') return 'Cancelado'
+    if (status === 'suspended') return 'Inactivo'
+    return 'Pendiente'
+  }
+
+  const getContractStatusClass = (status: string) => {
+    if (status === 'expiring_soon') return 'bg-yellow-100 text-yellow-800'
+    if (status === 'active') return 'bg-green-100 text-green-800'
+    if (status === 'expired') return 'bg-red-100 text-red-800'
+    if (status === 'cancelled') return 'bg-gray-100 text-gray-800'
+    if (status === 'suspended') return 'bg-orange-100 text-orange-800'
+    return 'bg-yellow-100 text-yellow-800'
+  }
+
+  const filteredContracts = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase()
+
+    return contracts.filter((contract) => {
+      const matchesSearch = !term || [
+        contract.contract_number,
+        contract.contract_name,
+        contract.supplier,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(term)
+
+      const effectiveStatus = getEffectiveContractStatus(contract)
+      const matchesStatus = statusFilter === 'all' || effectiveStatus === statusFilter
+      const matchesType = typeFilter === 'all' || contract.contract_type === typeFilter
+
+      return matchesSearch && matchesStatus && matchesType
+    })
+  }, [contracts, searchTerm, statusFilter, typeFilter])
+
   const convertCurrency = (amount: number, fromCurrency: string, toCurrency: string): number => {
     if (fromCurrency === toCurrency) return amount
     if (fromCurrency === 'ARS' && toCurrency === 'USD') {
@@ -261,6 +498,12 @@ export default function Contracts() {
         return
       }
 
+      const isEditing = editingContract !== null
+      if (isEditing && !changeNote.trim()) {
+        alert('Debe indicar una nota explicando por qué se edita el contrato')
+        return
+      }
+
       // Convertir fechas YYYY-MM-DD a formato datetime ISO (YYYY-MM-DDTHH:MM:SS)
       const formatDateToDateTime = (dateString: string) => {
         if (!dateString) return null
@@ -277,11 +520,11 @@ export default function Contracts() {
         start_date: formatDateToDateTime(addForm.start_date),
         end_date: formatDateToDateTime(addForm.end_date),
         renewal_date: addForm.renewal_date ? formatDateToDateTime(addForm.renewal_date) : null,
-        printer_ids: selectedPrinters
+        printer_ids: selectedPrinters,
+        change_note: isEditing ? changeNote.trim() : undefined
       }
       
       // Determinar si es crear o actualizar
-      const isEditing = editingContract !== null
       const url = isEditing 
         ? `${API_BASE}/contracts/${editingContract.id}` 
         : `${API_BASE}/contracts/`
@@ -291,6 +534,7 @@ export default function Contracts() {
         method: method,
         headers: {
           'Content-Type': 'application/json',
+          ...getAuthHeaders(),
         },
         body: JSON.stringify(contractData),
       })
@@ -348,7 +592,8 @@ export default function Contracts() {
         // Reset selected printers
         setSelectedPrinters([])
         setEditingContract(null)
-        alert(isEditing ? 'Contrato actualizado exitosamente' : 'Contrato creado exitosamente')
+        setChangeNote('')
+        setSuccessMessage(isEditing ? 'Contrato actualizado correctamente' : 'Contrato creado correctamente')
       } else {
         const errorData = await response.json()
         // Manejar errores de validación de FastAPI
@@ -400,6 +645,7 @@ export default function Contracts() {
     setShowAddForm(false)
     setShowEditForm(false)
     setEditingContract(null)
+    setChangeNote('')
     // Reset form
     setAddForm({
       contract_number: '',
@@ -447,15 +693,18 @@ export default function Contracts() {
       notes: ''
     })
     setSelectedPrinters([])
+    setEquipmentSearchTerm('')
   }
 
   const handleViewDetails = (contract: LeaseContract) => {
     setSelectedContract(contract)
+    setDetailsActiveTab('general')
     setShowDetails(true)
   }
 
   const handleEdit = async (contract: LeaseContract) => {
     setEditingContract(contract)
+    setChangeNote('')
     setShowEditForm(true)
   }
 
@@ -501,6 +750,19 @@ export default function Contracts() {
           <p className="mt-2 text-gray-600">Administra todos los contratos de equipos de impresión</p>
         </div>
 
+        {successMessage && (
+          <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 flex items-center justify-between">
+            <span>{successMessage}</span>
+            <button
+              type="button"
+              onClick={() => setSuccessMessage('')}
+              className="ml-4 text-green-700 hover:text-green-900"
+            >
+              Cerrar
+            </button>
+          </div>
+        )}
+
         {/* Stats Cards */}
         {stats && (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5 mb-8">
@@ -530,7 +792,7 @@ export default function Contracts() {
                   <div className="flex-shrink-0">
                     <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
                       <span className="text-white text-sm font-medium">
-                        {stats.status_distribution.find(s => s.status === 'active')?.count || 0}
+                        {getStatusCount('active')}
                       </span>
                     </div>
                   </div>
@@ -538,7 +800,7 @@ export default function Contracts() {
                     <dl>
                       <dt className="text-sm font-medium text-gray-500 truncate">Activos</dt>
                       <dd className="text-lg font-medium text-gray-900">
-                        {stats.status_distribution.find(s => s.status === 'active')?.count || 0}
+                        {getStatusCount('active')}
                       </dd>
                     </dl>
                   </div>
@@ -586,18 +848,14 @@ export default function Contracts() {
               <div className="p-5">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                      </svg>
+                    <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
+                      <span className="text-white text-sm font-medium">{getStatusCount('expired')}</span>
                     </div>
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Valor Total</dt>
-                      <dd className="text-lg font-medium text-gray-900">
-                        ${((stats as any)?.total_monthly_cost || 0).toLocaleString()}
-                      </dd>
+                      <dt className="text-sm font-medium text-gray-500 truncate">Vencidos</dt>
+                      <dd className="text-lg font-medium text-gray-900">{getStatusCount('expired')}</dd>
                     </dl>
                   </div>
                 </div>
@@ -626,8 +884,11 @@ export default function Contracts() {
             >
               <option value="all">Todos los estados</option>
               <option value="active">Activo</option>
-              <option value="expired">Expirado</option>
+              <option value="expiring_soon">Próximo a vencer</option>
+              <option value="expired">Vencido</option>
               <option value="pending">Pendiente</option>
+              <option value="suspended">Inactivo</option>
+              <option value="cancelled">Cancelado</option>
             </select>
             <button
               onClick={() => setShowAddForm(true)}
@@ -661,6 +922,11 @@ export default function Contracts() {
                   </button>
                 </div>
               </div>
+            ) : filteredContracts.length === 0 ? (
+              <div className="text-center py-8">
+                <h3 className="text-sm font-medium text-gray-900">Sin resultados</h3>
+                <p className="mt-1 text-sm text-gray-500">No hay contratos que coincidan con los filtros aplicados.</p>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
@@ -676,7 +942,9 @@ export default function Contracts() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {contracts.map((contract) => (
+                    {filteredContracts.map((contract) => {
+                      const effectiveStatus = getEffectiveContractStatus(contract)
+                      return (
                       <tr key={contract.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
@@ -691,14 +959,8 @@ export default function Contracts() {
                           {contract.contract_type === 'cost_per_copy' ? 'Por Copia' : 'Cuota Fija'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            contract.status === 'active' 
-                              ? 'bg-green-100 text-green-800' 
-                              : contract.status === 'expired' 
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {contract.status === 'active' ? 'Activo' : contract.status === 'expired' ? 'Expirado' : 'Pendiente'}
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getContractStatusClass(effectiveStatus)}`}>
+                            {getContractStatusLabel(effectiveStatus)}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -713,6 +975,7 @@ export default function Contracts() {
                             <button
                               onClick={() => {
                                 setSelectedContract(contract)
+                                setDetailsActiveTab('general')
                                 setShowDetails(true)
                               }}
                               className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition-colors"
@@ -728,6 +991,7 @@ export default function Contracts() {
                             <button
                               onClick={() => {
                                 setEditingContract(contract)
+                                setChangeNote('')
                                 setShowEditForm(true)
                               }}
                               className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors"
@@ -751,7 +1015,7 @@ export default function Contracts() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>
@@ -912,9 +1176,9 @@ export default function Contracts() {
                         title="Estado del contrato"
                       >
                         <option value="active">Activo</option>
-                        <option value="suspended">Suspendido</option>
+                        <option value="suspended">Inactivo</option>
                         <option value="cancelled">Cancelado</option>
-                        <option value="expired">Expirado</option>
+                        <option value="expired">Vencido</option>
                       </select>
                     </div>
                     <div>
@@ -1174,7 +1438,6 @@ export default function Contracts() {
                               type="button"
                               onClick={() => {
                                 setSelectedPrinters(printers.map(p => p.id));
-                                setAddForm(prev => ({ ...prev, total_printers: printers.length }));
                               }}
                               className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
                             >
@@ -1184,7 +1447,6 @@ export default function Contracts() {
                               type="button"
                               onClick={() => {
                                 setSelectedPrinters([]);
-                                setAddForm(prev => ({ ...prev, total_printers: 0 }));
                               }}
                               className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
                             >
@@ -1193,17 +1455,28 @@ export default function Contracts() {
                           </div>
                         )}
                       </div>
+                      <div className="mb-4">
+                        <input
+                          type="text"
+                          value={equipmentSearchTerm}
+                          onChange={(e) => setEquipmentSearchTerm(e.target.value)}
+                          className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                          placeholder="Filtrar por marca, modelo, IP, etiqueta o ubicacion..."
+                        />
+                      </div>
                       <div className="max-h-60 overflow-y-auto border border-gray-300 rounded-md">
-                        {printers.length === 0 ? (
+                        {getFilteredPrinters().length === 0 ? (
                           <div className="p-4 text-center text-gray-500">
                             <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                             </svg>
-                            <p className="mt-2">No hay impresoras disponibles</p>
+                            <p className="mt-2">No hay impresoras que coincidan con el filtro</p>
                           </div>
                         ) : (
                           <div className="p-4 space-y-3">
-                            {printers.map((printer) => (
+                            {getFilteredPrinters().map((printer) => {
+                              const assignments = getAssignmentsForPrinter(printer)
+                              return (
                               <div key={printer.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                                 <div className="flex items-center space-x-3">
                                   <input
@@ -1211,11 +1484,11 @@ export default function Contracts() {
                                     checked={selectedPrinters.includes(printer.id)}
                                     onChange={(e) => {
                                       if (e.target.checked) {
-                                        setSelectedPrinters(prev => [...prev, printer.id]);
-                                        setAddForm(prev => ({ ...prev, total_printers: prev.total_printers + 1 }));
+                                        setSelectedPrinters(prev => (
+                                          prev.includes(printer.id) ? prev : [...prev, printer.id]
+                                        ));
                                       } else {
                                         setSelectedPrinters(prev => prev.filter(id => id !== printer.id));
-                                        setAddForm(prev => ({ ...prev, total_printers: Math.max(0, prev.total_printers - 1) }));
                                       }
                                     }}
                                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
@@ -1237,6 +1510,11 @@ export default function Contracts() {
                                           Multifunción
                                         </span>
                                       )}
+                                      {assignments.length > 0 && (
+                                        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">
+                                          Asignada a otro contrato
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="flex items-center space-x-4 mt-1 text-xs text-gray-500">
                                       <span>📍 {printer.location || 'Sin ubicación'}</span>
@@ -1253,13 +1531,18 @@ export default function Contracts() {
                                            'Inactiva'}
                                       </span>
                                     </div>
+                                    {assignments.length > 0 && (
+                                      <p className="mt-1 text-xs text-amber-700">
+                                        Contratos: {assignments.map((assignment) => assignment.contractNumber).join(', ')}
+                                      </p>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="text-xs text-gray-400">
                                   ID: {printer.id}
                                 </div>
                               </div>
-                            ))}
+                            )})}
                           </div>
                         )}
                       </div>
@@ -1474,7 +1757,7 @@ export default function Contracts() {
               {/* Tab Navigation */}
               <div className="border-b border-gray-200 mb-6">
                 <nav className="-mb-px flex space-x-6 overflow-x-auto">
-                  {tabs.map((tab) => (
+                  {detailTabs.map((tab) => (
                     <button
                       key={tab.id}
                       type="button"
@@ -1517,13 +1800,9 @@ export default function Contracts() {
                     <div>
                       <label className="block text-sm font-medium text-gray-500">Estado</label>
                       <span className={`inline-flex mt-1 px-3 py-1 text-sm font-semibold rounded-full ${
-                        selectedContract.status === 'active' 
-                          ? 'bg-green-100 text-green-800' 
-                          : selectedContract.status === 'expired' 
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-yellow-100 text-yellow-800'
+                        getContractStatusClass(getEffectiveContractStatus(selectedContract))
                       }`}>
-                        {selectedContract.status === 'active' ? 'Activo' : selectedContract.status === 'expired' ? 'Expirado' : 'Pendiente'}
+                        {getContractStatusLabel(getEffectiveContractStatus(selectedContract))}
                       </span>
                     </div>
                     <div>
@@ -1674,6 +1953,53 @@ export default function Contracts() {
                       <p className="mt-1 text-lg text-gray-900">{selectedContract.contact_phone || 'N/A'}</p>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {detailsActiveTab === 'history' && (
+                <div className="space-y-4">
+                  {loadingHistory ? (
+                    <div className="text-center py-8 text-gray-500">Cargando historial...</div>
+                  ) : contractHistory.length === 0 ? (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-600">
+                      No hay cambios registrados para este contrato.
+                    </div>
+                  ) : (
+                    contractHistory.map((entry) => (
+                      <div key={entry.id} className="border border-gray-200 rounded-lg p-4 bg-white">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                entry.action === 'created'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}>
+                                {entry.action === 'created' ? 'Creación' : 'Edición'}
+                              </span>
+                              <span className="text-sm font-medium text-gray-900">
+                                {entry.changed_by_name || 'Usuario no identificado'}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm text-gray-700">{entry.change_note}</p>
+                          </div>
+                          <span className="text-xs text-gray-500 whitespace-nowrap">
+                            {formatDateTime(entry.created_at)}
+                          </span>
+                        </div>
+
+                        {entry.changed_fields.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {entry.changed_fields.map((field) => (
+                              <span key={field} className="inline-flex px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-700">
+                                {field}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
             </div>
@@ -1846,9 +2172,9 @@ export default function Contracts() {
                         title="Estado del contrato"
                       >
                         <option value="active">Activo</option>
-                        <option value="suspended">Suspendido</option>
+                        <option value="suspended">Inactivo</option>
                         <option value="cancelled">Cancelado</option>
-                        <option value="expired">Expirado</option>
+                        <option value="expired">Vencido</option>
                       </select>
                     </div>
                     <div>
@@ -2107,7 +2433,6 @@ export default function Contracts() {
                               type="button"
                               onClick={() => {
                                 setSelectedPrinters(printers.map(p => p.id));
-                                setAddForm(prev => ({ ...prev, total_printers: printers.length }));
                               }}
                               className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
                             >
@@ -2117,7 +2442,6 @@ export default function Contracts() {
                               type="button"
                               onClick={() => {
                                 setSelectedPrinters([]);
-                                setAddForm(prev => ({ ...prev, total_printers: 0 }));
                               }}
                               className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
                             >
@@ -2126,17 +2450,32 @@ export default function Contracts() {
                           </div>
                         )}
                       </div>
+                      <div className="mb-4">
+                        <input
+                          type="text"
+                          value={equipmentSearchTerm}
+                          onChange={(e) => setEquipmentSearchTerm(e.target.value)}
+                          className="block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                          placeholder="Filtrar por marca, modelo, IP, etiqueta o ubicacion..."
+                        />
+                      </div>
                       <div className="max-h-60 overflow-y-auto border border-gray-300 rounded-md">
-                        {printers.length === 0 ? (
+                        {getFilteredPrinters().length === 0 ? (
                           <div className="p-4 text-center text-gray-500">
                             <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                             </svg>
-                            <p className="mt-2">No hay impresoras disponibles</p>
+                            <p className="mt-2">No hay impresoras que coincidan con el filtro</p>
                           </div>
                         ) : (
                           <div className="p-4 space-y-3">
-                            {printers.map((printer) => (
+                            {getFilteredPrinters().map((printer) => {
+                              const assignments = getAssignmentsForPrinter(
+                                printer,
+                                editingContract.id,
+                                editingContract.contract_number
+                              )
+                              return (
                               <div key={printer.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                                 <div className="flex items-center space-x-3">
                                   <input
@@ -2144,11 +2483,11 @@ export default function Contracts() {
                                     checked={selectedPrinters.includes(printer.id)}
                                     onChange={(e) => {
                                       if (e.target.checked) {
-                                        setSelectedPrinters(prev => [...prev, printer.id]);
-                                        setAddForm(prev => ({ ...prev, total_printers: prev.total_printers + 1 }));
+                                        setSelectedPrinters(prev => (
+                                          prev.includes(printer.id) ? prev : [...prev, printer.id]
+                                        ));
                                       } else {
                                         setSelectedPrinters(prev => prev.filter(id => id !== printer.id));
-                                        setAddForm(prev => ({ ...prev, total_printers: Math.max(0, prev.total_printers - 1) }));
                                       }
                                     }}
                                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
@@ -2170,6 +2509,11 @@ export default function Contracts() {
                                           Multifunción
                                         </span>
                                       )}
+                                      {assignments.length > 0 && (
+                                        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">
+                                          Asignada a otro contrato
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="flex items-center space-x-4 mt-1 text-xs text-gray-500">
                                       <span>📍 {printer.location || 'Sin ubicación'}</span>
@@ -2186,13 +2530,18 @@ export default function Contracts() {
                                            'Inactiva'}
                                       </span>
                                     </div>
+                                    {assignments.length > 0 && (
+                                      <p className="mt-1 text-xs text-amber-700">
+                                        Contratos: {assignments.map((assignment) => assignment.contractNumber).join(', ')}
+                                      </p>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="text-xs text-gray-400">
                                   ID: {printer.id}
                                 </div>
                               </div>
-                            ))}
+                            )})}
                           </div>
                         )}
                       </div>
@@ -2364,12 +2713,29 @@ export default function Contracts() {
             
             {/* Form Actions - Fixed at bottom */}
             <div className="p-6 border-t border-gray-200 bg-gray-50">
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Motivo del cambio <span className="text-red-600">*</span>
+                </label>
+                <textarea
+                  value={changeNote}
+                  onChange={(e) => setChangeNote(e.target.value)}
+                  rows={2}
+                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow bg-white"
+                  placeholder="Describe por qué se realiza esta edición del contrato..."
+                  required
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Esta nota quedará registrada en la historia del contrato junto con fecha, usuario y campos modificados.
+                </p>
+              </div>
               <div className="flex justify-end space-x-4">
                 <button
                   type="button"
                   onClick={() => {
                     setShowEditForm(false)
                     setEditingContract(null)
+                    setChangeNote('')
                   }}
                   className="px-6 py-3 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
                 >
