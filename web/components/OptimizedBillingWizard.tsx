@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { LeaseContract } from '@/types/contract'
 import { WizardStep1 } from './wizard/WizardStep1'
 import { WizardStep2 } from './wizard/WizardStep2'
@@ -27,6 +28,16 @@ interface Printer {
   initial_counter_bw?: number
   initial_counter_color?: number
   initial_counter_total?: number
+}
+
+interface CounterReading {
+  id: number
+  printer_id: number
+  billing_period_id: number
+  reading_date: string
+  prints_bw_period: number
+  prints_color_period: number
+  prints_total_period: number
 }
 
 const normalizePrinters = (rawData: any): Printer[] => {
@@ -75,6 +86,30 @@ interface VisualDraft {
   status: string
 }
 
+interface BillingDeployment {
+  deployment_mode: 'internal_customer' | 'service_provider'
+  mode_label: string
+  target_label: string
+  document_label: string
+  target_type: string
+  digital_invoice_enabled: boolean
+  digital_invoice_provider: string
+}
+
+interface GeneratedInvoice {
+  id: number
+  invoice_number: string
+  status: string
+  total_amount: number
+  subtotal: number
+  tax_amount: number
+  currency: string
+  recipient_name?: string
+  recipient_email?: string
+  email_delivery_status?: string
+  digital_invoice_status?: string
+}
+
 const escapeHtml = (value: string) => value
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -101,6 +136,7 @@ const formatCurrency = (value: number, currency = 'ARS', maximumFractionDigits =
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 
 const OptimizedBillingWizard: React.FC = () => {
+  const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
   const [loading, setLoading] = useState(false)
 
@@ -109,12 +145,19 @@ const OptimizedBillingWizard: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<BillingPeriod | null>(null)
   const [selectedContract, setSelectedContract] = useState<LeaseContract | null>(null)
   const [printers, setPrinters] = useState<Printer[]>([])
+  const [readings, setReadings] = useState<CounterReading[]>([])
+  const [loadingReadings, setLoadingReadings] = useState(false)
   const [visualDraft, setVisualDraft] = useState<VisualDraft | null>(null)
+  const [deployment, setDeployment] = useState<BillingDeployment | null>(null)
+  const [generatedInvoice, setGeneratedInvoice] = useState<GeneratedInvoice | null>(null)
+  const [generatingInvoice, setGeneratingInvoice] = useState(false)
+  const [sendingInvoice, setSendingInvoice] = useState(false)
+  const [wizardMessage, setWizardMessage] = useState('')
 
   const [clientFilter, setClientFilter] = useState('')
 
   const steps: WizardStep[] = [
-    { number: 1, title: 'Período y Cliente', description: 'Seleccionar período de facturación y cliente', completed: false },
+    { number: 1, title: `Período y ${deployment?.target_label || 'Destino'}`, description: `Seleccionar período de facturación y ${deployment?.target_label?.toLowerCase() || 'destino'}`, completed: false },
     { number: 2, title: 'Tipo de Contrato', description: 'Revisar condiciones y reglas de facturación', completed: false },
     { number: 3, title: 'Validación de Contadores', description: 'Verificar lecturas y calcular copias', completed: false },
     { number: 4, title: 'Cálculo de Montos', description: 'Aplicar tarifas, descuentos e impuestos', completed: false },
@@ -124,13 +167,36 @@ const OptimizedBillingWizard: React.FC = () => {
   ]
 
   useEffect(() => {
+    fetchDeployment()
     fetchPeriods()
     fetchContracts()
   }, [])
 
   useEffect(() => {
     setVisualDraft(null)
+    setGeneratedInvoice(null)
+    setWizardMessage('')
+    setReadings([])
   }, [selectedPeriod, selectedContract])
+
+  useEffect(() => {
+    if (!selectedPeriod || !selectedContract) return
+
+    fetchContractPrinters(selectedContract.id)
+    fetchCounterReadings(selectedPeriod.id, selectedContract.id)
+  }, [selectedPeriod, selectedContract])
+
+  const fetchDeployment = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/billing/deployment`)
+      if (response.ok) {
+        const data = await response.json()
+        setDeployment(data)
+      }
+    } catch (error) {
+      console.error('Error fetching billing deployment:', error)
+    }
+  }
 
   const fetchPeriods = async () => {
     try {
@@ -173,6 +239,25 @@ const OptimizedBillingWizard: React.FC = () => {
     }
   }
 
+  const fetchCounterReadings = async (periodId: number, contractId?: number) => {
+    setLoadingReadings(true)
+    try {
+      const contractFilter = contractId ? `&contract_id=${contractId}` : ''
+      const response = await fetch(`${API_BASE}/api/billing/readings?period_id=${periodId}${contractFilter}&limit=500`)
+      if (response.ok) {
+        const data = await response.json()
+        setReadings(data)
+      } else {
+        setReadings([])
+      }
+    } catch (error) {
+      console.error('Error fetching counter readings:', error)
+      setReadings([])
+    } finally {
+      setLoadingReadings(false)
+    }
+  }
+
   const handleContractSelect = async (contract: LeaseContract) => {
     setSelectedContract(contract)
 
@@ -182,9 +267,7 @@ const OptimizedBillingWizard: React.FC = () => {
 
     setLoading(true)
 
-    if (selectedPeriod) {
-      await fetchContractPrinters(contract.id)
-    }
+    if (selectedPeriod) await fetchCounterReadings(selectedPeriod.id, contract.id)
 
     setLoading(false)
   }
@@ -213,6 +296,108 @@ const OptimizedBillingWizard: React.FC = () => {
       total: simulatedTotal,
       status: 'Borrador visual generado',
     })
+  }
+
+  const handleGenerateInvoice = async (): Promise<GeneratedInvoice | null> => {
+    if (!selectedContract || !selectedPeriod) return null
+
+    if (generatedInvoice) return generatedInvoice
+
+    if (hasMissingRequiredReadings) {
+      setWizardMessage(`No se puede generar la liquidacion: faltan lecturas del periodo para ${missingCounterPrinters.map(printer => `${printer.brand || 'N/A'} ${printer.model || ''}`).join(', ')}.`)
+      return null
+    }
+
+    setGeneratingInvoice(true)
+    setWizardMessage('')
+
+    try {
+      const response = await fetch(`${API_BASE}/api/billing/invoices/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          period_id: selectedPeriod.id,
+          contract_id: selectedContract.id,
+          status: 'draft',
+          send_email: false,
+          recipient_email: selectedContract.contact_email || undefined,
+          notes: `Generada desde wizard de facturacion (${deployment?.mode_label || 'Cliente interno'})`,
+          created_by: 'wizard',
+        }),
+      })
+
+      if (response.ok) {
+        const invoice = await response.json()
+        setGeneratedInvoice(invoice)
+        setVisualDraft({
+          number: invoice.invoice_number,
+          generatedAt: new Date().toISOString(),
+          total: Number(invoice.total_amount || 0),
+          status: 'Factura interna generada',
+        })
+        setWizardMessage(`${deployment?.document_label || 'Factura'} ${invoice.invoice_number} creada en billing.`)
+        return invoice
+      }
+
+      const errorData = await response.json()
+      setWizardMessage(errorData.detail || 'No se pudo generar la factura')
+      return null
+    } catch (error) {
+      console.error('Error generating invoice:', error)
+      setWizardMessage('Error de conexion al generar la factura')
+      return null
+    } finally {
+      setGeneratingInvoice(false)
+    }
+  }
+
+  const handleSendInvoice = async (invoiceToSend: GeneratedInvoice = generatedInvoice as GeneratedInvoice) => {
+    if (!invoiceToSend) return false
+
+    setSendingInvoice(true)
+    setWizardMessage('')
+
+    try {
+      const response = await fetch(`${API_BASE}/api/billing/invoices/${invoiceToSend.id}/send-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipient_email: invoiceToSend.recipient_email || selectedContract?.contact_email || undefined,
+        }),
+      })
+
+      const result = await response.json()
+      if (response.ok && result.success) {
+        setGeneratedInvoice(prev => prev ? { ...prev, status: 'sent', email_delivery_status: 'sent' } : prev)
+        setWizardMessage(result.message || 'Factura enviada correctamente')
+        return true
+      } else {
+        setGeneratedInvoice(prev => prev ? { ...prev, email_delivery_status: result.status || 'failed' } : prev)
+        setWizardMessage(result.message || result.detail || 'No se pudo enviar la factura')
+        return false
+      }
+    } catch (error) {
+      console.error('Error sending invoice:', error)
+      setWizardMessage('Error de conexion al enviar la factura')
+      return false
+    } finally {
+      setSendingInvoice(false)
+    }
+  }
+
+  const handleFinishWizard = async () => {
+    const invoice = generatedInvoice || await handleGenerateInvoice()
+    if (!invoice) return
+
+    router.push(`/billing?tab=invoices&refresh=${Date.now()}`)
+  }
+
+  const handleSendAndFinishWizard = async () => {
+    const invoice = generatedInvoice || await handleGenerateInvoice()
+    if (!invoice) return
+
+    await handleSendInvoice(invoice)
+    router.push(`/billing?tab=invoices&refresh=${Date.now()}`)
   }
 
   const handleDownloadVisualDraft = () => {
@@ -260,12 +445,12 @@ const OptimizedBillingWizard: React.FC = () => {
   <h2>Resumen económico</h2>
   <table>
     <tbody>
-      <tr><td>Copias B/N simuladas</td><td>${simulatedBwCopies.toLocaleString('es-AR')}</td></tr>
-      <tr><td>Copias color simuladas</td><td>${simulatedColorCopies.toLocaleString('es-AR')}</td></tr>
+      <tr><td>Copias B/N del período</td><td>${simulatedBwCopies.toLocaleString('es-AR')}</td></tr>
+      <tr><td>Copias color del período</td><td>${simulatedColorCopies.toLocaleString('es-AR')}</td></tr>
       <tr><td>Cargo B/N</td><td>${escapeHtml(formatCurrency(simulatedBwAmount, selectedCurrency))}</td></tr>
       <tr><td>Cargo color</td><td>${escapeHtml(formatCurrency(simulatedColorAmount, selectedCurrency))}</td></tr>
       <tr><td>Subtotal</td><td>${escapeHtml(formatCurrency(simulatedSubtotal, selectedCurrency))}</td></tr>
-      <tr><td>IVA (19%)</td><td>${escapeHtml(formatCurrency(simulatedTax, selectedCurrency))}</td></tr>
+      <tr><td>IVA (21%)</td><td>${escapeHtml(formatCurrency(simulatedTax, selectedCurrency))}</td></tr>
       <tr><td><strong>Total</strong></td><td><strong>${escapeHtml(formatCurrency(simulatedTotal, selectedCurrency))}</strong></td></tr>
     </tbody>
   </table>
@@ -289,18 +474,52 @@ const OptimizedBillingWizard: React.FC = () => {
     URL.revokeObjectURL(url)
   }
 
-  const simulatedBwCopies = printers.length * 850
-  const simulatedColorCopies = Math.round(printers.length * 0.2 * 850)
+  const readingByPrinterId = new Map(readings.map(reading => [reading.printer_id, reading]))
+  const printerBillingRows = printers.map((printer) => {
+    const reading = readingByPrinterId.get(printer.id)
+    return {
+      printer,
+      reading,
+      bwCopies: reading?.prints_bw_period || 0,
+      colorCopies: reading?.prints_color_period || 0,
+      totalCopies: reading?.prints_total_period || 0,
+    }
+  })
+  const missingCounterPrinters = printerBillingRows
+    .filter(row => !row.reading)
+    .map(row => row.printer)
+  const contractRequiresReadings = selectedContract?.contract_type === 'cost_per_copy' || selectedContract?.contract_type === 'fixed_cost_per_quantity'
+  const hasMissingRequiredReadings = Boolean(contractRequiresReadings && missingCounterPrinters.length > 0)
+
+  const totalBwCopies = printerBillingRows.reduce((sum, row) => sum + row.bwCopies, 0)
+  const totalColorCopies = printerBillingRows.reduce((sum, row) => sum + row.colorCopies, 0)
+  const includedBwCopies = Number(selectedContract?.included_copies_bw || 0)
+  const includedColorCopies = Number(selectedContract?.included_copies_color || 0)
+  const billableBwCopies = selectedContract?.contract_type === 'fixed_cost_per_quantity'
+    ? Math.max(0, totalBwCopies - includedBwCopies)
+    : totalBwCopies
+  const billableColorCopies = selectedContract?.contract_type === 'fixed_cost_per_quantity'
+    ? Math.max(0, totalColorCopies - includedColorCopies)
+    : totalColorCopies
+
+  const simulatedBwCopies = totalBwCopies
+  const simulatedColorCopies = totalColorCopies
   const simulatedTotalCopies = simulatedBwCopies + simulatedColorCopies
 
   const bwRate = Number(selectedContract?.cost_bw_per_copy || 0)
   const colorRate = Number(selectedContract?.cost_color_per_copy || 0)
   const fixedMonthlyCost = Number(selectedContract?.fixed_monthly_cost || 0)
   const selectedCurrency = selectedContract?.currency || 'ARS'
-  const simulatedBwAmount = roundMoney(simulatedBwCopies * bwRate)
-  const simulatedColorAmount = roundMoney(simulatedColorCopies * colorRate)
+  const effectiveBwRate = selectedContract?.contract_type === 'fixed_cost_per_quantity'
+    ? Number(selectedContract?.overage_cost_bw || selectedContract?.cost_bw_per_copy || 0)
+    : bwRate
+  const effectiveColorRate = selectedContract?.contract_type === 'fixed_cost_per_quantity'
+    ? Number(selectedContract?.overage_cost_color || selectedContract?.cost_color_per_copy || 0)
+    : colorRate
+  const simulatedBwAmount = roundMoney(billableBwCopies * effectiveBwRate)
+  const simulatedColorAmount = roundMoney(billableColorCopies * effectiveColorRate)
   const simulatedSubtotal = roundMoney(fixedMonthlyCost + simulatedBwAmount + simulatedColorAmount)
-  const simulatedTax = roundMoney(simulatedSubtotal * 0.19)
+  const simulatedTax = roundMoney(simulatedSubtotal * 0.21)
   const simulatedTotal = roundMoney(simulatedSubtotal + simulatedTax)
 
   const renderMissingContext = () => (
@@ -320,52 +539,56 @@ const OptimizedBillingWizard: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow">
           <h4 className="text-lg font-medium text-gray-900 mb-4">Validación de Contadores</h4>
           <p className="text-sm text-gray-600 mb-6">
-            Vista visual de lecturas para el período {selectedPeriod.name}. Esta pantalla no guarda cambios.
+            Lecturas registradas para el período {selectedPeriod.name}. Los montos se calculan con estos valores.
           </p>
 
-          {loading ? (
-            <div className="text-center py-8 text-gray-500">Cargando datos de equipos...</div>
+          {(loading || loadingReadings) ? (
+            <div className="text-center py-8 text-gray-500">Cargando datos de equipos y lecturas...</div>
           ) : printers.length === 0 ? (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-yellow-800">
               No hay equipos asociados al contrato seleccionado.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full border border-gray-200 rounded-lg">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Equipo</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">IP</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">B/N período</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Color período</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Total período</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {printers.map((printer, index) => {
-                    const rowBw = 700 + index * 35
-                    const rowColor = Math.round(rowBw * 0.18)
-                    const rowTotal = rowBw + rowColor
-                    return (
-                      <tr key={printer.id} className="border-t border-gray-100">
+            <div className="space-y-4">
+              {missingCounterPrinters.length > 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-yellow-800 text-sm">
+                  No hay registro de contadores en este período para: {missingCounterPrinters.map(printer => `${printer.brand || 'N/A'} ${printer.model || 'Sin modelo'}`).join(', ')}.
+                </div>
+              )}
+              <div className="overflow-x-auto">
+                <table className="min-w-full border border-gray-200 rounded-lg">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Equipo</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">IP</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">B/N período</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Color período</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Total período</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {printerBillingRows.map((row) => (
+                      <tr key={row.printer.id} className="border-t border-gray-100">
                         <td className="px-4 py-3 text-sm text-gray-800">
-                          {printer.brand || 'N/A'} {printer.model || 'Sin modelo'}
+                          {row.printer.brand || 'N/A'} {row.printer.model || 'Sin modelo'}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{printer.ip_address}</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-800">{rowBw.toLocaleString('es-CL')}</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-800">{rowColor.toLocaleString('es-CL')}</td>
-                        <td className="px-4 py-3 text-sm text-right font-medium text-gray-900">{rowTotal.toLocaleString('es-CL')}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{row.printer.ip_address}</td>
+                        <td className="px-4 py-3 text-sm text-right text-gray-800">{row.bwCopies.toLocaleString('es-CL')}</td>
+                        <td className="px-4 py-3 text-sm text-right text-gray-800">{row.colorCopies.toLocaleString('es-CL')}</td>
+                        <td className="px-4 py-3 text-sm text-right font-medium text-gray-900">{row.totalCopies.toLocaleString('es-CL')}</td>
                         <td className="px-4 py-3 text-sm">
-                          <span className="inline-flex items-center px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-medium">
-                            Validado
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            row.reading ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {row.reading ? 'Registrado' : 'Sin registro'}
                           </span>
                         </td>
                       </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
@@ -396,17 +619,25 @@ const OptimizedBillingWizard: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow">
           <h4 className="text-lg font-medium text-gray-900 mb-4">Cálculo de Montos</h4>
           <p className="text-sm text-gray-600 mb-6">
-            Simulación visual de cálculo para contrato {selectedContract.contract_number}.
+            Cálculo basado en las lecturas registradas del período {selectedPeriod.name}.
           </p>
+
+          {hasMissingRequiredReadings && (
+            <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
+              Faltan lecturas del período para una o más impresoras. La liquidación no se podrá generar hasta completar esos registros.
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="border border-gray-200 rounded-lg p-4">
               <h5 className="font-medium text-gray-900 mb-3">Tarifas Aplicadas</h5>
               <div className="space-y-2 text-sm">
                 <p className="flex justify-between"><span>Tipo de contrato:</span><span>{getContractTypeLabel(selectedContract.contract_type)}</span></p>
-                <p className="flex justify-between"><span>Valor copia B/N:</span><span>{formatCurrency(bwRate, selectedCurrency, 4)}</span></p>
-                <p className="flex justify-between"><span>Valor copia color:</span><span>{formatCurrency(colorRate, selectedCurrency, 4)}</span></p>
+                <p className="flex justify-between"><span>Valor copia B/N:</span><span>{formatCurrency(effectiveBwRate, selectedCurrency, 4)}</span></p>
+                <p className="flex justify-between"><span>Valor copia color:</span><span>{formatCurrency(effectiveColorRate, selectedCurrency, 4)}</span></p>
                 <p className="flex justify-between"><span>Cargo fijo mensual:</span><span>{formatCurrency(fixedMonthlyCost, selectedCurrency)}</span></p>
+                <p className="flex justify-between"><span>Copias B/N facturables:</span><span>{billableBwCopies.toLocaleString('es-CL')}</span></p>
+                <p className="flex justify-between"><span>Copias color facturables:</span><span>{billableColorCopies.toLocaleString('es-CL')}</span></p>
               </div>
             </div>
 
@@ -416,7 +647,7 @@ const OptimizedBillingWizard: React.FC = () => {
                 <p className="flex justify-between"><span>Cargo por B/N:</span><span>{formatCurrency(simulatedBwAmount, selectedCurrency)}</span></p>
                 <p className="flex justify-between"><span>Cargo por color:</span><span>{formatCurrency(simulatedColorAmount, selectedCurrency)}</span></p>
                 <p className="flex justify-between"><span>Subtotal:</span><span>{formatCurrency(simulatedSubtotal, selectedCurrency)}</span></p>
-                <p className="flex justify-between"><span>IVA (19%):</span><span>{formatCurrency(simulatedTax, selectedCurrency)}</span></p>
+                <p className="flex justify-between"><span>IVA (21%):</span><span>{formatCurrency(simulatedTax, selectedCurrency)}</span></p>
                 <p className="flex justify-between font-bold text-base pt-2 border-t border-gray-200">
                   <span>Total estimado:</span>
                   <span className="text-green-700">{formatCurrency(simulatedTotal, selectedCurrency)}</span>
@@ -435,13 +666,13 @@ const OptimizedBillingWizard: React.FC = () => {
     return (
       <div className="space-y-6">
         <div className="bg-white p-6 rounded-lg shadow">
-          <h4 className="text-lg font-medium text-gray-900 mb-4">Vista Previa de Factura</h4>
+          <h4 className="text-lg font-medium text-gray-900 mb-4">Vista Previa de {deployment?.document_label || 'Liquidacion interna'}</h4>
 
           <div className="border border-gray-200 rounded-lg p-5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
               <div>
-                <p className="text-gray-500">Cliente</p>
-                <p className="font-medium text-gray-900">{selectedContract.supplier}</p>
+                <p className="text-gray-500">{deployment?.target_label || 'Destino'}</p>
+                <p className="font-medium text-gray-900">{selectedContract.cost_center || selectedContract.department || selectedContract.supplier}</p>
               </div>
               <div>
                 <p className="text-gray-500">Contrato</p>
@@ -458,6 +689,7 @@ const OptimizedBillingWizard: React.FC = () => {
                 <p className="text-xs uppercase text-gray-500 font-semibold">Consumo</p>
                 <p className="mt-2 text-sm text-gray-700">B/N: {simulatedBwCopies.toLocaleString('es-CL')} copias</p>
                 <p className="text-sm text-gray-700">Color: {simulatedColorCopies.toLocaleString('es-CL')} copias</p>
+                <p className="text-sm text-gray-700">Sin registro: {missingCounterPrinters.length} equipos</p>
               </div>
               <div className="bg-green-50 rounded-lg p-4">
                 <p className="text-xs uppercase text-green-700 font-semibold">Total a facturar</p>
@@ -467,7 +699,9 @@ const OptimizedBillingWizard: React.FC = () => {
           </div>
 
           <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
-            Esta es una vista previa visual. El envío y la persistencia aún no están habilitados.
+            {hasMissingRequiredReadings
+              ? 'No se podrá generar la liquidación hasta registrar los contadores faltantes del período.'
+              : 'Al confirmar en el paso siguiente se creara una factura interna real en la tabla de billing. La conexion con factura digital queda preparada para una segunda version.'}
           </div>
         </div>
       </div>
@@ -480,11 +714,11 @@ const OptimizedBillingWizard: React.FC = () => {
     return (
       <div className="space-y-6">
         <div className="bg-white p-6 rounded-lg shadow">
-          <h4 className="text-lg font-medium text-gray-900 mb-4">Generar Borrador</h4>
+          <h4 className="text-lg font-medium text-gray-900 mb-4">Generar {deployment?.document_label || 'Liquidacion interna'}</h4>
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
             <p className="text-sm text-blue-800">
-              Simulación de creación de borrador para {selectedContract.contract_number} ({selectedPeriod.name}).
+              Se creara una factura interna persistida para {selectedContract.contract_number} ({selectedPeriod.name}) y quedara visible en la tabla de billing.
             </p>
           </div>
 
@@ -492,33 +726,34 @@ const OptimizedBillingWizard: React.FC = () => {
             <div className="border border-gray-200 rounded-lg p-4">
               <h5 className="font-medium text-gray-900 mb-3">Opciones de generación</h5>
               <div className="space-y-2 text-sm text-gray-700">
-                <label className="flex items-center gap-2"><input type="checkbox" defaultChecked /> Generar PDF visual</label>
+                <label className="flex items-center gap-2"><input type="checkbox" defaultChecked readOnly /> Guardar en billing</label>
                 <label className="flex items-center gap-2"><input type="checkbox" defaultChecked /> Incluir resumen por equipo</label>
-                <label className="flex items-center gap-2"><input type="checkbox" /> Preparar envío por email</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked readOnly /> Preparar factura digital v2</label>
               </div>
             </div>
 
             <div className="border border-gray-200 rounded-lg p-4">
               <h5 className="font-medium text-gray-900 mb-3">Datos del borrador</h5>
               <div className="space-y-2 text-sm">
-                <p className="flex justify-between"><span>Número:</span><span>{visualDraft?.number || `DRAFT-${selectedPeriod.id}-${selectedContract.id}`}</span></p>
+                <p className="flex justify-between"><span>Número:</span><span>{generatedInvoice?.invoice_number || `BOR-${selectedPeriod.id}-${selectedContract.id}`}</span></p>
                 <p className="flex justify-between"><span>Fecha emisión:</span><span>{visualDraft ? new Date(visualDraft.generatedAt).toLocaleDateString('es-AR') : new Date().toLocaleDateString('es-AR')}</span></p>
-                <p className="flex justify-between font-bold"><span>Total estimado:</span><span>{formatCurrency(simulatedTotal, selectedCurrency)}</span></p>
-                <p className="flex justify-between"><span>Estado:</span><span className={visualDraft ? 'text-green-700 font-medium' : 'text-gray-500'}>{visualDraft?.status || 'Pendiente de generación'}</span></p>
+                <p className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(generatedInvoice?.total_amount || simulatedTotal, generatedInvoice?.currency || selectedCurrency)}</span></p>
+                <p className="flex justify-between"><span>Estado:</span><span className={generatedInvoice ? 'text-green-700 font-medium' : 'text-gray-500'}>{generatedInvoice ? 'Creada en billing' : 'Pendiente de generación'}</span></p>
+                <p className="flex justify-between"><span>Factura digital:</span><span>{generatedInvoice?.digital_invoice_status || 'Preparada v2'}</span></p>
               </div>
             </div>
           </div>
 
-          {visualDraft && (
+          {generatedInvoice && (
             <div className="mt-6 border border-green-200 bg-green-50 rounded-lg p-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h5 className="font-medium text-green-900">Borrador generado correctamente</h5>
+                  <h5 className="font-medium text-green-900">Factura creada correctamente</h5>
                   <p className="mt-1 text-sm text-green-800">
-                    Se preparó el borrador visual {visualDraft.number} por {formatCurrency(visualDraft.total, selectedCurrency)}.
+                    Se creó {generatedInvoice.invoice_number} por {formatCurrency(generatedInvoice.total_amount, generatedInvoice.currency)}.
                   </p>
                   <p className="mt-1 text-xs text-green-700">
-                    Generado el {new Date(visualDraft.generatedAt).toLocaleString('es-AR')}. No se guardó información en el backend.
+                    Ya se encuentra disponible en la tabla de billing. La factura digital quedo marcada como pendiente para v2.
                   </p>
                 </div>
                 <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 border border-green-200">
@@ -531,10 +766,11 @@ const OptimizedBillingWizard: React.FC = () => {
           <div className="mt-6 flex justify-center">
             <button
               type="button"
-              onClick={handleGenerateVisualDraft}
-              className="px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+              onClick={handleGenerateInvoice}
+              disabled={generatingInvoice || hasMissingRequiredReadings}
+              className="px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-green-300 transition-colors font-medium"
             >
-              {visualDraft ? 'Regenerar borrador (visual)' : 'Generar borrador (visual)'}
+              {generatingInvoice ? 'Generando...' : hasMissingRequiredReadings ? 'Faltan contadores del periodo' : generatedInvoice ? 'Factura generada' : `Generar ${deployment?.document_label || 'factura interna'}`}
             </button>
           </div>
 
@@ -562,37 +798,55 @@ const OptimizedBillingWizard: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow">
           <h4 className="text-lg font-medium text-gray-900 mb-4">Envío Final</h4>
 
+          {!generatedInvoice && (
+            <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
+              Primero genera la factura en el paso 6 para habilitar el envío.
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="border border-gray-200 rounded-lg p-4">
               <h5 className="font-medium text-gray-900 mb-3">Destinatarios</h5>
               <div className="space-y-2 text-sm text-gray-700">
-                <p><span className="font-medium">Cliente:</span> {selectedContract.supplier}</p>
+                <p><span className="font-medium">{deployment?.target_label || 'Destino'}:</span> {generatedInvoice?.recipient_name || selectedContract.cost_center || selectedContract.department || selectedContract.supplier}</p>
                 <p><span className="font-medium">Contacto:</span> {selectedContract.contact_person || 'No definido'}</p>
-                <p><span className="font-medium">Email:</span> {selectedContract.contact_email || 'No definido'}</p>
+                <p><span className="font-medium">Email:</span> {generatedInvoice?.recipient_email || selectedContract.contact_email || 'No definido'}</p>
               </div>
             </div>
 
             <div className="border border-gray-200 rounded-lg p-4">
-              <h5 className="font-medium text-gray-900 mb-3">Confirmación visual</h5>
+              <h5 className="font-medium text-gray-900 mb-3">Factura generada</h5>
+              <div className="space-y-2 text-sm text-gray-700">
+                <p><span className="font-medium">Número:</span> {generatedInvoice?.invoice_number || 'Pendiente'}</p>
+                <p><span className="font-medium">Total:</span> {generatedInvoice ? formatCurrency(generatedInvoice.total_amount, generatedInvoice.currency) : formatCurrency(simulatedTotal, selectedCurrency)}</p>
+                <p><span className="font-medium">Estado email:</span> {generatedInvoice?.email_delivery_status || 'No enviado'}</p>
+              </div>
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" /> Confirmo revisión de datos
               </label>
-              <p className="text-xs text-gray-500 mt-3">
-                Esta etapa es solo visual y no enviará correos ni actualizará estado.
-              </p>
             </div>
           </div>
 
-          <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
-            Modo visual activo: no se ejecutan acciones en backend.
+          <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+            El envío usa la configuración SMTP del sistema. Si SMTP no está configurado, se registra el intento fallido y la factura queda disponible para reintento.
           </div>
 
           <div className="mt-6 flex justify-center gap-4">
-            <button type="button" className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
-              Vista previa final
+            <button
+              type="button"
+              onClick={handleFinishWizard}
+              disabled={generatingInvoice || sendingInvoice}
+              className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:bg-gray-300 transition-colors"
+            >
+              {generatingInvoice ? 'Guardando...' : 'Guardar y volver a facturación'}
             </button>
-            <button type="button" className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
-              Enviar factura (visual)
+            <button
+              type="button"
+              onClick={handleSendAndFinishWizard}
+              disabled={generatingInvoice || sendingInvoice}
+              className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors font-medium"
+            >
+              {sendingInvoice ? 'Enviando...' : 'Enviar por email y volver'}
             </button>
           </div>
         </div>
@@ -603,9 +857,24 @@ const OptimizedBillingWizard: React.FC = () => {
   return (
     <div className="container mx-auto p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">🧙‍♂️ Wizard de Facturación</h1>
-        <p className="text-gray-600">Generación guiada de facturas paso a paso</p>
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">Wizard de Facturación</h1>
+            <p className="text-gray-600">Generación guiada de facturas internas paso a paso</p>
+          </div>
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            <div className="font-semibold">Deployment: {deployment?.mode_label || 'Cliente interno'}</div>
+            <div>{deployment?.document_label || 'Liquidacion interna'} hacia {deployment?.target_label || 'Area / centro de costo'}</div>
+            <div className="mt-1 text-xs text-blue-700">Factura digital: preparada para version 2</div>
+          </div>
+        </div>
       </div>
+
+      {wizardMessage && (
+        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          {wizardMessage}
+        </div>
+      )}
 
       <div className="mb-8">
         <div className="flex items-center justify-between">
@@ -640,6 +909,7 @@ const OptimizedBillingWizard: React.FC = () => {
             selectedPeriod={selectedPeriod}
             selectedContract={selectedContract}
             clientFilter={clientFilter}
+            targetLabel={deployment?.target_label || 'Area / centro de costo'}
             onPeriodSelect={setSelectedPeriod}
             onContractSelect={handleContractSelect}
             onClientFilterChange={setClientFilter}
@@ -668,13 +938,15 @@ const OptimizedBillingWizard: React.FC = () => {
           ← Anterior
         </button>
 
-        <button
-          onClick={handleNextStep}
-          disabled={currentStep === 1 && !canProceedFromStep1()}
-          className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:text-blue-500 text-white px-6 py-2 rounded-md font-medium transition-colors"
-        >
-          Siguiente →
-        </button>
+        {currentStep < steps.length && (
+          <button
+            onClick={handleNextStep}
+            disabled={currentStep === 1 && !canProceedFromStep1()}
+            className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:text-blue-500 text-white px-6 py-2 rounded-md font-medium transition-colors"
+          >
+            Siguiente →
+          </button>
+        )}
       </div>
     </div>
   )

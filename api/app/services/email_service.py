@@ -4,6 +4,7 @@ Handles sending emails using SMTP configuration from database
 """
 
 import smtplib
+from dataclasses import dataclass
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -16,6 +17,13 @@ from app.models import SMTPConfig
 from app.services.crypto import decrypt_secret
 
 logger = logging.getLogger("email_service")
+
+
+@dataclass
+class EmailSendResult:
+    success: bool
+    message: str
+    error_detail: Optional[str] = None
 
 
 class EmailService:
@@ -38,12 +46,38 @@ class EmailService:
         if not config or not config.enabled:
             return False
         
-        # Verify required fields
-        if not all([config.host, config.port, config.from_email, config.username, config.password]):
+        # Username/password are optional because settings supports open SMTP relays.
+        if not all([config.host, config.port, config.from_email]):
             logger.warning("SMTP enabled but missing required configuration fields")
             return False
         
         return True
+
+    @staticmethod
+    def validate_smtp_config(db: Session) -> EmailSendResult:
+        """Validate the SMTP settings stored from Settings before sending."""
+        config = EmailService.get_smtp_config(db)
+        if not config:
+            return EmailSendResult(False, "No hay configuracion SMTP guardada en Settings")
+        if not config.enabled:
+            return EmailSendResult(False, "El envio SMTP esta deshabilitado en Settings")
+
+        missing_fields = []
+        if not config.host:
+            missing_fields.append("host")
+        if not config.port:
+            missing_fields.append("puerto")
+        if not config.from_email:
+            missing_fields.append("email remitente")
+
+        if missing_fields:
+            return EmailSendResult(
+                False,
+                "Configuracion SMTP incompleta en Settings",
+                f"Faltan campos requeridos: {', '.join(missing_fields)}",
+            )
+
+        return EmailSendResult(True, "Configuracion SMTP valida")
     
     @staticmethod
     def send_email(
@@ -72,12 +106,37 @@ class EmailService:
         Returns:
             bool: True if sent successfully, False otherwise
         """
+        return EmailService.send_email_detailed(
+            db=db,
+            to_email=to_email,
+            subject=subject,
+            body=body,
+            html_body=html_body,
+            cc=cc,
+            bcc=bcc,
+            attachments=attachments,
+        ).success
+
+    @staticmethod
+    def send_email_detailed(
+        db: Session,
+        to_email: str,
+        subject: str,
+        body: str,
+        html_body: Optional[str] = None,
+        cc: Optional[List[str]] = None,
+        bcc: Optional[List[str]] = None,
+        attachments: Optional[List[tuple]] = None
+    ) -> EmailSendResult:
+        """Send email using SMTP settings and return detailed status."""
         
         config = EmailService.get_smtp_config(db)
+        validation = EmailService.validate_smtp_config(db)
         
-        if not EmailService.is_smtp_enabled(db):
-            logger.error("SMTP not enabled or not properly configured")
-            return False
+        if not validation.success:
+            detail = validation.error_detail or validation.message
+            logger.error(f"SMTP not available: {detail}")
+            return validation
         
         try:
             # Create message
@@ -112,30 +171,41 @@ class EmailService:
             if bcc:
                 recipients.extend(bcc)
             
-            password = decrypt_secret(config.password)
-            if not password:
-                logger.error("SMTP password is not configured")
-                return False
+            password = None
+            if config.password:
+                try:
+                    password = decrypt_secret(config.password)
+                except Exception as e:
+                    logger.error(f"Error decrypting SMTP password: {e}")
+                    return EmailSendResult(False, "La contrasena SMTP guardada no se pudo descifrar", str(e))
 
-            with smtplib.SMTP(config.host, config.port, timeout=10) as server:
-                if config.use_tls:
+            smtp_cls = smtplib.SMTP_SSL if config.use_tls and config.port == 465 else smtplib.SMTP
+            with smtp_cls(config.host, config.port, timeout=10) as server:
+                if config.use_tls and config.port != 465:
                     server.starttls()
                 
-                server.login(config.username, password)
+                if config.username and password:
+                    server.login(config.username, password)
+                elif config.username and not password:
+                    logger.info("SMTP username configured without password; sending without authentication")
+
                 server.send_message(msg, from_addr=config.from_email, to_addrs=recipients)
             
             logger.info(f"Email sent successfully to {to_email}")
-            return True
+            return EmailSendResult(True, "Email enviado correctamente")
             
         except smtplib.SMTPAuthenticationError as e:
-            logger.error(f"SMTP authentication failed: {e}")
-            return False
+            detail = f"Autenticacion SMTP rechazada por {config.host}:{config.port}: {e}"
+            logger.error(detail)
+            return EmailSendResult(False, "Error de autenticacion SMTP. Verifique usuario y contrasena en Settings", detail)
         except smtplib.SMTPException as e:
-            logger.error(f"SMTP error: {e}")
-            return False
+            detail = f"Error SMTP en {config.host}:{config.port}: {e}"
+            logger.error(detail)
+            return EmailSendResult(False, "Error SMTP al enviar el correo", detail)
         except Exception as e:
-            logger.error(f"Error sending email: {e}")
-            return False
+            detail = f"Error conectando con {config.host}:{config.port}: {e}"
+            logger.error(detail)
+            return EmailSendResult(False, "Error al enviar el correo por SMTP", detail)
     
     @staticmethod
     def send_toner_alert(

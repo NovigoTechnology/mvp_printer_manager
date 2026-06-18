@@ -63,12 +63,52 @@ interface Invoice {
   total_amount: number
   status: string
   currency: string
+  deployment_mode?: string
+  document_type?: string
+  recipient_name?: string
+  recipient_email?: string
+  sent_at?: string
+  email_delivery_status?: string
+  digital_invoice_status?: string
+}
+
+interface InvoiceLine {
+  id: number
+  description: string
+  item_type: string
+  quantity: number
+  unit_price: number
+  line_total: number
+}
+
+interface InvoiceEmailLog {
+  id: number
+  recipient_email: string
+  subject: string
+  status: string
+  error_message?: string
+  sent_at?: string
+  created_at: string
+}
+
+interface InvoiceDetail {
+  invoice: Invoice
+  lines: InvoiceLine[]
+  contract?: Contract
+  period?: BillingPeriod
+  email_logs: InvoiceEmailLog[]
 }
 
 interface DashboardMetrics {
+  deploymentMode: string
+  deploymentLabel: string
+  targetLabel: string
+  documentLabel: string
   totalInvoices: number
   totalRevenue: number
   pendingInvoices: number
+  sentInvoices: number
+  emailFailedInvoices: number
   overdueInvoices: number
   periodsCount: number
   activeContracts: number
@@ -79,6 +119,35 @@ interface DashboardMetrics {
   }>
 }
 
+interface BillingDeployment {
+  deployment_mode: string
+  mode_label: string
+  target_label: string
+  document_label: string
+  digital_invoice_enabled: boolean
+  digital_invoice_provider: string
+}
+
+interface BillingAutomationRule {
+  id: number
+  name: string
+  description?: string
+  is_active: boolean
+  scope: string
+  contract_id?: number
+  billing_target_id?: number
+  frequency: string
+  day_of_month: number
+  time_of_day: string
+  auto_generate_invoice: boolean
+  auto_send_email: boolean
+  invoice_status: string
+  last_run_at?: string
+  run_count: number
+  error_count: number
+  last_error?: string
+}
+
 export default function Billing() {
   const [activeTab, setActiveTab] = useState('periods')
   const [periods, setPeriods] = useState<BillingPeriod[]>([])
@@ -87,6 +156,8 @@ export default function Billing() {
   const [contracts, setContracts] = useState<Contract[]>([])
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null)
   const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics | null>(null)
+  const [deployment, setDeployment] = useState<BillingDeployment | null>(null)
+  const [automationRules, setAutomationRules] = useState<BillingAutomationRule[]>([])
   const [loading, setLoading] = useState(true)
   const [showNewPeriodModal, setShowNewPeriodModal] = useState(false)
   const [showEditPeriodModal, setShowEditPeriodModal] = useState(false)
@@ -94,6 +165,14 @@ export default function Billing() {
   const [showNewReadingModal, setShowNewReadingModal] = useState(false)
   const [showBulkReadingModal, setShowBulkReadingModal] = useState(false)
   const [showSnmpBulkModal, setShowSnmpBulkModal] = useState(false)
+  const [showAutomationModal, setShowAutomationModal] = useState(false)
+  const [showInvoiceDetailModal, setShowInvoiceDetailModal] = useState(false)
+  const [selectedInvoiceDetail, setSelectedInvoiceDetail] = useState<InvoiceDetail | null>(null)
+  const [loadingInvoiceDetail, setLoadingInvoiceDetail] = useState(false)
+  const [showResendInvoiceModal, setShowResendInvoiceModal] = useState(false)
+  const [invoiceToResend, setInvoiceToResend] = useState<Invoice | null>(null)
+  const [resendEmail, setResendEmail] = useState('')
+  const [sendingInvoiceId, setSendingInvoiceId] = useState<number | null>(null)
   const [snmpLoading, setSnmpLoading] = useState(false)
   const [snmpResults, setSnmpResults] = useState<any>(null)
 
@@ -135,15 +214,47 @@ export default function Billing() {
     contract_id: ''
   })
 
+  const [automationForm, setAutomationForm] = useState({
+    name: '',
+    description: '',
+    contract_id: '',
+    day_of_month: 1,
+    time_of_day: '08:00',
+    auto_send_email: false,
+    invoice_status: 'draft'
+  })
+
   useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const tab = new URLSearchParams(window.location.search).get('tab')
+    if (tab && ['periods', 'readings', 'invoices', 'dashboard', 'automation'].includes(tab)) {
+      setActiveTab(tab)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchDeployment()
     fetchData()
-    if (showNewReadingModal || showBulkReadingModal) {
+    if (showNewReadingModal || showBulkReadingModal || activeTab === 'automation') {
       fetchContracts()
     }
     if (activeTab === 'dashboard') {
       fetchDashboardMetrics()
     }
   }, [activeTab, showNewReadingModal, showBulkReadingModal])
+
+  const fetchDeployment = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/billing/deployment`)
+      if (response.ok) {
+        const data = await response.json()
+        setDeployment(data)
+      }
+    } catch (error) {
+      console.error('Error fetching deployment:', error)
+    }
+  }
 
   const fetchDashboardMetrics = async () => {
     try {
@@ -215,6 +326,17 @@ export default function Billing() {
         if (response.ok) {
           const data = await response.json()
           setInvoices(data)
+        }
+      } else if (activeTab === 'automation') {
+        const response = await fetch(`${API_BASE}/api/billing/automation-rules`)
+        if (response.ok) {
+          const data = await response.json()
+          setAutomationRules(data)
+        }
+        const periodsResponse = await fetch(`${API_BASE}/api/billing/periods`)
+        if (periodsResponse.ok) {
+          const periodsData = await periodsResponse.json()
+          setPeriods(periodsData)
         }
       }
     } catch (error) {
@@ -635,6 +757,128 @@ export default function Billing() {
     }
   }
 
+  const viewInvoiceDetail = async (invoice: Invoice) => {
+    setLoadingInvoiceDetail(true)
+    setShowInvoiceDetailModal(true)
+    setSelectedInvoiceDetail(null)
+
+    try {
+      const response = await fetch(`${API_BASE}/api/billing/invoices/${invoice.id}`)
+      if (response.ok) {
+        const detail = await response.json()
+        setSelectedInvoiceDetail(detail)
+      } else {
+        const errorData = await response.json()
+        alert(`Error: ${errorData.detail || 'No se pudo cargar la factura'}`)
+        setShowInvoiceDetailModal(false)
+      }
+    } catch (error) {
+      console.error('Error loading invoice detail:', error)
+      alert('Error al cargar el detalle de la factura')
+      setShowInvoiceDetailModal(false)
+    } finally {
+      setLoadingInvoiceDetail(false)
+    }
+  }
+
+  const openResendInvoiceModal = (invoice: Invoice) => {
+    setInvoiceToResend(invoice)
+    setResendEmail(invoice.recipient_email || '')
+    setShowResendInvoiceModal(true)
+  }
+
+  const sendInvoiceEmail = async (invoice: Invoice, overrideEmail?: string) => {
+    const destinationEmail = (overrideEmail || invoice.recipient_email || '').trim()
+    if (!destinationEmail) {
+      alert(`La ${deployment?.document_label?.toLowerCase() || 'factura'} no tiene email destinatario configurado.`)
+      return
+    }
+
+    setSendingInvoiceId(invoice.id)
+    try {
+      const response = await fetch(`${API_BASE}/api/billing/invoices/${invoice.id}/send-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipient_email: destinationEmail })
+      })
+      const result = await response.json()
+      alert(result.message || (response.ok ? 'Proceso de envio finalizado' : 'No se pudo enviar'))
+      if (response.ok && result.success) {
+        setShowResendInvoiceModal(false)
+        setInvoiceToResend(null)
+        setResendEmail('')
+        fetchData()
+        fetchDashboardMetrics()
+      }
+    } catch (error) {
+      console.error('Error sending invoice email:', error)
+      alert('Error al enviar la factura por email')
+    } finally {
+      setSendingInvoiceId(null)
+    }
+  }
+
+  const createAutomationRule = async (event: React.FormEvent) => {
+    event.preventDefault()
+
+    try {
+      const response = await fetch(`${API_BASE}/api/billing/automation-rules`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: automationForm.name,
+          description: automationForm.description || undefined,
+          scope: automationForm.contract_id ? 'single_contract' : 'all_active_contracts',
+          contract_id: automationForm.contract_id ? Number(automationForm.contract_id) : undefined,
+          frequency: 'monthly',
+          day_of_month: Number(automationForm.day_of_month),
+          time_of_day: automationForm.time_of_day,
+          auto_generate_invoice: true,
+          auto_send_email: automationForm.auto_send_email,
+          invoice_status: automationForm.invoice_status,
+          created_by: 'billing-ui'
+        })
+      })
+
+      if (response.ok) {
+        setShowAutomationModal(false)
+        setAutomationForm({ name: '', description: '', contract_id: '', day_of_month: 1, time_of_day: '08:00', auto_send_email: false, invoice_status: 'draft' })
+        fetchData()
+        alert('Regla de automatizacion creada')
+      } else {
+        const errorData = await response.json()
+        alert(`Error: ${errorData.detail}`)
+      }
+    } catch (error) {
+      console.error('Error creating automation rule:', error)
+      alert('Error al crear la regla')
+    }
+  }
+
+  const runAutomationRule = async (ruleId: number) => {
+    const closedPeriods = periods.filter(period => period.status === 'closed')
+    const period = closedPeriods[0] || periods[0]
+    if (!period) {
+      alert('No hay períodos disponibles para ejecutar la automatización')
+      return
+    }
+
+    if (!confirm(`Ejecutar automatización para el período ${period.name}?`)) return
+
+    try {
+      const response = await fetch(`${API_BASE}/api/billing/automation-rules/${ruleId}/run?period_id=${period.id}`, {
+        method: 'POST'
+      })
+      const result = await response.json()
+      alert(result.message || 'Automatización ejecutada')
+      fetchData()
+      fetchDashboardMetrics()
+    } catch (error) {
+      console.error('Error running automation rule:', error)
+      alert('Error al ejecutar la automatización')
+    }
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'open': return 'bg-green-100 text-green-800'
@@ -644,6 +888,9 @@ export default function Billing() {
       case 'sent': return 'bg-blue-100 text-blue-800'
       case 'paid': return 'bg-green-100 text-green-800'
       case 'overdue': return 'bg-red-100 text-red-800'
+      case 'failed': return 'bg-red-100 text-red-800'
+      case 'not_sent': return 'bg-gray-100 text-gray-800'
+      case 'missing_recipient': return 'bg-orange-100 text-orange-800'
       default: return 'bg-gray-100 text-gray-800'
     }
   }
@@ -732,8 +979,9 @@ export default function Billing() {
             <p className="text-purple-100 mt-2">Gestión de períodos de corte, lecturas de contadores y facturación por contratos</p>
           </div>
           <div className="text-right">
-            <div className="text-sm opacity-90">Sistema de Facturación</div>
-            <div className="text-2xl font-bold">📊</div>
+            <div className="text-sm opacity-90">Deployment</div>
+            <div className="text-xl font-bold">{deployment?.mode_label || 'Cliente interno'}</div>
+            <div className="text-xs opacity-90">{deployment?.document_label || 'Liquidacion interna'} / {deployment?.target_label || 'Area'}</div>
           </div>
         </div>
       </div>
@@ -803,6 +1051,16 @@ export default function Billing() {
               }`}
             >
               📈 Dashboard
+            </button>
+            <button
+              onClick={() => setActiveTab('automation')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'automation'
+                  ? 'border-purple-500 text-purple-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              ⚙️ Automatización
             </button>
           </nav>
         </div>
@@ -1124,6 +1382,18 @@ export default function Billing() {
                           <span className="text-sm text-gray-500">Lecturas este Mes:</span>
                           <span className="text-sm font-medium text-gray-900">{dashboardMetrics.readingsThisMonth}</span>
                         </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-500">Emails enviados:</span>
+                          <span className="text-sm font-medium text-gray-900">{dashboardMetrics.sentInvoices}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-500">Errores de envio:</span>
+                          <span className="text-sm font-medium text-gray-900">{dashboardMetrics.emailFailedInvoices}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-500">Modo:</span>
+                          <span className="text-sm font-medium text-gray-900">{dashboardMetrics.deploymentLabel}</span>
+                        </div>
                       </div>
                     </div>
 
@@ -1172,6 +1442,80 @@ export default function Billing() {
             </div>
           )}
 
+          {/* Automatización */}
+          {activeTab === 'automation' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Automatización de Facturación</h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Crea tareas para generar {deployment?.document_label?.toLowerCase() || 'facturas internas'} en los períodos correspondientes.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowAutomationModal(true)}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                >
+                  ➕ Nueva Regla
+                </button>
+              </div>
+
+              {loading ? (
+                <div className="text-center py-8 text-gray-500">Cargando reglas...</div>
+              ) : automationRules.length === 0 ? (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-sm text-gray-600">
+                  No hay reglas de automatización creadas.
+                </div>
+              ) : (
+                <div className="bg-white shadow rounded-lg overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Regla</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Frecuencia</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Alcance</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Envío</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ejecuciones</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {automationRules.map((rule) => (
+                        <tr key={rule.id}>
+                          <td className="px-6 py-4 text-sm text-gray-900">
+                            <div className="font-medium">{rule.name}</div>
+                            {rule.description && <div className="text-xs text-gray-500">{rule.description}</div>}
+                            {rule.last_error && <div className="text-xs text-red-600 mt-1">{rule.last_error}</div>}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            Día {rule.day_of_month} a las {rule.time_of_day}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {rule.contract_id ? `Contrato #${rule.contract_id}` : 'Todos los contratos activos'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {rule.auto_send_email ? 'Enviar automáticamente' : 'Solo generar'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {rule.run_count || 0} ejecuciones / {rule.error_count || 0} errores
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button
+                              onClick={() => runAutomationRule(rule.id)}
+                              className="text-purple-600 hover:text-purple-900"
+                            >
+                              Ejecutar ahora
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Facturas */}
           {activeTab === 'invoices' && (
             <div className="space-y-6">
@@ -1198,17 +1542,21 @@ export default function Billing() {
                   <div className="text-gray-500">Cargando facturas...</div>
                 </div>
               ) : (
-                <div className="bg-white shadow rounded-lg overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-200">
+                <div className="bg-white shadow rounded-lg border border-gray-200 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[1280px] w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Número</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contrato</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{deployment?.target_label || 'Destino'}</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Período</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Envío</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Digital</th>
+                        <th className="sticky right-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.35)]">Acciones</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -1219,6 +1567,10 @@ export default function Billing() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             Contrato #{invoice.contract_id}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <div className="font-medium text-gray-900">{invoice.recipient_name || 'Sin destino'}</div>
+                            <div className="text-xs text-gray-500">{invoice.recipient_email || 'Sin email'}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {formatDate(invoice.invoice_date)}
@@ -1237,27 +1589,391 @@ export default function Billing() {
                                invoice.status === 'overdue' ? 'Vencida' : invoice.status}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button className="text-blue-600 hover:text-blue-900 mr-3">
-                              👁️ Ver
-                            </button>
-                            <button 
-                              onClick={() => downloadInvoicePDF(invoice.id, invoice.invoice_number)}
-                              className="text-green-600 hover:text-green-900"
-                            >
-                              📄 PDF
-                            </button>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="space-y-1">
+                              <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(invoice.email_delivery_status || 'not_sent')}`}>
+                                {invoice.email_delivery_status === 'sent' ? 'Enviada' :
+                                 invoice.email_delivery_status === 'failed' ? 'Fallida' :
+                                 invoice.email_delivery_status === 'missing_recipient' ? 'Sin destinatario' : 'No enviada'}
+                              </span>
+                              <div className="text-xs text-gray-500">
+                                {invoice.sent_at ? `Último envío: ${formatDate(invoice.sent_at)}` : 'Sin envíos registrados'}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {invoice.recipient_email || 'Sin email principal'}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
+                            {invoice.digital_invoice_status || 'pending_v2'}
+                          </td>
+                          <td className="sticky right-0 z-10 bg-white px-6 py-4 whitespace-nowrap text-sm font-medium shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.35)]">
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => viewInvoiceDetail(invoice)}
+                                className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                title="Ver factura"
+                              >
+                                Ver
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => downloadInvoicePDF(invoice.id, invoice.invoice_number)}
+                                className="rounded-md border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                title="Descargar nuevamente"
+                              >
+                                Descargar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openResendInvoiceModal(invoice)}
+                                disabled={sendingInvoiceId === invoice.id}
+                                className="rounded-md border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-purple-50 disabled:text-purple-300"
+                                title={invoice.email_delivery_status === 'sent' ? 'Reenviar factura' : 'Enviar factura'}
+                              >
+                                {sendingInvoiceId === invoice.id ? 'Enviando...' : invoice.email_delivery_status === 'sent' ? 'Reenviar' : 'Enviar'}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Modal detalle de factura */}
+      {showInvoiceDetailModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+          <div className="relative w-full max-w-4xl max-h-[90vh] shadow-lg rounded-md bg-white overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">Detalle de factura</h3>
+                <p className="text-sm text-gray-500">
+                  {selectedInvoiceDetail?.invoice.invoice_number || 'Cargando...'}
+                </p>
+              </div>
+                              <button
+                type="button"
+                onClick={() => setShowInvoiceDetailModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+                title="Cerrar detalle"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {loadingInvoiceDetail || !selectedInvoiceDetail ? (
+                <div className="text-center py-8 text-gray-500">Cargando factura...</div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="text-xs uppercase text-gray-500 font-medium">Número</div>
+                      <div className="mt-1 text-lg font-semibold text-gray-900">{selectedInvoiceDetail.invoice.invoice_number}</div>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="text-xs uppercase text-gray-500 font-medium">Total</div>
+                      <div className="mt-1 text-lg font-semibold text-gray-900">
+                        {formatCurrency(selectedInvoiceDetail.invoice.total_amount, selectedInvoiceDetail.invoice.currency)}
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="text-xs uppercase text-gray-500 font-medium">Envío</div>
+                      <div className="mt-1 text-sm text-gray-900">
+                        {selectedInvoiceDetail.invoice.email_delivery_status === 'sent' ? 'Enviada' : 'No enviada'}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {selectedInvoiceDetail.invoice.sent_at ? formatDate(selectedInvoiceDetail.invoice.sent_at) : 'Sin fecha de envío'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-2">Destino</h4>
+                      <div className="text-sm text-gray-700 space-y-1">
+                        <p>{selectedInvoiceDetail.invoice.recipient_name || 'Sin destino'}</p>
+                        <p>{selectedInvoiceDetail.invoice.recipient_email || 'Sin email principal'}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-2">Período</h4>
+                      <div className="text-sm text-gray-700 space-y-1">
+                        <p>{selectedInvoiceDetail.period?.name || `Período #${selectedInvoiceDetail.invoice.billing_period_id}`}</p>
+                        <p>{formatDate(selectedInvoiceDetail.invoice.period_start)} - {formatDate(selectedInvoiceDetail.invoice.period_end)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-3">Ítems facturados</h4>
+                    {selectedInvoiceDetail.lines.length === 0 ? (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
+                        Esta factura no tiene líneas generadas.
+                      </div>
+                    ) : (
+                      <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Descripción</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Cantidad</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Unitario</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-100">
+                            {selectedInvoiceDetail.lines.map((line) => (
+                              <tr key={line.id}>
+                                <td className="px-4 py-2 text-sm text-gray-900">{line.description}</td>
+                                <td className="px-4 py-2 text-sm text-gray-700 text-right">{Number(line.quantity || 0).toLocaleString('es-AR')}</td>
+                                <td className="px-4 py-2 text-sm text-gray-700 text-right">{formatCurrency(line.unit_price, selectedInvoiceDetail.invoice.currency)}</td>
+                                <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right">{formatCurrency(line.line_total, selectedInvoiceDetail.invoice.currency)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-3">Historial de envíos</h4>
+                    {selectedInvoiceDetail.email_logs.length === 0 ? (
+                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-600">
+                        No hay envíos registrados.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {selectedInvoiceDetail.email_logs.map((log) => (
+                          <div key={log.id} className="border border-gray-200 rounded-lg p-3 text-sm">
+                            <div className="flex items-center justify-between gap-4">
+                              <span className="font-medium text-gray-900">{log.recipient_email || 'Sin destinatario'}</span>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(log.status)}`}>
+                                {log.status === 'sent' ? 'Enviado' : log.status === 'failed' ? 'Fallido' : log.status}
+                              </span>
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500">
+                              {log.sent_at ? formatDate(log.sent_at) : formatDate(log.created_at)}
+                              {log.error_message ? ` - ${log.error_message}` : ''}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
+              {selectedInvoiceDetail && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => downloadInvoicePDF(selectedInvoiceDetail.invoice.id, selectedInvoiceDetail.invoice.invoice_number)}
+                    className="px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 text-sm font-medium"
+                  >
+                    Descargar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openResendInvoiceModal(selectedInvoiceDetail.invoice)}
+                    className="px-4 py-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 text-sm font-medium"
+                  >
+                    Reenviar
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowInvoiceDetailModal(false)}
+                className="px-4 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 text-sm font-medium"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal reenvio de factura */}
+      {showResendInvoiceModal && invoiceToResend && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+          <div className="relative w-full max-w-md shadow-lg rounded-md bg-white overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {invoiceToResend.email_delivery_status === 'sent' ? 'Reenviar factura' : 'Enviar factura'}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">{invoiceToResend.invoice_number}</p>
+            </div>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault()
+                sendInvoiceEmail(invoiceToResend, resendEmail)
+              }}
+            >
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Enviar a</label>
+                  <input
+                    type="email"
+                    required
+                    value={resendEmail}
+                    onChange={(event) => setResendEmail(event.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    placeholder="correo@empresa.com"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Puedes usar el email principal o ingresar un correo adicional para este reenvío.
+                  </p>
+                </div>
+              </div>
+              <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowResendInvoiceModal(false)
+                    setInvoiceToResend(null)
+                    setResendEmail('')
+                  }}
+                  className="px-4 py-2 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 text-sm font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={sendingInvoiceId === invoiceToResend.id}
+                  className="px-4 py-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:bg-purple-300 text-sm font-medium"
+                >
+                  {sendingInvoiceId === invoiceToResend.id ? 'Enviando...' : 'Enviar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para Nueva Regla de Automatización */}
+      {showAutomationModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-10 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Nueva Regla de Automatización</h3>
+              <form onSubmit={createAutomationRule} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+                  <input
+                    type="text"
+                    required
+                    value={automationForm.name}
+                    onChange={(e) => setAutomationForm({ ...automationForm, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    placeholder="Facturación mensual interna"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                  <textarea
+                    value={automationForm.description}
+                    onChange={(e) => setAutomationForm({ ...automationForm, description: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    rows={2}
+                    placeholder="Genera facturas internas para el período cerrado correspondiente"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Contrato</label>
+                  <select
+                    value={automationForm.contract_id}
+                    onChange={(e) => setAutomationForm({ ...automationForm, contract_id: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    title="Contrato de la regla"
+                  >
+                    <option value="">Todos los contratos activos</option>
+                    {contracts.map((contract) => (
+                      <option key={contract.id} value={contract.id}>
+                        {contract.contract_number} - {contract.client_name || contract.contract_number}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Día del mes</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="28"
+                      value={automationForm.day_of_month}
+                      onChange={(e) => setAutomationForm({ ...automationForm, day_of_month: Number(e.target.value) })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Hora</label>
+                    <input
+                      type="time"
+                      value={automationForm.time_of_day}
+                      onChange={(e) => setAutomationForm({ ...automationForm, time_of_day: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Estado inicial</label>
+                    <select
+                      value={automationForm.invoice_status}
+                      onChange={(e) => setAutomationForm({ ...automationForm, invoice_status: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      title="Estado inicial de la factura"
+                    >
+                      <option value="draft">Borrador</option>
+                      <option value="generated">Generada</option>
+                    </select>
+                  </div>
+                  <label className="flex items-center mt-6 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={automationForm.auto_send_email}
+                      onChange={(e) => setAutomationForm({ ...automationForm, auto_send_email: e.target.checked })}
+                      className="mr-2"
+                    />
+                    Enviar email al generar
+                  </label>
+                </div>
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+                  La regla queda preparada para ejecución programada. La ejecución manual usa el período cerrado más reciente.
+                </div>
+                <div className="flex justify-end space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowAutomationModal(false)}
+                    className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                  >
+                    Crear Regla
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal para Nuevo Período */}
       {showNewPeriodModal && (
