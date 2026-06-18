@@ -253,6 +253,7 @@ class LeaseContract(Base):
     department = Column(String)
     cost_center = Column(String)
     cost_center_id = Column(Integer, ForeignKey("cost_centers.id"), nullable=True, index=True)
+    billing_target_id = Column(Integer, ForeignKey("billing_targets.id"), nullable=True, index=True)
     budget_code = Column(String)
     
     # Observaciones y notas
@@ -269,6 +270,26 @@ class LeaseContract(Base):
     contract_printers = relationship("ContractPrinter", back_populates="contract")
     invoices = relationship("Invoice", back_populates="contract")
     contract_companies = relationship("ContractCompany", back_populates="contract")
+    change_history = relationship("ContractChangeHistory", back_populates="contract", cascade="all, delete-orphan")
+    billing_target = relationship("BillingTarget", back_populates="contracts")
+
+
+class ContractChangeHistory(Base):
+    __tablename__ = "contract_change_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contract_id = Column(Integer, ForeignKey("lease_contracts.id"), nullable=False, index=True)
+    action = Column(String(30), nullable=False)
+    changed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    changed_by_name = Column(String(150), nullable=True)
+    change_note = Column(Text, nullable=False)
+    changed_fields = Column(Text, nullable=True)
+    previous_values = Column(Text, nullable=True)
+    new_values = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    contract = relationship("LeaseContract", back_populates="change_history")
+    changed_by = relationship("User")
 
 class ContractPrinter(Base):
     __tablename__ = "contract_printers"
@@ -657,6 +678,30 @@ class CounterReading(Base):
     printer = relationship("Printer", back_populates="counter_readings")
     billing_period = relationship("BillingPeriod", back_populates="counter_readings")
 
+
+class BillingTarget(Base):
+    """Destino de facturación adaptable al modo de deployment."""
+    __tablename__ = "billing_targets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False, index=True)
+    target_type = Column(String(40), nullable=False, default="internal_area")
+    billing_email = Column(String(255), nullable=True)
+    cc_emails = Column(Text, nullable=True)
+    tax_id = Column(String(50), nullable=True)
+    address = Column(Text, nullable=True)
+    contact_name = Column(String(255), nullable=True)
+    cost_center_code = Column(String(100), nullable=True, index=True)
+    source_type = Column(String(40), nullable=True)
+    source_id = Column(Integer, nullable=True)
+    is_active = Column(Boolean, default=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    contracts = relationship("LeaseContract", back_populates="billing_target")
+    invoices = relationship("Invoice", back_populates="billing_target")
+
 class Invoice(Base):
     """Factura generada para un contrato en un período específico"""
     __tablename__ = "invoices"
@@ -665,6 +710,8 @@ class Invoice(Base):
     invoice_number = Column(String(50), unique=True, nullable=False)
     contract_id = Column(Integer, ForeignKey("lease_contracts.id"), nullable=False)
     billing_period_id = Column(Integer, ForeignKey("billing_periods.id"), nullable=False)
+    billing_target_id = Column(Integer, ForeignKey("billing_targets.id"), nullable=True, index=True)
+    deployment_mode = Column(String(30), default="internal_customer", nullable=False)
     
     # Fechas
     invoice_date = Column(DateTime(timezone=True), nullable=False)
@@ -679,6 +726,16 @@ class Invoice(Base):
     
     # Estado
     status = Column(String(20), default="draft")  # draft, sent, paid, overdue, cancelled
+    document_type = Column(String(40), default="internal_invoice")
+    recipient_name = Column(String(255), nullable=True)
+    recipient_email = Column(String(255), nullable=True)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    email_delivery_status = Column(String(30), default="not_sent")
+    email_error = Column(Text, nullable=True)
+    digital_invoice_status = Column(String(30), default="not_configured")
+    digital_invoice_provider = Column(String(50), nullable=True)
+    digital_invoice_external_id = Column(String(100), nullable=True)
+    digital_invoice_payload = Column(Text, nullable=True)
     
     # Información adicional
     currency = Column(String(3), default="ARS")
@@ -691,7 +748,9 @@ class Invoice(Base):
     # Relaciones
     contract = relationship("LeaseContract", back_populates="invoices")
     billing_period = relationship("BillingPeriod", back_populates="invoices")
+    billing_target = relationship("BillingTarget", back_populates="invoices")
     invoice_lines = relationship("InvoiceLine", back_populates="invoice", cascade="all, delete-orphan")
+    email_logs = relationship("BillingEmailLog", back_populates="invoice", cascade="all, delete-orphan")
 
 class InvoiceLine(Base):
     """Línea de detalle de una factura"""
@@ -717,6 +776,71 @@ class InvoiceLine(Base):
     # Relaciones
     invoice = relationship("Invoice", back_populates="invoice_lines")
     printer = relationship("Printer", back_populates="invoice_lines")
+
+
+class BillingEmailLog(Base):
+    """Historial de intentos de envío de facturas."""
+    __tablename__ = "billing_email_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False, index=True)
+    recipient_email = Column(String(255), nullable=False)
+    cc_emails = Column(Text, nullable=True)
+    subject = Column(String(255), nullable=False)
+    status = Column(String(30), nullable=False, default="pending")
+    error_message = Column(Text, nullable=True)
+    provider_message_id = Column(String(255), nullable=True)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    invoice = relationship("Invoice", back_populates="email_logs")
+
+
+class BillingAutomationRule(Base):
+    """Regla para automatizar generación y envío de facturas por período."""
+    __tablename__ = "billing_automation_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(150), nullable=False)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    scope = Column(String(30), default="all_active_contracts")
+    contract_id = Column(Integer, ForeignKey("lease_contracts.id"), nullable=True, index=True)
+    billing_target_id = Column(Integer, ForeignKey("billing_targets.id"), nullable=True, index=True)
+    frequency = Column(String(20), default="monthly")
+    day_of_month = Column(Integer, default=1)
+    time_of_day = Column(String(5), default="08:00")
+    auto_generate_invoice = Column(Boolean, default=True)
+    auto_send_email = Column(Boolean, default=False)
+    invoice_status = Column(String(20), default="draft")
+    last_run_at = Column(DateTime(timezone=True), nullable=True)
+    next_run_at = Column(DateTime(timezone=True), nullable=True)
+    run_count = Column(Integer, default=0)
+    error_count = Column(Integer, default=0)
+    last_error = Column(Text, nullable=True)
+    created_by = Column(String(100), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    runs = relationship("BillingAutomationRun", back_populates="rule", cascade="all, delete-orphan")
+
+
+class BillingAutomationRun(Base):
+    """Resultado de ejecución de una regla de facturación automática."""
+    __tablename__ = "billing_automation_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    rule_id = Column(Integer, ForeignKey("billing_automation_rules.id"), nullable=False, index=True)
+    billing_period_id = Column(Integer, ForeignKey("billing_periods.id"), nullable=True, index=True)
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    success = Column(Boolean, default=False)
+    invoices_created = Column(Integer, default=0)
+    emails_sent = Column(Integer, default=0)
+    errors = Column(Text, nullable=True)
+    details = Column(Text, nullable=True)
+
+    rule = relationship("BillingAutomationRule", back_populates="runs")
 
 class BillingConfiguration(Base):
     """Configuración global del módulo de facturación"""

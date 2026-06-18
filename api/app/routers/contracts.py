@@ -1,14 +1,75 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 from typing import List, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta
+import json
+from jose import JWTError, jwt
 
 from ..db import get_db
-from ..models import LeaseContract, ContractPrinter, Printer, Company, ContractCompany, CostCenter
+from ..config import settings
+from ..models import LeaseContract, ContractPrinter, Printer, Company, ContractCompany, CostCenter, ContractChangeHistory, User
 from ..services.exchange_rate_service import get_current_exchange_rate, get_current_exchange_rate_with_info
 
 router = APIRouter()
+
+
+CONTRACT_AUDIT_FIELDS = [
+    "contract_number", "contract_name", "supplier", "contract_type",
+    "cost_bw_per_copy", "cost_color_per_copy", "fixed_monthly_cost", "fixed_annual_cost",
+    "included_copies_bw", "included_copies_color", "overage_cost_bw", "overage_cost_color",
+    "currency", "exchange_rate", "cost_bw_per_copy_usd", "cost_color_per_copy_usd",
+    "fixed_monthly_cost_usd", "fixed_annual_cost_usd", "overage_cost_bw_usd", "overage_cost_color_usd",
+    "total_printers", "printers_bw_only", "printers_color", "multifunction_devices",
+    "start_date", "end_date", "renewal_date", "status", "auto_renewal", "renewal_notice_days",
+    "contact_person", "contact_email", "contact_phone", "contact_position", "priority",
+    "department", "cost_center", "cost_center_id", "budget_code", "internal_notes",
+    "special_conditions", "terms_and_conditions", "notes",
+]
+
+
+def _serialize_audit_value(value):
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
+
+
+def _get_optional_current_user(request: Request, db: Session) -> Optional[User]:
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.lower().startswith("bearer "):
+        return None
+
+    token = auth_header.split(" ", 1)[1]
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        username = payload.get("sub")
+        if not username:
+            return None
+        return db.query(User).filter(User.username == username).first()
+    except JWTError:
+        return None
+
+
+def _record_contract_history(
+    db: Session,
+    contract_id: int,
+    action: str,
+    change_note: str,
+    changed_fields: List[str],
+    previous_values: dict,
+    new_values: dict,
+    user: Optional[User] = None,
+):
+    db.add(ContractChangeHistory(
+        contract_id=contract_id,
+        action=action,
+        changed_by_id=user.id if user else None,
+        changed_by_name=(user.full_name or user.username) if user else "Usuario no autenticado",
+        change_note=change_note,
+        changed_fields=json.dumps(changed_fields, ensure_ascii=False),
+        previous_values=json.dumps(previous_values, ensure_ascii=False, default=str),
+        new_values=json.dumps(new_values, ensure_ascii=False, default=str),
+    ))
 
 
 def _resolve_contract_cost_center(db: Session, cost_center_id: Optional[int], cost_center_code: Optional[str]) -> Tuple[Optional[int], Optional[str]]:
@@ -32,6 +93,47 @@ def _apply_contract_cost_center_to_printer(printer: Printer, contract: LeaseCont
     """Force printer to inherit contract cost center."""
     printer.cost_center_id = contract.cost_center_id
     printer.cost_center = contract.cost_center
+
+
+def _resolve_lifecycle_status(end_date: Optional[datetime], status: str) -> str:
+    if not end_date or status in ("cancelled", "suspended"):
+        return status
+
+    now = datetime.now(end_date.tzinfo) if end_date.tzinfo else datetime.utcnow()
+    if end_date < now and status in ("active", "pending"):
+        return "expired"
+    if end_date >= now and status == "expired":
+        return "active"
+    return status
+
+
+def _sync_contract_lifecycle_statuses(db: Session):
+    """Mantiene el estado de contratos alineado con su fecha de vencimiento."""
+    now = datetime.utcnow()
+    changed = False
+
+    expired_candidates = db.query(LeaseContract).filter(
+        LeaseContract.end_date < now,
+        LeaseContract.status.in_(["active", "pending"]),
+    ).all()
+    for contract in expired_candidates:
+        resolved_status = _resolve_lifecycle_status(contract.end_date, contract.status)
+        if resolved_status != contract.status:
+            contract.status = resolved_status
+            changed = True
+
+    renewed_candidates = db.query(LeaseContract).filter(
+        LeaseContract.end_date >= now,
+        LeaseContract.status == "expired",
+    ).all()
+    for contract in renewed_candidates:
+        resolved_status = _resolve_lifecycle_status(contract.end_date, contract.status)
+        if resolved_status != contract.status:
+            contract.status = resolved_status
+            changed = True
+
+    if changed:
+        db.commit()
 
 def generate_contract_number(db: Session) -> str:
     """Generar número de contrato secuencial único"""
@@ -288,6 +390,7 @@ class LeaseContractCreate(BaseModel):
     
     # Impresoras asignadas al contrato
     printer_ids: List[int] = []
+    change_note: Optional[str] = None
     
     # Empresas asociadas al contrato
     companies: List[ContractCompanyCreate] = []
@@ -347,6 +450,19 @@ class LeaseContractResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+class ContractChangeHistoryResponse(BaseModel):
+    id: int
+    contract_id: int
+    action: str
+    changed_by_id: Optional[int]
+    changed_by_name: Optional[str]
+    change_note: str
+    changed_fields: List[str]
+    previous_values: dict
+    new_values: dict
+    created_at: datetime
 
 @router.get("/exchange-rates")
 def get_exchange_rates():
@@ -436,6 +552,7 @@ def get_next_contract_number(db: Session = Depends(get_db)):
 @router.get("/", response_model=List[LeaseContractResponse])
 def list_contracts(db: Session = Depends(get_db)):
     """Listar todos los contratos de arrendamiento"""
+    _sync_contract_lifecycle_statuses(db)
     contracts = db.query(LeaseContract).all()
     
     # Construir respuestas manualmente para evitar problemas de serialización
@@ -513,7 +630,7 @@ def list_contracts(db: Session = Depends(get_db)):
     return response_contracts
 
 @router.post("/", response_model=LeaseContractResponse)
-def create_contract(contract: LeaseContractCreate, db: Session = Depends(get_db)):
+def create_contract(contract: LeaseContractCreate, request: Request, db: Session = Depends(get_db)):
     """Crear un nuevo contrato de arrendamiento"""
     
     # Generar número de contrato automáticamente si no se proporciona
@@ -537,31 +654,38 @@ def create_contract(contract: LeaseContractCreate, db: Session = Depends(get_db)
         cost_center_code=contract.cost_center,
     )
     
-    # Verificar que las impresoras seleccionadas no estén ya asignadas a otros contratos
-    if contract.printer_ids:
-        already_assigned = db.query(ContractPrinter.printer_id).filter(
-            ContractPrinter.printer_id.in_(contract.printer_ids),
-            ContractPrinter.is_active == True
-        ).all()
-        
-        if already_assigned:
-            assigned_ids = [row[0] for row in already_assigned]
-            raise HTTPException(
-                status_code=400,
-                detail=f"Las siguientes impresoras ya están asignadas a otros contratos: {assigned_ids}"
-            )
-    
     # Crear el contrato (sin printer_ids y companies en el dict)
     contract_dict = contract.dict()
     printer_ids = contract_dict.pop('printer_ids', [])
     companies = contract_dict.pop('companies', [])
+    change_note = contract_dict.pop('change_note', None)
     contract_dict['cost_center_id'] = resolved_cost_center_id
     contract_dict['cost_center'] = resolved_cost_center_code
+    contract_dict['status'] = _resolve_lifecycle_status(
+        contract_dict.get('end_date'),
+        contract_dict.get('status', 'active')
+    )
     
     db_contract = LeaseContract(**contract_dict)
     db.add(db_contract)
     db.commit()
     db.refresh(db_contract)
+
+    current_user = _get_optional_current_user(request, db)
+    _record_contract_history(
+        db=db,
+        contract_id=db_contract.id,
+        action="created",
+        change_note=change_note or "Creación inicial del contrato",
+        changed_fields=["contract", "printer_ids"],
+        previous_values={},
+        new_values={
+            "contract_number": db_contract.contract_number,
+            "printer_ids": printer_ids,
+        },
+        user=current_user,
+    )
+    db.commit()
     
     # Asignar impresoras al contrato
     if printer_ids:
@@ -703,6 +827,7 @@ def create_contract(contract: LeaseContractCreate, db: Session = Depends(get_db)
 @router.get("/{contract_id}", response_model=LeaseContractResponse)
 def get_contract(contract_id: int, db: Session = Depends(get_db)):
     """Obtener un contrato específico"""
+    _sync_contract_lifecycle_statuses(db)
     contract = db.query(LeaseContract).filter(LeaseContract.id == contract_id).first()
     if not contract:
         raise HTTPException(status_code=404, detail="Contrato no encontrado")
@@ -736,12 +861,44 @@ def get_contract_printers(contract_id: int, db: Session = Depends(get_db)):
     
     return contract_printers
 
+
+@router.get("/{contract_id}/history", response_model=List[ContractChangeHistoryResponse])
+def get_contract_history(contract_id: int, db: Session = Depends(get_db)):
+    """Obtener historial de cambios de un contrato."""
+    contract = db.query(LeaseContract).filter(LeaseContract.id == contract_id).first()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contrato no encontrado")
+
+    entries = db.query(ContractChangeHistory).filter(
+        ContractChangeHistory.contract_id == contract_id
+    ).order_by(ContractChangeHistory.created_at.desc()).all()
+
+    return [
+        ContractChangeHistoryResponse(
+            id=entry.id,
+            contract_id=entry.contract_id,
+            action=entry.action,
+            changed_by_id=entry.changed_by_id,
+            changed_by_name=entry.changed_by_name,
+            change_note=entry.change_note,
+            changed_fields=json.loads(entry.changed_fields or "[]"),
+            previous_values=json.loads(entry.previous_values or "{}"),
+            new_values=json.loads(entry.new_values or "{}"),
+            created_at=entry.created_at,
+        )
+        for entry in entries
+    ]
+
 @router.put("/{contract_id}", response_model=LeaseContractResponse)
-def update_contract(contract_id: int, contract_update: LeaseContractCreate, db: Session = Depends(get_db)):
+def update_contract(contract_id: int, contract_update: LeaseContractCreate, request: Request, db: Session = Depends(get_db)):
     """Actualizar un contrato de arrendamiento"""
     contract = db.query(LeaseContract).filter(LeaseContract.id == contract_id).first()
     if not contract:
         raise HTTPException(status_code=404, detail="Contrato no encontrado")
+
+    change_note = (contract_update.change_note or "").strip()
+    if not change_note:
+        raise HTTPException(status_code=400, detail="Debe indicar una nota explicando el motivo del cambio")
     
     # Verificar que no exista otro contrato con el mismo número
     if contract_update.contract_number != contract.contract_number:
@@ -762,21 +919,119 @@ def update_contract(contract_id: int, contract_update: LeaseContractCreate, db: 
         cost_center_code=contract_update.cost_center,
     )
 
-    update_data = contract_update.dict(exclude={"printer_ids", "companies"})
+    previous_values = {
+        field: _serialize_audit_value(getattr(contract, field, None))
+        for field in CONTRACT_AUDIT_FIELDS
+    }
+    previous_printer_ids = [row[0] for row in db.query(ContractPrinter.printer_id).filter(
+        ContractPrinter.contract_id == contract_id,
+        ContractPrinter.is_active == True,
+    ).all()]
+
+    update_data = contract_update.dict(exclude={"printer_ids", "companies", "change_note"})
     update_data["cost_center_id"] = resolved_cost_center_id
     update_data["cost_center"] = resolved_cost_center_code
+    update_data["status"] = _resolve_lifecycle_status(
+        update_data.get("end_date"),
+        update_data.get("status", contract.status)
+    )
 
     for field, value in update_data.items():
         setattr(contract, field, value)
 
+    # Sincronizar impresoras asignadas al contrato durante edición.
+    requested_printer_ids = set(contract_update.printer_ids or [])
     active_assignments = db.query(ContractPrinter).filter(
         ContractPrinter.contract_id == contract_id,
         ContractPrinter.is_active == True,
     ).all()
-    for assignment in active_assignments:
+    active_printer_ids = {assignment.printer_id for assignment in active_assignments}
+
+    printer_ids_to_remove = active_printer_ids - requested_printer_ids
+    printer_ids_to_add = requested_printer_ids - active_printer_ids
+
+    if printer_ids_to_remove:
+        for assignment in active_assignments:
+            if assignment.printer_id not in printer_ids_to_remove:
+                continue
+
+            assignment.is_active = False
+            assignment.removal_date = datetime.utcnow()
+
+            printer = db.query(Printer).filter(Printer.id == assignment.printer_id).first()
+            if printer and printer.cost_center_id == contract.cost_center_id:
+                printer.cost_center_id = None
+                printer.cost_center = None
+
+    if printer_ids_to_add:
+        for printer_id in printer_ids_to_add:
+            printer = db.query(Printer).filter(Printer.id == printer_id).first()
+            if not printer:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Impresora con ID {printer_id} no encontrada"
+                )
+
+            existing_assignment = db.query(ContractPrinter).filter(
+                ContractPrinter.contract_id == contract_id,
+                ContractPrinter.printer_id == printer_id,
+            ).first()
+
+            if existing_assignment:
+                existing_assignment.is_active = True
+                existing_assignment.removal_date = None
+                if not existing_assignment.installation_date:
+                    existing_assignment.installation_date = datetime.utcnow()
+            else:
+                db.add(ContractPrinter(
+                    contract_id=contract_id,
+                    printer_id=printer_id,
+                    device_type="printer_bw" if not printer.is_color else "printer_color",
+                    monthly_included_copies_bw=0,
+                    monthly_included_copies_color=0,
+                    overage_cost_bw=0.0,
+                    overage_cost_color=0.0,
+                    installation_date=datetime.utcnow(),
+                    is_active=True,
+                ))
+
+            _apply_contract_cost_center_to_printer(printer, contract)
+
+    refreshed_active_assignments = db.query(ContractPrinter).filter(
+        ContractPrinter.contract_id == contract_id,
+        ContractPrinter.is_active == True,
+    ).all()
+    for assignment in refreshed_active_assignments:
         printer = db.query(Printer).filter(Printer.id == assignment.printer_id).first()
         if printer:
             _apply_contract_cost_center_to_printer(printer, contract)
+
+    new_values = {
+        field: _serialize_audit_value(getattr(contract, field, None))
+        for field in CONTRACT_AUDIT_FIELDS
+    }
+    new_printer_ids = sorted(list(requested_printer_ids))
+    changed_fields = [
+        field for field in CONTRACT_AUDIT_FIELDS
+        if previous_values.get(field) != new_values.get(field)
+    ]
+    if sorted(previous_printer_ids) != new_printer_ids:
+        changed_fields.append("printer_ids")
+        previous_values["printer_ids"] = sorted(previous_printer_ids)
+        new_values["printer_ids"] = new_printer_ids
+
+    if changed_fields:
+        current_user = _get_optional_current_user(request, db)
+        _record_contract_history(
+            db=db,
+            contract_id=contract_id,
+            action="updated",
+            change_note=change_note,
+            changed_fields=changed_fields,
+            previous_values={field: previous_values.get(field) for field in changed_fields},
+            new_values={field: new_values.get(field) for field in changed_fields},
+            user=current_user,
+        )
     
     db.commit()
     db.refresh(contract)
@@ -993,6 +1248,8 @@ def remove_printer_from_contract(contract_id: int, printer_id: int, db: Session 
 def get_contracts_stats(db: Session = Depends(get_db)):
     """Obtener estadísticas generales de contratos"""
     from sqlalchemy import func
+
+    _sync_contract_lifecycle_statuses(db)
     
     total_contracts = db.query(LeaseContract).count()
     
@@ -1009,10 +1266,10 @@ def get_contracts_stats(db: Session = Depends(get_db)):
     ).group_by(LeaseContract.contract_type).all()
     
     # Contratos que expiran pronto (próximos 30 días)
-    from datetime import datetime, timedelta
-    future_date = datetime.utcnow() + timedelta(days=30)
+    now = datetime.utcnow()
+    future_date = now + timedelta(days=30)
     expiring_contracts = db.query(LeaseContract).filter(
-        LeaseContract.end_date.between(datetime.utcnow(), future_date),
+        LeaseContract.end_date.between(now, future_date),
         LeaseContract.status == 'active'
     ).count()
     
@@ -1036,6 +1293,7 @@ def search_contracts(
     db: Session = Depends(get_db)
 ):
     """Buscar contratos con múltiples filtros"""
+    _sync_contract_lifecycle_statuses(db)
     contracts_query = db.query(LeaseContract)
     
     if query:

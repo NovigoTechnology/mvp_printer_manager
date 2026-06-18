@@ -70,6 +70,10 @@ export const WizardStep2: React.FC<Step2Props> = ({
           <div className="text-center py-4">
             <div className="text-gray-500">Cargando equipos...</div>
           </div>
+        ) : printers.length === 0 ? (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-yellow-800 text-sm">
+            Este contrato no tiene equipos asociados.
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {printers.map(printer => (

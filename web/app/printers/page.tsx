@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { PrinterIcon, usePrinterEmoji } from '../../components/icons'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
+import { API_BASE } from '@/lib/config'
 
 interface Printer {
   id: number

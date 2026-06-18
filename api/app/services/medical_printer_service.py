@@ -6,6 +6,7 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import re
+from urllib.parse import urljoin
 from datetime import datetime
 from typing import Dict, Optional, List
 import socket
@@ -54,6 +55,8 @@ class DrypixScraper:
     # Constantes de configuración
     DEFAULT_LANGUAGE = "en"
     TRAY_CAPACITY = 100
+    LOGOUT_TIMEOUT_SECONDS = 3
+    LOGOUT_MAX_ATTEMPTS = 2
     
     def __init__(self, ip_address: str, port: int = 20051,
                  login: str = None, password: str = None):
@@ -71,6 +74,33 @@ class DrypixScraper:
         self.login = login if login is not None else settings.drypix_login
         self.password = password if password is not None else settings.drypix_password
         self.session = requests.Session()
+        self._logout_urls = [
+            f"{self.base_url}/USER/chkout",
+            f"{self.base_url}/USER/chkout?Language={self.DEFAULT_LANGUAGE}",
+            f"{self.base_url}/USER/chkout&Language={self.DEFAULT_LANGUAGE}",
+        ]
+
+    def _extract_logout_urls(self, html: str) -> List[str]:
+        """Extrae posibles URLs de logout desde el HTML de respuesta."""
+        if not html:
+            return []
+
+        candidates = []
+        seen = set()
+
+        for raw_url in re.findall(r'href=["\']([^"\']*chkout[^"\']*)["\']', html, re.IGNORECASE):
+            absolute_url = urljoin(f"{self.base_url}/", raw_url)
+            if absolute_url not in seen:
+                seen.add(absolute_url)
+                candidates.append(absolute_url)
+
+        for raw_url in re.findall(r'location\.href\s*=\s*["\']([^"\']*chkout[^"\']*)["\']', html, re.IGNORECASE):
+            absolute_url = urljoin(f"{self.base_url}/", raw_url)
+            if absolute_url not in seen:
+                seen.add(absolute_url)
+                candidates.append(absolute_url)
+
+        return candidates
     
     def authenticate(self) -> bool:
         """
@@ -87,12 +117,29 @@ class DrypixScraper:
             
             # Verificar si el login fue exitoso
             if response.status_code == 200 and "main" in response.text.lower():
+                dynamic_logout_urls = self._extract_logout_urls(response.text)
+                if dynamic_logout_urls:
+                    # Priorizar URLs descubiertas en tiempo de ejecución para mayor compatibilidad.
+                    self._logout_urls = dynamic_logout_urls + [
+                        url for url in self._logout_urls if url not in dynamic_logout_urls
+                    ]
                 return True
             return False
             
         except Exception as e:
             print(f"Error en autenticación DRYPIX: {e}")
             return False
+
+    def _close_http_session(self):
+        """Cierra la sesión HTTP local para evitar sesiones colgadas."""
+        try:
+            self.session.close()
+        except Exception:
+            pass
+
+    def close_session(self):
+        """Método público para cerrar sesión HTTP cuando no hubo login de mantenimiento."""
+        self._close_http_session()
     
     def logout(self) -> bool:
         """
@@ -101,26 +148,39 @@ class DrypixScraper:
         Returns:
             True si el logout fue exitoso
         """
+        logout_success = False
         try:
-            logout_url = f"{self.base_url}/USER/chkout"
-            response = self.session.get(logout_url, timeout=5)
-            
-            # Cerrar la sesión de requests
-            self.session.close()
-            
-            if response.status_code == 200:
+            # Algunos firmwares exponen rutas de salida distintas; probar varias opciones
+            # reduce sesiones de mantenimiento colgadas.
+            for _ in range(self.LOGOUT_MAX_ATTEMPTS):
+                for logout_url in self._logout_urls:
+                    try:
+                        response = self.session.get(
+                            logout_url,
+                            timeout=self.LOGOUT_TIMEOUT_SECONDS,
+                            allow_redirects=False,
+                        )
+                        if response.status_code in (200, 301, 302, 303):
+                            logout_success = True
+                            break
+                    except Exception:
+                        continue
+
+                if logout_success:
+                    break
+
+            if logout_success:
                 print(f"✅ Logout exitoso de DRYPIX en {self.base_url}")
-                return True
-            return False
-            
-        except Exception as e:
-            print(f"Error en logout DRYPIX: {e}")
-            # Intentar cerrar la sesión de todos modos
-            try:
-                self.session.close()
-            except:
-                pass
-            return False
+            else:
+                attempted = ", ".join(self._logout_urls)
+                print(
+                    f"⚠️ No se pudo confirmar logout de DRYPIX en {self.base_url}. "
+                    f"Rutas intentadas: {attempted}"
+                )
+
+            return logout_success
+        finally:
+            self._close_http_session()
     
     def get_counters(self) -> Optional[Dict]:
         """
@@ -129,10 +189,12 @@ class DrypixScraper:
         Returns:
             Dict con información de contadores o None si hay error
         """
+        authenticated = False
         try:
             # Autenticar
             if not self.authenticate():
                 return None
+            authenticated = True
             
             # Acceder a la página Setting2 que contiene los contadores
             setting2_url = f"{self.base_url}/SETTING/?settingMode=5"
@@ -180,19 +242,16 @@ class DrypixScraper:
                 "pages_printed": total_printed,  # Equivalente a films impresos
                 "is_online": True
             }
-            
-            # Cerrar sesión antes de retornar
-            self.logout()
             return result
             
         except Exception as e:
             print(f"Error obteniendo contadores DRYPIX: {e}")
-            # Intentar hacer logout incluso si hay error
-            try:
-                self.logout()
-            except:
-                pass
             return None
+        finally:
+            if authenticated:
+                self.logout()
+            else:
+                self._close_http_session()
     
     def _parse_counters(self, html: str) -> Optional[Dict[str, int]]:
         """
@@ -254,10 +313,12 @@ class DrypixScraper:
         Returns:
             Dict con información del dispositivo o None si hay error
         """
+        authenticated = False
         try:
             # Autenticar
             if not self.authenticate():
                 return None
+            authenticated = True
             
             info = {}
             
@@ -290,24 +351,19 @@ class DrypixScraper:
                                 if len(serial) > 3 and serial not in ['VALUE', 'TEXT', 'INPUT']:
                                     info['serial_number'] = serial
                                     print(f"✅ Serial encontrado para {self.base_url}: {serial}")
-                                    # Cerrar sesión antes de retornar
-                                    self.logout()
                                     return info
                 except Exception as e:
                     continue
-            
-            # Cerrar sesión antes de retornar
-            self.logout()
             return info if info else None
             
         except Exception as e:
             print(f"Error obteniendo información del dispositivo: {e}")
-            # Intentar hacer logout incluso si hay error
-            try:
-                self.logout()
-            except:
-                pass
             return None
+        finally:
+            if authenticated:
+                self.logout()
+            else:
+                self._close_http_session()
 
 
 def is_medical_printer(printer) -> bool:
@@ -398,26 +454,24 @@ def check_drypix_web_interface(ip: str, port: int = 20051, timeout: int = 3) -> 
                 
                 # Intentar autenticación para confirmar
                 scraper = DrypixScraper(ip, port)
-                if scraper.authenticate():
-                    device_info['authenticated'] = True
-                    
-                    # Intentar obtener número de serie
-                    try:
-                        info = scraper.get_device_info()
-                        if info and 'serial_number' in info:
-                            device_info['serial_number'] = info['serial_number']
-                    except Exception as e:
-                        print(f"No se pudo obtener serial de {ip}: {e}")
-                    
-                    # Intentar obtener información del modelo desde la interfaz
-                    try:
-                        # Intentar obtener contadores para validar funcionalidad
-                        counters = scraper.get_counters()
-                        if counters:
-                            device_info['counters_available'] = True
-                            device_info['trays'] = len(counters.get('trays', {}))
-                    except:
-                        pass
+                # Cada operación gestiona su propio ciclo login/logout
+                # para garantizar cierre de sesión en la impresora.
+                try:
+                    info = scraper.get_device_info()
+                    if info and 'serial_number' in info:
+                        device_info['serial_number'] = info['serial_number']
+                        device_info['authenticated'] = True
+                except Exception as e:
+                    print(f"No se pudo obtener serial de {ip}: {e}")
+
+                try:
+                    counters = scraper.get_counters()
+                    if counters:
+                        device_info['counters_available'] = True
+                        device_info['trays'] = len(counters.get('trays', {}))
+                        device_info['authenticated'] = True
+                except Exception:
+                    pass
                 
                 return device_info
                 

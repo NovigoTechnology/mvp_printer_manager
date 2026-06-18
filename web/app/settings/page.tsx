@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Select, Badge } from '@/components/ui'
 import UsersManagement from '@/components/UsersManagement'
 import { useTheme } from '@/contexts/ThemeContext'
+import { useAuth } from '@/components/AuthProvider'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'
+import { API_BASE } from '@/lib/config'
 
 interface AppSettings {
   // General
@@ -59,6 +60,7 @@ interface MedicalScheduleConfig {
 
 export default function Settings() {
   const { theme, accentColor, setTheme, setAccentColor } = useTheme()
+  const { token, user, logout } = useAuth()
   
   const [settings, setSettings] = useState<AppSettings>({
     company_name: 'Printer Fleet Manager',
@@ -103,8 +105,7 @@ export default function Settings() {
       // Save SMTP configuration to backend if in notifications tab
       if (activeTab === 'notifications') {
         try {
-          const token = localStorage.getItem('token')
-          if (!token) {
+          if (!token || !isAdminUser) {
             throw new Error('No authentication token found')
           }
 
@@ -167,22 +168,34 @@ export default function Settings() {
       setSaving(true)
       setMessage(null)
 
-      const token = localStorage.getItem('token')
       if (!token) {
-        throw new Error('No authentication token found')
+        throw new Error('No estás autenticado. Por favor inicia sesión.')
       }
 
+      const isAdmin = user?.is_admin || user?.role === 'admin'
+      if (!isAdmin) {
+        throw new Error('Solo administradores pueden probar la configuración SMTP')
+      }
+
+      // Validate required fields
+      if (!settings.smtp_host) {
+        throw new Error('Host SMTP es requerido')
+      }
+
+      // Build config - username and password are optional for open relays
       const smtpConfig = {
-        enabled: settings.smtp_enabled,
+        enabled: true,  // Force enabled for test
         host: settings.smtp_host,
         port: settings.smtp_port,
         use_tls: settings.smtp_use_tls,
-        username: settings.smtp_username,
-        password: settings.smtp_password,
+        username: settings.smtp_username || '',  // Allow empty
+        password: settings.smtp_password || '',  // Allow empty
         from_email: settings.smtp_from_email,
         from_name: settings.smtp_from_name
       }
 
+      console.log('Saving SMTP config before test:', smtpConfig)
+      
       const saveResponse = await fetch(`${API_BASE}/api/settings/smtp`, {
         method: 'POST',
         headers: {
@@ -197,6 +210,8 @@ export default function Settings() {
         throw new Error(error.detail || 'Error al guardar SMTP antes de probar')
       }
 
+      console.log('SMTP config saved. Testing connection...')
+
       const response = await fetch(`${API_BASE}/api/settings/smtp/test`, {
         method: 'POST',
         headers: {
@@ -206,21 +221,25 @@ export default function Settings() {
 
       if (response.ok) {
         const result = await response.json()
-        setMessage({ type: 'success', text: `✅ Conexión SMTP exitosa: ${result.host}:${result.port}` })
+        console.log('SMTP test successful:', result)
+        setMessage({ type: 'success', text: `✅ Conexión SMTP exitosa: ${result.host}:${result.port} (${result.auth_method})` })
       } else {
         const error = await response.json()
+        console.error('SMTP test failed:', error)
         setMessage({ type: 'error', text: `❌ Error de conexión SMTP: ${error.detail}` })
       }
 
       setTimeout(() => setMessage(null), 5000)
     } catch (error) {
       console.error('Error testing SMTP connection:', error)
-      setMessage({ type: 'error', text: 'Error al probar conexión SMTP' })
+      setMessage({ type: 'error', text: `Error: ${error instanceof Error ? error.message : 'Error al probar conexión SMTP'}` })
       setTimeout(() => setMessage(null), 5000)
     } finally {
       setSaving(false)
     }
   }
+
+  const isAdminUser = Boolean(user?.is_admin || user?.role === 'admin')
 
   useEffect(() => {
     const saved = localStorage.getItem('app_settings')
@@ -231,13 +250,12 @@ export default function Settings() {
         console.error('Error loading settings:', error)
       }
     }
+  }, [])
 
-    // Load SMTP configuration from backend
+  useEffect(() => {
     const loadSmtpConfig = async () => {
       try {
-        const token = localStorage.getItem('token')
-        if (!token) {
-          console.log('No authentication token, skipping SMTP config load')
+        if (activeTab !== 'notifications' || !token || !isAdminUser) {
           return
         }
 
@@ -262,6 +280,8 @@ export default function Settings() {
             smtp_from_name: smtpConfig.from_name || 'Printer Fleet Manager'
           }))
           console.log('SMTP configuration loaded from backend')
+        } else if (response.status === 401) {
+          logout()
         } else {
           console.log('Could not load SMTP config from backend, using local defaults')
         }
@@ -272,7 +292,7 @@ export default function Settings() {
     }
 
     loadSmtpConfig()
-  }, [])
+  }, [activeTab, token, isAdminUser, logout])
 
   const tabs = [
     { id: 'general', label: 'General' },
@@ -784,14 +804,23 @@ export default function Settings() {
                         </ul>
                       </div>
 
-                      <div className="flex gap-2">
+                      <div className="space-y-2">
                         <button
                           onClick={handleTestSmtpConnection}
-                          disabled={saving || !settings.smtp_host || !settings.smtp_username || !settings.smtp_from_email}
+                          disabled={saving || !settings.smtp_host}
                           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition"
+                          title={!settings.smtp_host ? 'Se requiere el Host SMTP' : 'Probar conexión SMTP'}
                         >
                           {saving ? 'Probando...' : '🧪 Probar Conexión'}
                         </button>
+                        {!settings.smtp_host && (
+                          <p className="text-xs text-red-600">
+                            • Host SMTP requerido
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-1">
+                          💡 Tip: Usuario y contraseña son opcionales para relés SMTP abiertos (puerto 25)
+                        </p>
                       </div>
                     </>
                   )}

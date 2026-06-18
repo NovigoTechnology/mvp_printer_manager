@@ -8,7 +8,12 @@ import json
 
 from pydantic import BaseModel
 from ..db import get_db
-from ..models import Printer, LeaseContract, ContractPrinter, BillingPeriod, CounterReading, Invoice, InvoiceLine, BillingConfiguration
+from ..models import (
+    Printer, LeaseContract, ContractPrinter, BillingPeriod, CounterReading,
+    Invoice, InvoiceLine, BillingConfiguration, BillingTarget, MonthlyCounter,
+    BillingAutomationRule, BillingAutomationRun, BillingEmailLog,
+)
+from ..services import billing_engine
 from ..services.snmp import SNMPService
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -83,10 +88,134 @@ class InvoiceResponse(BaseModel):
     currency: str
     tax_rate: Decimal
     notes: Optional[str]
+    billing_target_id: Optional[int] = None
+    deployment_mode: Optional[str] = None
+    document_type: Optional[str] = None
+    recipient_name: Optional[str] = None
+    recipient_email: Optional[str] = None
+    sent_at: Optional[datetime] = None
+    email_delivery_status: Optional[str] = None
+    digital_invoice_status: Optional[str] = None
+    digital_invoice_provider: Optional[str] = None
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class BillingDeploymentResponse(BaseModel):
+    deployment_mode: str
+    mode_label: str
+    target_label: str
+    document_label: str
+    target_type: str
+    digital_invoice_enabled: bool
+    digital_invoice_provider: str
+
+
+class BillingTargetResponse(BaseModel):
+    id: int
+    name: str
+    target_type: str
+    billing_email: Optional[str]
+    cc_emails: Optional[str]
+    tax_id: Optional[str]
+    address: Optional[str]
+    contact_name: Optional[str]
+    cost_center_code: Optional[str]
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+class InvoiceGenerationRequest(BaseModel):
+    period_id: int
+    contract_id: int
+    status: str = "draft"
+    send_email: bool = False
+    recipient_email: Optional[str] = None
+    notes: Optional[str] = None
+    created_by: Optional[str] = None
+
+
+class InvoiceEmailRequest(BaseModel):
+    recipient_email: Optional[str] = None
+
+
+class BillingAutomationRuleCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    scope: str = "all_active_contracts"
+    contract_id: Optional[int] = None
+    billing_target_id: Optional[int] = None
+    frequency: str = "monthly"
+    day_of_month: int = 1
+    time_of_day: str = "08:00"
+    auto_generate_invoice: bool = True
+    auto_send_email: bool = False
+    invoice_status: str = "draft"
+    created_by: Optional[str] = None
+
+
+class BillingAutomationRuleResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    is_active: bool
+    scope: str
+    contract_id: Optional[int]
+    billing_target_id: Optional[int]
+    frequency: str
+    day_of_month: int
+    time_of_day: str
+    auto_generate_invoice: bool
+    auto_send_email: bool
+    invoice_status: str
+    last_run_at: Optional[datetime]
+    next_run_at: Optional[datetime]
+    run_count: int
+    error_count: int
+    last_error: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# DEPLOYMENT AND TARGETS ENDPOINTS
+
+@router.get("/deployment", response_model=BillingDeploymentResponse)
+def get_billing_deployment(db: Session = Depends(get_db)):
+    """Obtener modo de instalacion y etiquetas de facturacion."""
+    mode = billing_engine.ensure_default_deployment_config(db)
+    db.commit()
+    labels = billing_engine.get_deployment_labels(mode)
+    digital_enabled = billing_engine.get_config_value(db, "digital_invoice_enabled", "false").lower() == "true"
+    return BillingDeploymentResponse(
+        deployment_mode=mode,
+        mode_label=labels["mode_label"],
+        target_label=labels["target_label"],
+        document_label=labels["document_label"],
+        target_type=labels["target_type"],
+        digital_invoice_enabled=digital_enabled,
+        digital_invoice_provider=billing_engine.get_config_value(db, "digital_invoice_provider", "pending"),
+    )
+
+
+@router.get("/targets", response_model=List[BillingTargetResponse])
+def list_billing_targets(
+    target_type: Optional[str] = Query(None),
+    active_only: bool = Query(True),
+    db: Session = Depends(get_db),
+):
+    """Listar destinos de facturacion internos o externos."""
+    query = db.query(BillingTarget)
+    if target_type:
+        query = query.filter(BillingTarget.target_type == target_type)
+    if active_only:
+        query = query.filter(BillingTarget.is_active == True)
+    return query.order_by(BillingTarget.name.asc()).all()
+
 
 # BILLING PERIODS ENDPOINTS
 
@@ -210,6 +339,7 @@ def close_billing_period(
 def get_counter_readings(
     period_id: Optional[int] = Query(None),
     printer_id: Optional[int] = Query(None),
+    contract_id: Optional[int] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db)
@@ -222,6 +352,58 @@ def get_counter_readings(
     
     if printer_id:
         query = query.filter(CounterReading.printer_id == printer_id)
+
+    if contract_id:
+        contract_printer_ids = db.query(ContractPrinter.printer_id).filter(
+            ContractPrinter.contract_id == contract_id
+        ).subquery()
+        query = query.filter(CounterReading.printer_id.in_(contract_printer_ids))
+
+    if period_id:
+        period = db.query(BillingPeriod).filter(BillingPeriod.id == period_id).first()
+        if not period:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Período de facturación no encontrado"
+            )
+
+        readings = query.order_by(desc(CounterReading.reading_date)).all()
+        existing_printer_ids = {reading.printer_id for reading in readings}
+
+        if printer_id:
+            candidate_printer_ids = [printer_id]
+        elif contract_id:
+            candidate_printer_ids = [row[0] for row in db.query(ContractPrinter.printer_id).filter(
+                ContractPrinter.contract_id == contract_id
+            ).all()]
+        else:
+            period_end_exclusive = period.end_date + timedelta(days=1)
+            candidate_printer_ids = [row[0] for row in db.query(MonthlyCounter.printer_id).filter(
+                MonthlyCounter.recorded_at >= period.start_date,
+                MonthlyCounter.recorded_at < period_end_exclusive,
+            ).distinct().all()]
+
+            if not candidate_printer_ids:
+                candidate_printer_ids = [row[0] for row in db.query(MonthlyCounter.printer_id).filter(
+                    MonthlyCounter.year == period.start_date.year,
+                    MonthlyCounter.month == period.start_date.month,
+                ).distinct().all()]
+
+        derived_readings = []
+        for candidate_printer_id in candidate_printer_ids:
+            if candidate_printer_id in existing_printer_ids:
+                continue
+
+            monthly_usage = billing_engine.get_period_usage_from_monthly_counters(db, candidate_printer_id, period)
+            if monthly_usage:
+                derived_readings.append(monthly_usage)
+
+        combined_readings = list(readings) + derived_readings
+        combined_readings.sort(
+            key=lambda reading: billing_engine.usage_value(reading, "reading_date"),
+            reverse=True,
+        )
+        return combined_readings[skip:skip + limit]
     
     readings = query.order_by(desc(CounterReading.reading_date)).offset(skip).limit(limit).all()
     return readings
@@ -358,47 +540,16 @@ def generate_invoices_for_period(
     
     for contract in contracts:
         try:
-            # Verificar si ya existe factura para este contrato y período
-            existing_invoice = db.query(Invoice).filter(
-                and_(
-                    Invoice.contract_id == contract.id,
-                    Invoice.billing_period_id == period_id
-                )
-            ).first()
-            
-            if existing_invoice:
-                continue
-            
-            # Generar número de factura
-            invoice_prefix = get_config_value(db, "invoice_prefix", "FAC-")
-            last_invoice = db.query(Invoice).order_by(desc(Invoice.id)).first()
-            next_number = (last_invoice.id + 1) if last_invoice else 1
-            invoice_number = f"{invoice_prefix}{next_number:06d}"
-            
-            # Crear factura
-            invoice = Invoice(
-                invoice_number=invoice_number,
+            invoice = billing_engine.create_invoice(
+                db=db,
+                period_id=period_id,
                 contract_id=contract.id,
-                billing_period_id=period_id,
-                invoice_date=date.today(),
-                due_date=date.today() + timedelta(days=int(get_config_value(db, "due_days", "30"))),
-                period_start=period.start_date,
-                period_end=period.end_date,
-                currency=get_config_value(db, "currency", "ARS"),
-                tax_rate=Decimal(get_config_value(db, "default_tax_rate", "21.00"))
+                invoice_status="draft",
+                send_email=False,
+                notes="Generada desde proceso masivo de periodo",
             )
-            
-            db.add(invoice)
-            db.flush()  # Para obtener el ID
-            
-            # Generar líneas de factura según el tipo de contrato
-            total_amount = generate_invoice_lines(db, invoice, contract, period)
-            
-            # Calcular totales
-            invoice.subtotal = total_amount
-            invoice.tax_amount = total_amount * (invoice.tax_rate / 100)
-            invoice.total_amount = invoice.subtotal + invoice.tax_amount
-            
+            if invoice.created_at is None:
+                db.flush()
             invoices_created += 1
             
         except Exception as e:
@@ -414,67 +565,7 @@ def generate_invoices_for_period(
 
 def generate_invoice_lines(db: Session, invoice: Invoice, contract: LeaseContract, period: BillingPeriod) -> Decimal:
     """Generar líneas de factura según el tipo de contrato"""
-    total_amount = Decimal('0.00')
-    
-    if contract.contract_type == "monthly_fixed":
-        # Costo fijo mensual
-        line = InvoiceLine(
-            invoice_id=invoice.id,
-            description=f"Renta mensual - {period.name}",
-            item_type="rental",
-            quantity=1,
-            unit_price=Decimal(str(contract.fixed_monthly_cost)),
-            line_total=Decimal(str(contract.fixed_monthly_cost))
-        )
-        db.add(line)
-        total_amount += line.line_total
-        
-    elif contract.contract_type == "cost_per_copy":
-        # Costo por copia - obtener lecturas de contadores
-        contract_printers = db.query(ContractPrinter).filter(
-            ContractPrinter.contract_id == contract.id
-        ).all()
-        
-        for cp in contract_printers:
-            reading = db.query(CounterReading).filter(
-                and_(
-                    CounterReading.printer_id == cp.printer_id,
-                    CounterReading.billing_period_id == period.id
-                )
-            ).first()
-            
-            if reading:
-                printer = db.query(Printer).filter(Printer.id == cp.printer_id).first()
-                
-                # Línea para copias B/N
-                if reading.prints_bw_period > 0:
-                    line_bw = InvoiceLine(
-                        invoice_id=invoice.id,
-                        printer_id=cp.printer_id,
-                        description=f"Copias B/N - {printer.brand} {printer.model} ({printer.asset_tag})",
-                        item_type="copies_bw",
-                        quantity=reading.prints_bw_period,
-                        unit_price=Decimal(str(contract.cost_bw_per_copy)),
-                        line_total=Decimal(str(reading.prints_bw_period)) * Decimal(str(contract.cost_bw_per_copy))
-                    )
-                    db.add(line_bw)
-                    total_amount += line_bw.line_total
-                
-                # Línea para copias color
-                if reading.prints_color_period > 0:
-                    line_color = InvoiceLine(
-                        invoice_id=invoice.id,
-                        printer_id=cp.printer_id,
-                        description=f"Copias Color - {printer.brand} {printer.model} ({printer.asset_tag})",
-                        item_type="copies_color",
-                        quantity=reading.prints_color_period,
-                        unit_price=Decimal(str(contract.cost_color_per_copy)),
-                        line_total=Decimal(str(reading.prints_color_period)) * Decimal(str(contract.cost_color_per_copy))
-                    )
-                    db.add(line_color)
-                    total_amount += line_color.line_total
-    
-    return total_amount
+    return billing_engine.build_invoice_lines(db, invoice, contract, period)
 
 def get_config_value(db: Session, key: str, default: str = "") -> str:
     """Obtener valor de configuración"""
@@ -507,6 +598,150 @@ def get_invoices(
     invoices = query.order_by(desc(Invoice.invoice_date)).offset(skip).limit(limit).all()
     return invoices
 
+
+@router.post("/invoices/generate", response_model=InvoiceResponse)
+def generate_single_invoice(
+    payload: InvoiceGenerationRequest,
+    db: Session = Depends(get_db),
+):
+    """Generar una factura real desde el wizard o un flujo manual."""
+    try:
+        invoice = billing_engine.create_invoice(
+            db=db,
+            period_id=payload.period_id,
+            contract_id=payload.contract_id,
+            invoice_status=payload.status,
+            send_email=payload.send_email,
+            recipient_email=payload.recipient_email,
+            notes=payload.notes,
+            created_by=payload.created_by,
+        )
+        db.commit()
+        db.refresh(invoice)
+        return invoice
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error generando factura: {str(exc)}")
+
+
+@router.post("/invoices/{invoice_id}/send-email")
+def send_invoice_by_email(
+    invoice_id: int,
+    payload: InvoiceEmailRequest = InvoiceEmailRequest(),
+    db: Session = Depends(get_db),
+):
+    """Enviar factura por email usando SMTP configurado y registrar el resultado."""
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Factura no encontrada")
+
+    success = billing_engine.send_invoice_email(db, invoice, recipient_email=payload.recipient_email)
+    db.commit()
+
+    return {
+        "success": success,
+        "status": invoice.email_delivery_status,
+        "message": "Factura enviada correctamente" if success else (invoice.email_error or "No se pudo enviar la factura"),
+        "error_detail": None if success else invoice.email_error,
+    }
+
+
+@router.get("/automation-rules", response_model=List[BillingAutomationRuleResponse])
+def list_billing_automation_rules(db: Session = Depends(get_db)):
+    """Listar reglas de automatizacion de facturacion."""
+    return db.query(BillingAutomationRule).order_by(BillingAutomationRule.created_at.desc()).all()
+
+
+@router.post("/automation-rules", response_model=BillingAutomationRuleResponse)
+def create_billing_automation_rule(
+    payload: BillingAutomationRuleCreate,
+    db: Session = Depends(get_db),
+):
+    """Crear una regla de automatizacion para generar facturas por periodo."""
+    rule = BillingAutomationRule(**payload.dict())
+    db.add(rule)
+    db.commit()
+    db.refresh(rule)
+    return rule
+
+
+@router.post("/automation-rules/{rule_id}/run")
+def run_billing_automation_rule(
+    rule_id: int,
+    period_id: int,
+    db: Session = Depends(get_db),
+):
+    """Ejecutar manualmente una regla de automatizacion para un periodo."""
+    rule = db.query(BillingAutomationRule).filter(BillingAutomationRule.id == rule_id).first()
+    if not rule:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Regla de automatizacion no encontrada")
+    if not rule.is_active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La regla no esta activa")
+
+    period = db.query(BillingPeriod).filter(BillingPeriod.id == period_id).first()
+    if not period:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Periodo de facturacion no encontrado")
+
+    query = db.query(LeaseContract).filter(LeaseContract.status == "active")
+    if rule.contract_id:
+        query = query.filter(LeaseContract.id == rule.contract_id)
+    if rule.billing_target_id:
+        query = query.filter(LeaseContract.billing_target_id == rule.billing_target_id)
+
+    contracts = query.all()
+    run = BillingAutomationRun(rule_id=rule.id, billing_period_id=period.id)
+    db.add(run)
+    db.flush()
+
+    invoices_created = 0
+    emails_sent = 0
+    errors = []
+
+    for contract in contracts:
+        try:
+            invoice = billing_engine.create_invoice(
+                db=db,
+                period_id=period.id,
+                contract_id=contract.id,
+                invoice_status=rule.invoice_status,
+                send_email=False,
+                notes=f"Generada por regla automatica: {rule.name}",
+                created_by=rule.created_by,
+            )
+            invoices_created += 1
+            if rule.auto_send_email:
+                if billing_engine.send_invoice_email(db, invoice):
+                    emails_sent += 1
+        except Exception as exc:
+            errors.append(f"Contrato {contract.contract_number}: {str(exc)}")
+
+    now = datetime.utcnow()
+    run.finished_at = now
+    run.success = len(errors) == 0
+    run.invoices_created = invoices_created
+    run.emails_sent = emails_sent
+    run.errors = json.dumps(errors, ensure_ascii=False)
+    rule.last_run_at = now
+    rule.run_count = (rule.run_count or 0) + 1
+    if errors:
+        rule.error_count = (rule.error_count or 0) + 1
+        rule.last_error = "; ".join(errors[:3])
+    else:
+        rule.last_error = None
+
+    db.commit()
+
+    return {
+        "success": run.success,
+        "invoices_created": invoices_created,
+        "emails_sent": emails_sent,
+        "errors": errors,
+        "message": f"Automatizacion ejecutada: {invoices_created} facturas generadas",
+    }
+
 @router.get("/invoices/{invoice_id}")
 def get_invoice_detail(
     invoice_id: int,
@@ -529,12 +764,16 @@ def get_invoice_detail(
     
     # Obtener información del período
     period = db.query(BillingPeriod).filter(BillingPeriod.id == invoice.billing_period_id).first()
+    target = db.query(BillingTarget).filter(BillingTarget.id == invoice.billing_target_id).first() if invoice.billing_target_id else None
+    email_logs = db.query(BillingEmailLog).filter(BillingEmailLog.invoice_id == invoice_id).order_by(desc(BillingEmailLog.created_at)).all()
     
     return {
         "invoice": invoice,
         "lines": lines,
         "contract": contract,
-        "period": period
+        "period": period,
+        "billing_target": target,
+        "email_logs": email_logs,
     }
 
 # AUTOMATIC SNMP READING ENDPOINTS
@@ -1132,6 +1371,8 @@ def get_snmp_reading_for_printer(
 @router.get("/dashboard-metrics")
 def get_dashboard_metrics(db: Session = Depends(get_db)):
     """Obtener métricas para el dashboard de facturación"""
+    mode = billing_engine.ensure_default_deployment_config(db)
+    labels = billing_engine.get_deployment_labels(mode)
     
     # Total de facturas
     total_invoices = db.query(func.count(Invoice.id)).scalar() or 0
@@ -1141,7 +1382,15 @@ def get_dashboard_metrics(db: Session = Depends(get_db)):
     
     # Facturas pendientes
     pending_invoices = db.query(func.count(Invoice.id)).filter(
-        Invoice.status.in_(["draft", "sent"])
+        Invoice.status.in_(["draft", "generated", "sent"])
+    ).scalar() or 0
+
+    sent_invoices = db.query(func.count(Invoice.id)).filter(
+        Invoice.email_delivery_status == "sent"
+    ).scalar() or 0
+
+    email_failed_invoices = db.query(func.count(Invoice.id)).filter(
+        Invoice.email_delivery_status == "failed"
     ).scalar() or 0
     
     # Facturas vencidas
@@ -1185,15 +1434,22 @@ def get_dashboard_metrics(db: Session = Depends(get_db)):
     revenue_data = [
         {
             "period_name": period_name,
+            "period": period_name,
             "revenue": float(revenue)
         }
         for period_name, revenue in revenue_by_period_query
     ]
     
     return {
+        "deploymentMode": mode,
+        "deploymentLabel": labels["mode_label"],
+        "targetLabel": labels["target_label"],
+        "documentLabel": labels["document_label"],
         "totalInvoices": total_invoices,
         "totalRevenue": float(total_revenue),
         "pendingInvoices": pending_invoices,
+        "sentInvoices": sent_invoices,
+        "emailFailedInvoices": email_failed_invoices,
         "overdueInvoices": overdue_invoices,
         "periodsCount": periods_count,
         "activeContracts": active_contracts,
