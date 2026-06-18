@@ -972,36 +972,35 @@ export default function Billing() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg shadow-lg p-6 text-white">
-        <div className="flex justify-between items-center">
+      <div className="mb-2">
+        <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold">💰 Módulo de Facturación</h1>
-            <p className="text-purple-100 mt-2">Gestión de períodos de corte, lecturas de contadores y facturación por contratos</p>
+            <h1 className="text-3xl font-bold text-gray-900">Módulo de Facturación</h1>
+            <p className="mt-2 text-gray-600">Gestión de períodos de corte, lecturas de contadores y facturación por contratos</p>
           </div>
-          <div className="text-right">
-            <div className="text-sm opacity-90">Deployment</div>
-            <div className="text-xl font-bold">{deployment?.mode_label || 'Cliente interno'}</div>
-            <div className="text-xs opacity-90">{deployment?.document_label || 'Liquidacion interna'} / {deployment?.target_label || 'Area'}</div>
+          <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm">
+            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Modo</div>
+            <div className="mt-0.5 font-semibold text-gray-900">{deployment?.mode_label || 'Cliente interno'}</div>
+            <div className="text-xs text-gray-500">{deployment?.document_label || 'Liquidacion interna'} / {deployment?.target_label || 'Area'}</div>
           </div>
         </div>
       </div>
 
       {/* Wizard Banner */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+      <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-5">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold flex items-center">
-              🧙‍♂️ Wizard de Facturación
-              <span className="ml-2 px-2 py-1 text-xs bg-white bg-opacity-20 rounded-full">NUEVO</span>
+            <h2 className="text-base font-semibold text-indigo-900 flex items-center gap-2">
+              Wizard de Facturación
+              <span className="px-2 py-0.5 text-xs bg-indigo-100 text-indigo-700 rounded-full border border-indigo-200">Guiado</span>
             </h2>
-            <p className="text-blue-100 mt-1">Proceso guiado paso a paso para generar facturas de manera fácil y rápida</p>
+            <p className="text-sm text-indigo-700 mt-1">Proceso guiado paso a paso para generar facturas de manera fácil y rápida</p>
           </div>
           <div>
             <Link 
               href="/billing/wizard"
-              className="bg-white text-blue-600 hover:bg-blue-50 px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center"
+              className="bg-indigo-600 text-white hover:bg-indigo-700 px-5 py-2.5 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-2"
             >
-              <span className="mr-2">🚀</span>
               Iniciar Wizard
             </Link>
           </div>

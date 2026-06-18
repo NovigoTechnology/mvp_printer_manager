@@ -859,13 +859,13 @@ const OptimizedBillingWizard: React.FC = () => {
       <div className="mb-8">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-4">Wizard de Facturación</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-1">Wizard de Facturación</h1>
             <p className="text-gray-600">Generación guiada de facturas internas paso a paso</p>
           </div>
-          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-            <div className="font-semibold">Deployment: {deployment?.mode_label || 'Cliente interno'}</div>
-            <div>{deployment?.document_label || 'Liquidacion interna'} hacia {deployment?.target_label || 'Area / centro de costo'}</div>
-            <div className="mt-1 text-xs text-blue-700">Factura digital: preparada para version 2</div>
+          <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm">
+            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Modo</div>
+            <div className="mt-0.5 font-semibold text-gray-900">{deployment?.mode_label || 'Cliente interno'}</div>
+            <div className="text-xs text-gray-500">{deployment?.document_label || 'Liquidacion interna'} → {deployment?.target_label || 'Area / centro de costo'}</div>
           </div>
         </div>
       </div>

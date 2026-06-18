@@ -2038,18 +2038,20 @@ export default function Printers() {
                     {/* Tags */}
                     <div className="flex flex-wrap gap-1.5">
                       <span className={`px-2 py-0.5 rounded text-xs font-medium border ${
-                        printer.is_color ? 'border-violet-200 text-violet-600' : 'border-gray-200 text-gray-500'
+                        printer.is_color
+                          ? 'border-violet-200 text-violet-600 dark:border-violet-700 dark:text-violet-300'
+                          : 'border-gray-200 text-gray-500 dark:border-gray-600 dark:text-gray-300'
                       }`}>
                         {printer.is_color ? 'Color' : 'B&W'}
                       </span>
-                      <span className="px-2 py-0.5 rounded text-xs font-medium border border-gray-200 text-gray-500 capitalize">
+                      <span className="px-2 py-0.5 rounded text-xs font-medium border border-gray-200 text-gray-500 capitalize dark:border-gray-600 dark:text-gray-300">
                         {printer.printer_type}
                       </span>
                       {printer.network_capable && (
-                        <span className="px-2 py-0.5 rounded text-xs font-medium border border-gray-200 text-gray-500">Red</span>
+                        <span className="px-2 py-0.5 rounded text-xs font-medium border border-gray-200 text-gray-500 dark:border-gray-600 dark:text-gray-300">Red</span>
                       )}
                       {printer.duplex_capable && (
-                        <span className="px-2 py-0.5 rounded text-xs font-medium border border-gray-200 text-gray-500">Duplex</span>
+                        <span className="px-2 py-0.5 rounded text-xs font-medium border border-gray-200 text-gray-500 dark:border-gray-600 dark:text-gray-300">Duplex</span>
                       )}
                     </div>
                   </div>
@@ -2082,7 +2084,7 @@ export default function Printers() {
                       </svg>
                     </button>
                     <button
-                      className="p-1.5 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+                      className="p-1.5 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
                       title="Herramientas"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -2375,7 +2377,7 @@ export default function Printers() {
                                 setToolsPrinter(printer)
                                 setShowToolsModal(true)
                               }}
-                              className="p-1 text-gray-400 hover:text-gray-700 transition-colors rounded"
+                              className="p-1 text-gray-400 hover:text-gray-700 transition-colors rounded dark:text-gray-300 dark:hover:text-gray-100"
                               title="Herramientas"
                             >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -3194,21 +3196,23 @@ export default function Printers() {
                   {/* Tags */}
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                      selectedPrinter.is_color ? 'bg-violet-50 text-violet-600' : 'bg-gray-100 text-gray-500'
+                      selectedPrinter.is_color
+                        ? 'bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-300'
+                        : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-300'
                     }`}>
                       {selectedPrinter.is_color ? 'Color' : 'B&W'}
                     </span>
-                    <span className="px-2.5 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-medium">
+                    <span className="px-2.5 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-medium dark:bg-blue-900/30 dark:text-blue-300">
                       {selectedPrinter.printer_type}
                     </span>
                     {selectedPrinter.duplex_capable && (
-                      <span className="px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-medium">Duplex</span>
+                      <span className="px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-medium dark:bg-emerald-900/30 dark:text-emerald-300">Duplex</span>
                     )}
                     {selectedPrinter.network_capable && (
-                      <span className="px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-medium">Red</span>
+                      <span className="px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-medium dark:bg-indigo-900/30 dark:text-indigo-300">Red</span>
                     )}
                     {selectedPrinter.wireless_capable && (
-                      <span className="px-2.5 py-1 bg-amber-50 text-amber-600 rounded-full text-xs font-medium">WiFi</span>
+                      <span className="px-2.5 py-1 bg-amber-50 text-amber-600 rounded-full text-xs font-medium dark:bg-amber-900/30 dark:text-amber-300">WiFi</span>
                     )}
                   </div>
                 </div>
@@ -3238,7 +3242,7 @@ export default function Printers() {
           {/* Tools Modal */}
           {showToolsModal && toolsPrinter && (
             <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
-              <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto animate-fadeIn">
+              <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto animate-fadeIn dark:bg-gray-800 dark:border dark:border-gray-700">
                 <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-green-500 to-green-600">
                   <div className="flex justify-between items-center">
                     <div>
@@ -3261,12 +3265,12 @@ export default function Printers() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     
                     {/* Acceso Web */}
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition-colors">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition-colors dark:bg-blue-900/20 dark:border-blue-800 dark:hover:bg-blue-900/35">
                       <div className="flex items-center mb-3">
                         <span className="text-2xl mr-3">🌐</span>
-                        <h3 className="font-semibold text-blue-900">Acceso Web</h3>
+                        <h3 className="font-semibold text-blue-900 dark:text-blue-200">Acceso Web</h3>
                       </div>
-                      <p className="text-sm text-blue-700 mb-4">Acceder al panel de administración web de la impresora</p>
+                      <p className="text-sm text-blue-700 mb-4 dark:text-blue-300">Acceder al panel de administración web de la impresora</p>
                       <button
                         onClick={() => window.open(`http://${toolsPrinter.ip}`, '_blank')}
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md text-sm font-medium transition-colors"
@@ -3276,12 +3280,12 @@ export default function Printers() {
                     </div>
 
                     {/* Test de Conectividad */}
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 hover:bg-green-100 transition-colors">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 hover:bg-green-100 transition-colors dark:bg-green-900/20 dark:border-green-800 dark:hover:bg-green-900/35">
                       <div className="flex items-center mb-3">
                         <span className="text-2xl mr-3">🔌</span>
-                        <h3 className="font-semibold text-green-900">Test de Conectividad</h3>
+                        <h3 className="font-semibold text-green-900 dark:text-green-200">Test de Conectividad</h3>
                       </div>
-                      <p className="text-sm text-green-700 mb-4">Verificar conectividad de red y respuesta SNMP</p>
+                      <p className="text-sm text-green-700 mb-4 dark:text-green-300">Verificar conectividad de red y respuesta SNMP</p>
                       <button
                         onClick={() => handleConnectivityTest(toolsPrinter)}
                         disabled={toolsLoading[`connectivity-${toolsPrinter.id}`]}
@@ -3292,12 +3296,12 @@ export default function Printers() {
                     </div>
 
                     {/* Estado y Contadores */}
-                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 hover:bg-purple-100 transition-colors">
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 hover:bg-purple-100 transition-colors dark:bg-purple-900/20 dark:border-purple-800 dark:hover:bg-purple-900/35">
                       <div className="flex items-center mb-3">
                         <span className="text-2xl mr-3">📊</span>
-                        <h3 className="font-semibold text-purple-900">Estado y Contadores</h3>
+                        <h3 className="font-semibold text-purple-900 dark:text-purple-200">Estado y Contadores</h3>
                       </div>
-                      <p className="text-sm text-purple-700 mb-4">Consultar estado actual y contadores de páginas</p>
+                      <p className="text-sm text-purple-700 mb-4 dark:text-purple-300">Consultar estado actual y contadores de páginas</p>
                       <button
                         onClick={() => handleStatusCheck(toolsPrinter)}
                         disabled={toolsLoading[`status-${toolsPrinter.id}`]}
@@ -3308,12 +3312,12 @@ export default function Printers() {
                     </div>
 
                     {/* Información de Tóner */}
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 hover:bg-yellow-100 transition-colors">
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 hover:bg-yellow-100 transition-colors dark:bg-yellow-900/20 dark:border-yellow-700 dark:hover:bg-yellow-900/35">
                       <div className="flex items-center mb-3">
                         <span className="text-2xl mr-3">🖨️</span>
-                        <h3 className="font-semibold text-yellow-900">Información de Tóner</h3>
+                        <h3 className="font-semibold text-yellow-900 dark:text-yellow-200">Información de Tóner</h3>
                       </div>
-                      <p className="text-sm text-yellow-700 mb-4">Verificar niveles de tóner y suministros</p>
+                      <p className="text-sm text-yellow-700 mb-4 dark:text-yellow-300">Verificar niveles de tóner y suministros</p>
                       <button
                         onClick={() => handleTonerCheck(toolsPrinter)}
                         disabled={toolsLoading[`toner-${toolsPrinter.id}`]}
@@ -3324,12 +3328,12 @@ export default function Printers() {
                     </div>
 
                     {/* Configuración SNMP */}
-                    <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 hover:bg-indigo-100 transition-colors">
+                    <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 hover:bg-indigo-100 transition-colors dark:bg-indigo-900/20 dark:border-indigo-700 dark:hover:bg-indigo-900/35">
                       <div className="flex items-center mb-3">
                         <span className="text-2xl mr-3">⚙️</span>
-                        <h3 className="font-semibold text-indigo-900">Configuración SNMP</h3>
+                        <h3 className="font-semibold text-indigo-900 dark:text-indigo-200">Configuración SNMP</h3>
                       </div>
-                      <p className="text-sm text-indigo-700 mb-4">Probar y configurar parámetros SNMP</p>
+                      <p className="text-sm text-indigo-700 mb-4 dark:text-indigo-300">Probar y configurar parámetros SNMP</p>
                       <button
                         onClick={() => handleSnmpConfig(toolsPrinter)}
                         disabled={toolsLoading[`snmp-${toolsPrinter.id}`]}
@@ -3340,12 +3344,12 @@ export default function Printers() {
                     </div>
 
                     {/* Página de Prueba */}
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 hover:bg-red-100 transition-colors">
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 hover:bg-red-100 transition-colors dark:bg-red-900/20 dark:border-red-800 dark:hover:bg-red-900/35">
                       <div className="flex items-center mb-3">
                         <span className="text-2xl mr-3">📄</span>
-                        <h3 className="font-semibold text-red-900">Página de Prueba</h3>
+                        <h3 className="font-semibold text-red-900 dark:text-red-200">Página de Prueba</h3>
                       </div>
-                      <p className="text-sm text-red-700 mb-4">Enviar página de prueba para verificar funcionamiento</p>
+                      <p className="text-sm text-red-700 mb-4 dark:text-red-300">Enviar página de prueba para verificar funcionamiento</p>
                       <button
                         onClick={() => handleTestPrint(toolsPrinter)}
                         disabled={toolsLoading[`testprint-${toolsPrinter.id}`]}
@@ -3363,7 +3367,7 @@ export default function Printers() {
                         setShowToolsModal(false)
                         setToolsPrinter(null)
                       }}
-                      className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                      className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-100"
                     >
                       Cerrar
                     </button>
