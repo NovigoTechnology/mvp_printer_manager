@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
 from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -15,6 +15,7 @@ from ..db import get_db
 from ..models import MonthlyCounter, Printer, CounterLocationExportHistory
 from ..services.snmp import SNMPService
 from ..services.export_service import ExportService
+from ..services.location_counter_sync import sync_location_segments_for_printer_month
 
 router = APIRouter()
 
@@ -84,6 +85,48 @@ class LocationExportHistoryResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+class ConsolidatedExportRequest(BaseModel):
+    counter_ids: List[int]
+
+
+class ConsolidatedExportRow(BaseModel):
+    asset_tag: str
+    marca: str
+    modelo: str
+    ip: str
+    ubicacion: str
+    year: int
+    month: int
+    month_name: str
+    previous_counter_bw: int
+    previous_counter_color: int
+    previous_counter_total: int
+    current_counter_bw: int
+    current_counter_color: int
+    current_counter_total: int
+    total_pages_bw: int
+    total_pages_color: int
+    total_pages: int
+    readings_count: int
+    last_reading_date: Optional[str] = None
+
+
+MONTH_NAMES_ES = {
+    1: "Enero",
+    2: "Febrero",
+    3: "Marzo",
+    4: "Abril",
+    5: "Mayo",
+    6: "Junio",
+    7: "Julio",
+    8: "Agosto",
+    9: "Septiembre",
+    10: "Octubre",
+    11: "Noviembre",
+    12: "Diciembre",
+}
+
 def calculate_pages_printed(current: int, previous: int) -> int:
     """Calculate pages printed, ensuring non-negative result"""
     return max(0, current - previous)
@@ -99,6 +142,76 @@ def get_previous_counter(db: Session, printer_id: int, exclude_counter_id: int =
         query = query.filter(MonthlyCounter.id != exclude_counter_id)
     
     return query.order_by(MonthlyCounter.recorded_at.desc()).first()
+
+
+@router.post("/export/consolidated-data", response_model=List[ConsolidatedExportRow])
+def get_consolidated_export_data(
+    payload: ConsolidatedExportRequest = Body(...),
+    db: Session = Depends(get_db),
+):
+    """Return consolidated monthly counter rows by printer and period for export."""
+
+    if not payload.counter_ids:
+        return []
+
+    counters = (
+        db.query(MonthlyCounter)
+        .filter(MonthlyCounter.id.in_(payload.counter_ids))
+        .all()
+    )
+
+    if not counters:
+        return []
+
+    grouped: Dict[str, List[MonthlyCounter]] = {}
+    for row in counters:
+        key = f"{row.printer_id}-{row.year}-{row.month}"
+        grouped.setdefault(key, []).append(row)
+
+    result: List[ConsolidatedExportRow] = []
+    for group_rows in grouped.values():
+        ordered = sorted(
+            group_rows,
+            key=lambda x: x.recorded_at or x.created_at,
+        )
+
+        first = ordered[0]
+        last = ordered[-1]
+        printer = db.query(Printer).filter(Printer.id == last.printer_id).first()
+
+        if not printer:
+            continue
+
+        total_bw = sum(item.pages_printed_bw or 0 for item in ordered)
+        total_color = sum(item.pages_printed_color or 0 for item in ordered)
+        total_pages = sum(item.pages_printed_total or 0 for item in ordered)
+
+        result.append(
+            ConsolidatedExportRow(
+                asset_tag=printer.asset_tag or "",
+                marca=printer.brand,
+                modelo=printer.model,
+                ip=printer.ip,
+                ubicacion=printer.location or "",
+                year=last.year,
+                month=last.month,
+                month_name=MONTH_NAMES_ES.get(last.month, str(last.month)),
+                previous_counter_bw=first.previous_counter_bw or 0,
+                previous_counter_color=first.previous_counter_color or 0,
+                previous_counter_total=first.previous_counter_total or 0,
+                current_counter_bw=last.counter_bw or 0,
+                current_counter_color=last.counter_color or 0,
+                current_counter_total=last.counter_total or 0,
+                total_pages_bw=total_bw,
+                total_pages_color=total_color,
+                total_pages=total_pages,
+                readings_count=len(ordered),
+                last_reading_date=(last.recorded_at or last.created_at).strftime("%d/%m/%Y") if (last.recorded_at or last.created_at) else None,
+            )
+        )
+
+    result.sort(key=lambda x: (x.year, x.month, x.asset_tag), reverse=True)
+    return result
 
 @router.get("/", response_model=List[MonthlyCounterResponse])
 def get_monthly_counters(
@@ -215,6 +328,7 @@ def create_monthly_counter(counter: MonthlyCounterCreate, db: Session = Depends(
         db_counter.recorded_at = counter.recorded_at
     
     db.add(db_counter)
+    sync_location_segments_for_printer_month(db, counter.printer_id, counter.year, counter.month)
     db.commit()
     db.refresh(db_counter)
     
@@ -296,6 +410,7 @@ def update_monthly_counter(
     db_counter.pages_printed_total = pages_total
     db_counter.notes = counter_update.notes
     
+    sync_location_segments_for_printer_month(db, db_counter.printer_id, db_counter.year, db_counter.month)
     db.commit()
     db.refresh(db_counter)
     
@@ -338,8 +453,13 @@ def delete_monthly_counter(counter_id: int, db: Session = Depends(get_db)):
     db_counter = db.query(MonthlyCounter).filter(MonthlyCounter.id == counter_id).first()
     if not db_counter:
         raise HTTPException(status_code=404, detail="Counter record not found")
+
+    target_printer = db_counter.printer_id
+    target_year = db_counter.year
+    target_month = db_counter.month
     
     db.delete(db_counter)
+    sync_location_segments_for_printer_month(db, target_printer, target_year, target_month)
     db.commit()
     
     return {"message": "Counter record deleted successfully"}

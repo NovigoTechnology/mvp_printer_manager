@@ -286,23 +286,6 @@ export default function Inventory() {
     return () => clearTimeout(timeoutId)
   }, [searchTerm, statusFilter, conditionFilter, supplierFilter])
 
-  // Manejo del scroll hint
-  useEffect(() => {
-    const scrollContainer = document.querySelector('.overflow-x-auto')
-    if (!scrollContainer) return
-
-    const handleScroll = () => {
-      if (scrollContainer.scrollLeft > 10) {
-        scrollContainer.classList.add('scrolled')
-      } else {
-        scrollContainer.classList.remove('scrolled')
-      }
-    }
-
-    scrollContainer.addEventListener('scroll', handleScroll)
-    return () => scrollContainer.removeEventListener('scroll', handleScroll)
-  }, [])
-
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'active': return 'bg-green-100 text-green-800'
@@ -590,18 +573,22 @@ export default function Inventory() {
 
       if (sortDirection === 'asc') {
         return aValue < bValue ? -1 : aValue > bValue ? 1 : 0
-      } else {
-        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0
       }
+
+      return aValue > bValue ? -1 : aValue < bValue ? 1 : 0
     })
   }
 
   // Función para alternar visibilidad de columnas
   const toggleColumn = (columnKey: string) => {
-    setVisibleColumns(prev => ({
-      ...prev,
-      [columnKey]: !prev[columnKey as keyof typeof prev]
-    }))
+    setVisibleColumns((prev) => {
+      const next = { ...prev }
+      if (columnKey in next) {
+        const key = columnKey as keyof typeof next
+        next[key] = !next[key]
+      }
+      return next
+    })
   }
 
   if (loading) {
@@ -609,22 +596,17 @@ export default function Inventory() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
-          <p className="mt-4 text-gray-600">Loading inventory...</p>
+          <p className="mt-4 text-gray-600">Cargando inventario...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="w-full mx-auto py-3 px-4 sm:px-6 lg:px-8">
-      <div className="sm:px-0">
-        {/* Stats Cards */}
-        {stats && (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-4">
-            <div className="bg-white border border-gray-100 rounded-lg p-4 shadow-sm">
-              <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Total</p>
-              <p className="text-2xl font-semibold text-gray-800">{stats.total_printers}</p>
-            </div>
+    <div className="space-y-6">
+      {/* Stats */}
+      {stats && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white border border-gray-100 rounded-lg p-4 shadow-sm">
               <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Activas</p>
               <p className="text-2xl font-semibold text-emerald-600">
@@ -642,7 +624,7 @@ export default function Inventory() {
               <p className="text-2xl font-semibold text-rose-500">{stats.warranties_expiring_soon}</p>
             </div>
           </div>
-        )}
+      )}
 
         {/* Search and Filters */}
         <div className="bg-white border border-gray-100 rounded-lg p-3 mb-4 shadow-sm">
@@ -868,9 +850,7 @@ export default function Inventory() {
             </div>
           </div>
 
-          <div className="overflow-x-auto shadow-scroll relative">
-            {/* Hint de scroll */}
-            <div className="scroll-hint"></div>
+          <div className="overflow-x-auto relative">
             
             <table className="min-w-full divide-y divide-gray-200 inventory-table"
 >
@@ -3084,7 +3064,6 @@ export default function Inventory() {
             </div>
           </div>
         )}
-      </div>
       </div>
     </div>
   )

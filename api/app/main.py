@@ -14,6 +14,7 @@ import logging
 from .config import settings
 from .db import engine, Base, get_db
 from .routers import auth, printers, incidents, reports, counters, contracts, toner_requests, stock, discovery_configs, billing, exchange_rates, companies, cost_centers, settings as settings_router
+from .routers import location_movements
 from .workers.polling import start_scheduler
 
 # Configure logging
@@ -112,6 +113,10 @@ app.include_router(medical_refills.router, prefix="/medical-printers", tags=["me
 # Import and include alerts router
 from .routers import alerts
 app.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
+
+# Import and include location_movements router
+from .routers import location_movements
+app.include_router(location_movements.router, prefix="/location-movements", tags=["location-movements"])
 
 @app.get("/")
 async def root():

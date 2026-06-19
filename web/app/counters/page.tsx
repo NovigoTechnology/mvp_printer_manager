@@ -108,7 +108,12 @@ export default function Counters() {
     running_jobs: [],
     recent_jobs: []
   })
-  
+
+  // Location Counters related state
+  const [activeMainTab, setActiveMainTab] = useState<'general' | 'location'>('general')
+  const [locationCounters, setLocationCounters] = useState<any[]>([])
+  const [locationLoading, setLocationLoading] = useState(false)
+
   // Estados para la ventana de sincronización
   const [showSyncModal, setShowSyncModal] = useState(false)
   const [syncOption, setSyncOption] = useState<'all' | 'contract' | 'selected'>('all')
@@ -122,7 +127,7 @@ export default function Counters() {
     status: 'preparing' | 'running' | 'completed' | 'error'
     logs: string[]
   } | null>(null)
-  
+
   // Estados para exportación
   const [showExportModal, setShowExportModal] = useState(false)
 
@@ -130,32 +135,63 @@ export default function Counters() {
   const [sortField, setSortField] = useState<string>('')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
-  // Función para exportar datos filtrados
-  const exportFilteredData = (format: 'excel' | 'pdf') => {
-    const filteredData = sortedAndFilteredCounters.map(counter => ({
-      'Asset Tag': counter.printer.asset_tag || '',
-      'Marca': counter.printer.brand,
-      'Modelo': counter.printer.model,
-      'IP': counter.printer.ip,
-      'Ubicación': counter.printer.location || '',
-      'Año': counter.year,
-      'Mes': getMonthName(counter.month),
-      'Contador B/N': counter.counter_bw,
-      'Contador Color': counter.counter_color,
-      'Contador Total': counter.counter_total,
-      'Páginas B/N': counter.pages_printed_bw,
-      'Páginas Color': counter.pages_printed_color,
-      'Páginas Total': counter.pages_printed_total,
-      'Fecha Registro': new Date(counter.recorded_at).toLocaleDateString('es-ES'),
-      'Notas': counter.notes || ''
-    }))
+  const fetchConsolidatedExportData = async () => {
+    const counterIds = sortedAndFilteredCounters.map(counter => counter.id)
 
-    if (format === 'excel') {
-      exportToExcel(filteredData)
-    } else {
-      exportToPDF(filteredData)
+    if (counterIds.length === 0) {
+      return []
     }
-    setShowExportModal(false)
+
+    const response = await fetch(`${API_BASE}/counters/export/consolidated-data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ counter_ids: counterIds })
+    })
+
+    if (!response.ok) {
+      throw new Error('No se pudo obtener la data consolidada para exportación')
+    }
+
+    const rows = await response.json()
+    return rows.map((row: any) => ({
+      'Asset Tag': row.asset_tag || '',
+      'Marca': row.marca,
+      'Modelo': row.modelo,
+      'IP': row.ip,
+      'Ubicación': row.ubicacion || '',
+      'Año': row.year,
+      'Mes': row.month_name,
+      'Últ. Contador Ant. B/N': row.previous_counter_bw,
+      'Últ. Contador Ant. Color': row.previous_counter_color,
+      'Últ. Contador Ant. Total': row.previous_counter_total,
+      'Contador Actual B/N': row.current_counter_bw,
+      'Contador Actual Color': row.current_counter_color,
+      'Contador Actual Total': row.current_counter_total,
+      'Total Impresiones B/N': row.total_pages_bw,
+      'Total Impresiones Color': row.total_pages_color,
+      'Total Impresiones': row.total_pages,
+      'Cantidad Tomas': row.readings_count,
+      'Fecha Última Toma': row.last_reading_date || ''
+    }))
+  }
+
+  // Función para exportar datos filtrados
+  const exportFilteredData = async (format: 'excel' | 'pdf') => {
+    try {
+      const consolidatedData = await fetchConsolidatedExportData()
+
+      if (format === 'excel') {
+        exportToExcel(consolidatedData)
+      } else {
+        exportToPDF(consolidatedData)
+      }
+      setShowExportModal(false)
+    } catch (error) {
+      console.error('Error preparando exportación consolidada:', error)
+      alert('No se pudo generar la exportación consolidada')
+    }
   }
 
   // Función para exportar a Excel
@@ -165,7 +201,7 @@ export default function Counters() {
       const headers = Object.keys(data[0] || {})
       const csvContent = [
         headers.join(','),
-        ...data.map(row => 
+        ...data.map(row =>
           headers.map(header => {
             const value = row[header]
             // Escapar comillas y envolver en comillas si contiene comas
@@ -179,7 +215,7 @@ export default function Counters() {
       const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
       const link = document.createElement('a')
       link.href = URL.createObjectURL(blob)
-      
+
       const filters = []
       if (selectedPrinter > 0) {
         const printer = printers.find(p => p.id === selectedPrinter)
@@ -188,7 +224,7 @@ export default function Counters() {
       if (selectedSupplier) filters.push(selectedSupplier)
       if (selectedMonth > 0) filters.push(getMonthName(selectedMonth))
       filters.push(selectedYear.toString())
-      
+
       const filename = `contadores_${filters.join('_').replace(/[^a-zA-Z0-9_-]/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`
       link.download = filename
       link.click()
@@ -247,7 +283,7 @@ export default function Counters() {
               </tr>
             </thead>
             <tbody>
-              ${data.map(row => 
+              ${data.map(row =>
                 `<tr>
                   ${headers.map(header => `<td>${row[header] || ''}</td>`).join('')}
                 </tr>`
@@ -275,10 +311,10 @@ export default function Counters() {
       alert('Error al exportar a PDF')
     }
   }
-  
+
   const [lastCounters, setLastCounters] = useState<{
-    counter_bw: number, 
-    counter_color: number, 
+    counter_bw: number,
+    counter_color: number,
     counter_total: number,
     year: number,
     month: number
@@ -321,6 +357,30 @@ export default function Counters() {
     return () => clearInterval(interval)
   }, [])
 
+  // Load location counters when tab is active or filters change
+  useEffect(() => {
+    if (activeMainTab === 'location' && selectedYear && selectedMonth) {
+      fetchLocationCounters()
+    }
+  }, [activeMainTab, selectedYear, selectedMonth])
+
+  const fetchLocationCounters = async () => {
+    try {
+      setLocationLoading(true)
+      const response = await fetch(
+        `${API_BASE}/location-movements/location-summary?year=${selectedYear}&month=${selectedMonth}`
+      )
+      if (response.ok) {
+        const data = await response.json()
+        setLocationCounters(data)
+      }
+    } catch (error) {
+      console.error('Error fetching location counters:', error)
+    } finally {
+      setLocationLoading(false)
+    }
+  }
+
   const fetchAvailableContracts = async () => {
     try {
       const response = await fetch(`${API_BASE}/contracts/`)
@@ -361,7 +421,7 @@ export default function Counters() {
     try {
       console.log('🔄 fetchData iniciado con:', { selectedYear, selectedMonth })
       setLoading(true)
-      
+
       // Fetch counters for selected month/year
       let countersUrl = `${API_BASE}/counters?year=${selectedYear}`
       if (selectedMonth > 0) {
@@ -390,20 +450,20 @@ export default function Counters() {
     try {
       console.log('🔄 Forzando actualización de datos después de sincronización...')
       setLoading(true)
-      
+
       // Limpiar datos actuales para forzar re-render
       setCounters([])
-      
+
       // Pequeño delay para asegurar que el estado se limpie
       await new Promise(resolve => setTimeout(resolve, 500))
-      
+
       // Recargar datos con timestamp para evitar cache
       const timestamp = new Date().getTime()
       let countersUrl = `${API_BASE}/counters?year=${selectedYear}&_t=${timestamp}`
       if (selectedMonth > 0) {
         countersUrl += `&month=${selectedMonth}`
       }
-      
+
       console.log(`📡 Cargando contadores desde: ${countersUrl}`)
       const countersResponse = await fetch(countersUrl, {
         cache: 'no-cache',
@@ -422,7 +482,7 @@ export default function Counters() {
       })
       const printersData = await printersResponse.json()
       setPrinters(printersData)
-      
+
     } catch (error) {
       console.error('Error en actualización forzada:', error)
     } finally {
@@ -433,11 +493,11 @@ export default function Counters() {
   const fetchComparisonData = async () => {
     try {
       setLoading(true)
-      
+
       const currentDate = new Date()
       const currentYear = currentDate.getFullYear()
       const currentMonth = currentDate.getMonth() + 1
-      
+
       // Calculate previous month
       let prevMonth = currentMonth - 1
       let prevYear = currentYear
@@ -467,7 +527,7 @@ export default function Counters() {
       const comparisonData = activePrinters.map((printer: any) => {
         const currentCounter = currentCounters.find((c: any) => c.printer_id === printer.id)
         const prevCounter = prevCounters.find((c: any) => c.printer_id === printer.id)
-        
+
         return {
           printer,
           currentMonth: {
@@ -498,7 +558,7 @@ export default function Counters() {
       // Get last month's data for the same printer
       const response = await fetch(`${API_BASE}/counters?printer_id=${printerId}`)
       const data = await response.json()
-      
+
       // Find the most recent counter for this printer (excluding current month if provided)
       const printerCounters = data
         .filter((counter: MonthlyCounter) => {
@@ -544,7 +604,7 @@ export default function Counters() {
 
   const handleSubmit = async (e: any) => {
     e.preventDefault()
-    
+
     try {
       let dataToSend
 
@@ -589,13 +649,13 @@ export default function Counters() {
           ...(manualFormData.recorded_at && { recorded_at: manualFormData.recorded_at })
         }
       }
-      
-      const url = editingCounter 
+
+      const url = editingCounter
         ? `${API_BASE}/counters/${editingCounter.id}`
         : `${API_BASE}/counters`
-      
+
       const method = editingCounter ? 'PUT' : 'POST'
-      
+
       const response = await fetch(url, {
         method,
         headers: {
@@ -625,12 +685,12 @@ export default function Counters() {
       alert('Counter record not found.')
       return
     }
-    
+
     if (currentCounter.locked) {
       alert('This counter record is locked. Unlock it first to edit.')
       return
     }
-    
+
     setEditingCounter(currentCounter)
     setFormData({
       printer_id: currentCounter.printer_id,
@@ -674,14 +734,14 @@ export default function Counters() {
       if (response.ok) {
         // Get the updated counter data from the response
         const updatedCounter = await response.json()
-        
+
         // Update the local state immediately
-        setCounters(prevCounters => 
-          prevCounters.map(counter => 
+        setCounters(prevCounters =>
+          prevCounters.map(counter =>
             counter.id === id ? updatedCounter : counter
           )
         )
-        
+
         console.log('Lock status toggled successfully', updatedCounter)
       } else {
         const errorData = await response.json()
@@ -726,7 +786,7 @@ export default function Counters() {
       alert('Hay una tarea automatica de toma de contadores en ejecucion. Espere a que termine.')
       return
     }
-    
+
     setCollectingCounters(true)
     setSyncProgress({
       current: 0,
@@ -735,7 +795,7 @@ export default function Counters() {
       status: 'preparing',
       logs: ['Iniciando sincronización...']
     })
-    
+
     try {
       // Construir query parameters basado en la opción seleccionada
       const params = new URLSearchParams()
@@ -745,32 +805,32 @@ export default function Counters() {
       if (selectedMonth !== 0) {
         params.append('month', selectedMonth.toString())
       }
-      
+
       // Agregar filtros según la opción seleccionada
       if (syncOption === 'contract' && selectedContract) {
         params.append('lease_contract', selectedContract)
       } else if (syncOption === 'selected' && selectedPrinters.length > 0) {
         params.append('printer_ids', selectedPrinters.join(','))
       }
-      
+
       setSyncProgress(prev => ({
         ...prev!,
         status: 'running',
         logs: [...prev!.logs, `Enviando solicitud a ${syncOption === 'all' ? 'todas las impresoras' : syncOption === 'contract' ? 'impresoras del contrato ' + selectedContract : selectedPrinters.length + ' impresoras seleccionadas'}...`]
       }))
-      
+
       const url = `${API_BASE}/counter-collection/collect${params.toString() ? '?' + params.toString() : ''}`
-      
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         }
       })
-      
+
       if (response.ok) {
         const result = await response.json()
-        
+
         setSyncProgress(prev => ({
           ...prev!,
           status: 'completed',
@@ -778,7 +838,7 @@ export default function Counters() {
           total: result.printers_processed,
           currentPrinter: 'Completado',
           logs: [
-            ...prev!.logs, 
+            ...prev!.logs,
             `✅ Sincronización completada`,
             `📊 Impresoras procesadas: ${result.printers_processed}`,
             `✅ Exitosas: ${result.printers_successful}`,
@@ -787,13 +847,13 @@ export default function Counters() {
             `🔄 Contadores actualizados: ${result.counters_updated}`
           ]
         }))
-        
+
         // Guardar el resultado para mostrarlo en el modal
         setLastCollectionResult(result)
-        
+
         // Guardar en el historial
         await saveExecutionToHistory(result)
-        
+
         // Esperar un momento antes de actualizar los datos para asegurar que la BD se actualice
         setTimeout(async () => {
           console.log('🔄 Iniciando actualización de datos post-sincronización...')
@@ -802,14 +862,14 @@ export default function Counters() {
           if (viewMode === 'table') {
             await fetchComparisonData()
           }
-          
+
           console.log('✅ Actualización completada, mostrando resultados...')
           // Mostrar modal de resultados después de actualizar
           setShowSyncModal(false)
           setShowResultsModal(true)
           setSyncProgress(null)
         }, 3000)  // Aumentar a 3 segundos para asegurar que la BD se actualice
-        
+
       } else {
         const errorData = await response.json()
         setSyncProgress(prev => ({
@@ -817,7 +877,7 @@ export default function Counters() {
           status: 'error',
           logs: [...prev!.logs, `❌ Error: ${errorData.detail || 'Error desconocido'}`]
         }))
-        
+
         const errorResult = {
           success: false,
           message: errorData.detail || 'Error desconocido',
@@ -830,17 +890,17 @@ export default function Counters() {
           execution_time: 0,
           results: []
         }
-        
+
         await saveExecutionToHistory(errorResult)
       }
-      
+
     } catch (error) {
       setSyncProgress(prev => ({
         ...prev!,
         status: 'error',
         logs: [...prev!.logs, `❌ Error de conexión: ${error}`]
       }))
-      
+
       const errorResult = {
         success: false,
         message: `Error de conexión: ${error}`,
@@ -853,7 +913,7 @@ export default function Counters() {
         execution_time: 0,
         results: []
       }
-      
+
       await saveExecutionToHistory(errorResult)
     } finally {
       setCollectingCounters(false)
@@ -884,7 +944,7 @@ export default function Counters() {
         },
         body: JSON.stringify(historyEntry)
       })
-      
+
       if (!response.ok) {
         console.error('Failed to save execution to history')
       }
@@ -940,7 +1000,7 @@ export default function Counters() {
     if (selectedPrinter > 0 && counter.printer_id !== selectedPrinter) {
       return false
     }
-    
+
     // Filter by supplier
     if (selectedSupplier !== '') {
       const printer = printers.find(p => p.id === counter.printer_id)
@@ -948,7 +1008,7 @@ export default function Counters() {
         return false
       }
     }
-    
+
     // Filter by specific date
     if (selectedDate) {
       const counterDate = new Date(counter.recorded_at).toISOString().split('T')[0]
@@ -956,7 +1016,7 @@ export default function Counters() {
         return false
       }
     }
-    
+
     return true
   })
 
@@ -973,7 +1033,7 @@ export default function Counters() {
   // Función para obtener el valor ordenable de una fila
   const getSortValue = (counter: any, field: string) => {
     const printer = printers.find(p => p.id === counter.printer_id)
-    
+
     switch (field) {
       case 'printer':
         return `${printer?.brand || ''} ${printer?.model || ''}`.toLowerCase() || ''
@@ -1006,13 +1066,13 @@ export default function Counters() {
       if (sortField !== field) {
         return <span className="text-gray-400 ml-1">↕️</span>
       }
-      return sortDirection === 'asc' ? 
-        <span className="text-blue-600 ml-1">↑</span> : 
+      return sortDirection === 'asc' ?
+        <span className="text-blue-600 ml-1">↑</span> :
         <span className="text-blue-600 ml-1">↓</span>
     }
 
     return (
-      <th 
+      <th
         className="cursor-pointer hover:bg-gray-100 transition-colors"
         onClick={() => handleSort(field)}
       >
@@ -1027,21 +1087,21 @@ export default function Counters() {
   // Aplicar ordenamiento a los counters filtrados
   const sortedAndFilteredCounters = useMemo(() => {
     if (!sortField) return filteredCounters
-    
+
     return [...filteredCounters].sort((a, b) => {
       const aValue = getSortValue(a, sortField)
       const bValue = getSortValue(b, sortField)
-      
+
       if (typeof aValue === 'string' && typeof bValue === 'string') {
         const comparison = aValue.localeCompare(bValue)
         return sortDirection === 'asc' ? comparison : -comparison
       }
-      
+
       if (typeof aValue === 'number' && typeof bValue === 'number') {
         const comparison = aValue - bValue
         return sortDirection === 'asc' ? comparison : -comparison
       }
-      
+
       return 0
     })
   }, [filteredCounters, sortField, sortDirection, printers])
@@ -1094,9 +1154,42 @@ export default function Counters() {
           </a>
         </div>
 
-        {/* Controls */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-          <div className="p-4">
+        {/* Main Tab Navigation */}
+        <div className="mb-6 border-b border-gray-200">
+          <nav className="flex space-x-8" aria-label="Main tabs">
+            <button
+              onClick={() => setActiveMainTab('general')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeMainTab === 'general'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              General Counters
+            </button>
+            <button
+              onClick={() => {
+                setActiveMainTab('location')
+                if (selectedMonth === 0) {
+                  setSelectedMonth(new Date().getMonth() + 1)
+                }
+              }}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeMainTab === 'location'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Location Counters
+            </button>
+          </nav>
+        </div>
+
+        {/* General Counters Tab */}
+        {activeMainTab === 'general' && (
+          <>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+              <div className="p-4">
             <div className="flex flex-wrap items-center gap-3">
               {/* View Mode Selector */}
               <div className="flex items-center gap-2">
@@ -1224,7 +1317,7 @@ export default function Counters() {
                     </svg>
                     Add New Counter
                   </button>
-                  
+
                   <button
                     onClick={() => { setShowSyncModal(true); fetchAvailableContracts() }}
                     disabled={collectingCounters || autoRuntimeStatus.is_busy}
@@ -1248,7 +1341,7 @@ export default function Counters() {
                       </>
                     )}
                   </button>
-                  
+
                   <button
                     onClick={async () => {
                       await loadExecutionHistory()
@@ -1262,7 +1355,7 @@ export default function Counters() {
                     </svg>
                     Ver Historial
                   </button>
-                  
+
                   <button
                     onClick={forceRefreshData}
                     className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-md border border-gray-300 hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1274,7 +1367,7 @@ export default function Counters() {
                     </svg>
                     Actualizar
                   </button>
-                  
+
                   <button
                     onClick={() => setShowExportModal(true)}
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1286,7 +1379,7 @@ export default function Counters() {
                     </svg>
                     Exportar
                   </button>
-                  
+
                   <button
                     onClick={() => {
                       setSelectedPrinter(0)
@@ -1421,18 +1514,18 @@ export default function Counters() {
                       </span>
                     </td>
                     <td className="text-sm text-gray-600">
-                      <div 
-                        className="cursor-help" 
+                      <div
+                        className="cursor-help"
                         title={`Registrado: ${new Date(counter.recorded_at).toLocaleString('es-ES')}\nCreado: ${new Date(counter.created_at).toLocaleString('es-ES')}`}
                       >
                         <div className="font-medium">
                           {new Date(counter.recorded_at).toLocaleDateString('es-ES')}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {new Date(counter.recorded_at).toLocaleTimeString('es-ES', { 
-                            hour: '2-digit', 
+                          {new Date(counter.recorded_at).toLocaleTimeString('es-ES', {
+                            hour: '2-digit',
                             minute: '2-digit',
-                            hour12: false 
+                            hour12: false
                           })}
                         </div>
                         {counter.notes && (
@@ -1500,7 +1593,7 @@ export default function Counters() {
                       <option value={100}>100 por página</option>
                     </select>
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setCurrentPage(1)}
@@ -1518,7 +1611,7 @@ export default function Counters() {
                     >
                       ‹
                     </button>
-                    
+
                     <div className="flex items-center gap-1">
                       {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                         let pageNum
@@ -1531,7 +1624,7 @@ export default function Counters() {
                         } else {
                           pageNum = currentPage - 2 + i
                         }
-                        
+
                         return (
                           <button
                             key={pageNum}
@@ -1547,7 +1640,7 @@ export default function Counters() {
                         )
                       })}
                     </div>
-                    
+
                     <button
                       onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                       disabled={currentPage === totalPages}
@@ -1684,87 +1777,87 @@ export default function Counters() {
                           )}
                         </div>
                       </td>
-                      
+
                       {/* Current Month */}
                       <td className="text-center">
-                        {item.currentMonth.counter ? 
-                          item.currentMonth.counter.counter_bw.toLocaleString() : 
+                        {item.currentMonth.counter ?
+                          item.currentMonth.counter.counter_bw.toLocaleString() :
                           <span className="text-gray-400">-</span>
                         }
                       </td>
                       <td className="text-center">
-                        {item.currentMonth.counter ? 
-                          item.currentMonth.counter.counter_color.toLocaleString() : 
+                        {item.currentMonth.counter ?
+                          item.currentMonth.counter.counter_color.toLocaleString() :
                           <span className="text-gray-400">-</span>
                         }
                       </td>
                       <td className="text-center">
-                        {item.currentMonth.counter ? 
-                          item.currentMonth.counter.counter_total.toLocaleString() : 
+                        {item.currentMonth.counter ?
+                          item.currentMonth.counter.counter_total.toLocaleString() :
                           <span className="text-gray-400">-</span>
                         }
                       </td>
                       <td className="text-center border-r">
-                        {item.currentMonth.counter ? 
-                          (item.currentMonth.counter.pages_printed_bw + item.currentMonth.counter.pages_printed_color).toLocaleString() : 
+                        {item.currentMonth.counter ?
+                          (item.currentMonth.counter.pages_printed_bw + item.currentMonth.counter.pages_printed_color).toLocaleString() :
                           <span className="text-gray-400">-</span>
                         }
                       </td>
-                      
+
                       {/* Previous Month */}
                       <td className="text-center">
-                        {item.previousMonth.counter ? 
-                          item.previousMonth.counter.counter_bw.toLocaleString() : 
+                        {item.previousMonth.counter ?
+                          item.previousMonth.counter.counter_bw.toLocaleString() :
                           <span className="text-gray-400">-</span>
                         }
                       </td>
                       <td className="text-center">
-                        {item.previousMonth.counter ? 
-                          item.previousMonth.counter.counter_color.toLocaleString() : 
+                        {item.previousMonth.counter ?
+                          item.previousMonth.counter.counter_color.toLocaleString() :
                           <span className="text-gray-400">-</span>
                         }
                       </td>
                       <td className="text-center">
-                        {item.previousMonth.counter ? 
-                          item.previousMonth.counter.counter_total.toLocaleString() : 
+                        {item.previousMonth.counter ?
+                          item.previousMonth.counter.counter_total.toLocaleString() :
                           <span className="text-gray-400">-</span>
                         }
                       </td>
                       <td className="text-center border-r">
-                        {item.previousMonth.counter ? 
-                          (item.previousMonth.counter.pages_printed_bw + item.previousMonth.counter.pages_printed_color).toLocaleString() : 
+                        {item.previousMonth.counter ?
+                          (item.previousMonth.counter.pages_printed_bw + item.previousMonth.counter.pages_printed_color).toLocaleString() :
                           <span className="text-gray-400">-</span>
                         }
                       </td>
-                      
+
                       {/* Difference */}
                       <td className="text-center">
-                        {item.currentMonth.counter && item.previousMonth.counter ? 
+                        {item.currentMonth.counter && item.previousMonth.counter ?
                           <span className={`font-medium ${
                             (item.currentMonth.counter.counter_bw - item.previousMonth.counter.counter_bw) > 0 ? 'text-green-600' : 'text-gray-500'
                           }`}>
                             +{(item.currentMonth.counter.counter_bw - item.previousMonth.counter.counter_bw).toLocaleString()}
-                          </span> : 
+                          </span> :
                           <span className="text-gray-400">-</span>
                         }
                       </td>
                       <td className="text-center">
-                        {item.currentMonth.counter && item.previousMonth.counter ? 
+                        {item.currentMonth.counter && item.previousMonth.counter ?
                           <span className={`font-medium ${
                             (item.currentMonth.counter.counter_color - item.previousMonth.counter.counter_color) > 0 ? 'text-green-600' : 'text-gray-500'
                           }`}>
                             +{(item.currentMonth.counter.counter_color - item.previousMonth.counter.counter_color).toLocaleString()}
-                          </span> : 
+                          </span> :
                           <span className="text-gray-400">-</span>
                         }
                       </td>
                       <td className="text-center">
-                        {item.currentMonth.counter && item.previousMonth.counter ? 
+                        {item.currentMonth.counter && item.previousMonth.counter ?
                           <span className={`font-medium ${
                             (item.currentMonth.counter.counter_total - item.previousMonth.counter.counter_total) > 0 ? 'text-green-600' : 'text-gray-500'
                           }`}>
                             +{(item.currentMonth.counter.counter_total - item.previousMonth.counter.counter_total).toLocaleString()}
-                          </span> : 
+                          </span> :
                           <span className="text-gray-400">-</span>
                         }
                       </td>
@@ -1785,6 +1878,149 @@ export default function Counters() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+          </>
+        )}
+
+        {/* Location Counters Tab */}
+        {activeMainTab === 'location' && (
+          <div className="card">
+            <div className="card-header">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Location Counters for {getMonthName(selectedMonth)} {selectedYear}</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Pages consumed by location during this period
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-gray-700">Year</label>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                      className="rounded-md border-gray-300 shadow-sm text-sm py-1.5 px-3 focus:border-blue-500 focus:ring-blue-500"
+                    >
+                      {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-gray-700">Month</label>
+                    <select
+                      value={selectedMonth === 0 ? new Date().getMonth() + 1 : selectedMonth}
+                      onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                      className="rounded-md border-gray-300 shadow-sm text-sm py-1.5 px-3 focus:border-blue-500 focus:ring-blue-500"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+                        <option key={month} value={month}>{getMonthName(month)}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {locationLoading ? (
+              <div className="text-center py-12">
+                <div className="spinner w-12 h-12 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading location data...</p>
+              </div>
+            ) : locationCounters.length === 0 ? (
+              <div className="text-center py-12">
+                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No location data</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  No location counter segments available for {getMonthName(selectedMonth)} {selectedYear}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="border border-gray-300 px-4 py-2 text-left">Location</th>
+                      <th className="border border-gray-300 px-4 py-2 text-right">B&W Pages</th>
+                      <th className="border border-gray-300 px-4 py-2 text-right">Color Pages</th>
+                      <th className="border border-gray-300 px-4 py-2 text-right">Total Pages</th>
+                      <th className="border border-gray-300 px-4 py-2 text-center">Printers</th>
+                      <th className="border border-gray-300 px-4 py-2 text-center">Data Quality</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {locationCounters.map((location: any, index: number) => (
+                      <tr key={location.location} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                        <td className="border border-gray-300 px-4 py-2 font-medium">
+                          {location.location || 'Descubierto automaticamente'}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2 text-right">
+                          {(location.total_pages_bw || 0).toLocaleString()}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2 text-right">
+                          {(location.total_pages_color || 0).toLocaleString()}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2 text-right font-bold">
+                          {(location.total_pages || 0).toLocaleString()}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2 text-center">
+                          <span className="badge badge-info">{location.printers_count}</span>
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2 text-center">
+                          <div className="flex flex-wrap gap-1 justify-center">
+                            {Object.entries(location.data_quality_distribution || {}).map(([quality, count]: [string, any]) => (
+                              <span
+                                key={quality}
+                                className={`text-xs px-2 py-1 rounded ${
+                                  quality === 'real' ? 'bg-green-100 text-green-800' :
+                                  quality === 'estimated' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}
+                                title={`${quality}: ${count} segment(s)`}
+                              >
+                                {quality} ({count})
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Summary */}
+            {locationCounters.length > 0 && (
+              <div className="border-t bg-gray-50 px-6 py-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-center">
+                    <div className="text-sm font-medium text-gray-500">Total B&W Pages</div>
+                    <div className="text-2xl font-bold text-blue-600">
+                      {locationCounters.reduce((sum: number, l: any) => sum + (l.total_pages_bw || 0), 0).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm font-medium text-gray-500">Total Color Pages</div>
+                    <div className="text-2xl font-bold text-green-600">
+                      {locationCounters.reduce((sum: number, l: any) => sum + (l.total_pages_color || 0), 0).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm font-medium text-gray-500">Total Pages</div>
+                    <div className="text-2xl font-bold text-gray-800">
+                      {locationCounters.reduce((sum: number, l: any) => sum + (l.total_pages || 0), 0).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 text-center text-xs text-gray-500">
+                  Summary for {locationCounters.length} location(s) in {getMonthName(selectedMonth)} {selectedYear}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1988,7 +2224,7 @@ export default function Counters() {
                         placeholder="Si no se especifica, se usará la fecha actual"
                       />
                       <small className="text-gray-500 text-sm">
-                        Si no se especifica una fecha, se registrará con la fecha y hora actual. 
+                        Si no se especifica una fecha, se registrará con la fecha y hora actual.
                         Útil para cargar registros históricos.
                       </small>
                     </div>
@@ -2108,7 +2344,7 @@ export default function Counters() {
                         placeholder="Si no se especifica, se usará la fecha actual"
                       />
                       <small className="text-gray-500 text-sm">
-                        Si no se especifica una fecha, se registrará con la fecha y hora actual. 
+                        Si no se especifica una fecha, se registrará con la fecha y hora actual.
                         Útil para cargar registros históricos.
                       </small>
                     </div>
@@ -2148,10 +2384,10 @@ export default function Counters() {
                       onClick={handleSubmit}
                       className="btn btn-primary"
                     >
-                      {editingCounter 
-                        ? 'Update Counter' 
-                        : activeTab === 'counter' 
-                          ? 'Add Counter Reading' 
+                      {editingCounter
+                        ? 'Update Counter'
+                        : activeTab === 'counter'
+                          ? 'Add Counter Reading'
                           : 'Add Manual Entry'
                       }
                     </button>
@@ -2281,7 +2517,7 @@ export default function Counters() {
                            'Error'}
                         </span>
                       </div>
-                      
+
                       {syncProgress.total > 0 && (
                         <div className="mb-2">
                           <div className="flex justify-between text-sm mb-1">
@@ -2289,18 +2525,18 @@ export default function Counters() {
                             <span>{Math.round((syncProgress.current / syncProgress.total) * 100)}%</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div 
-                              className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                            <div
+                              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                               style={{width: `${(syncProgress.current / syncProgress.total) * 100}%`}}
                             ></div>
                           </div>
                         </div>
                       )}
-                      
+
                       <div className="text-sm text-gray-600 mb-2">
                         <strong>Estado actual:</strong> {syncProgress.currentPrinter}
                       </div>
-                      
+
                       <div className="max-h-32 overflow-y-auto">
                         <div className="text-xs space-y-1">
                           {syncProgress.logs.map((log, index) => (
@@ -2519,15 +2755,15 @@ export default function Counters() {
                               {record.printers_processed || 0}
                             </td>
                             <td className="border border-gray-300 px-4 py-2">
-                              {record.execution_duration_seconds 
-                                ? `${record.execution_duration_seconds.toFixed(2)}s` 
+                              {record.execution_duration_seconds
+                                ? `${record.execution_duration_seconds.toFixed(2)}s`
                                 : 'N/A'
                               }
                             </td>
                             <td className="border border-gray-300 px-4 py-2">
                               <span className={`px-2 py-1 rounded text-sm ${
-                                record.success 
-                                  ? 'bg-green-100 text-green-800' 
+                                record.success
+                                  ? 'bg-green-100 text-green-800'
                                   : 'bg-red-100 text-red-800'
                               }`}>
                                 {record.success ? 'Completado' : 'Fallido'}
@@ -2554,7 +2790,7 @@ export default function Counters() {
 
         {/* Export Modal */}
         {showExportModal && (
-          <div 
+          <div
             style={{
               position: 'fixed',
               top: 0,
@@ -2569,7 +2805,7 @@ export default function Counters() {
             }}
             onClick={() => setShowExportModal(false)}
           >
-            <div 
+            <div
               style={{
                 backgroundColor: 'white',
                 padding: '2rem',
@@ -2585,10 +2821,10 @@ export default function Counters() {
               <h3 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem', color: 'black' }}>
                 📥 Exportar Contadores
               </h3>
-              
+
               <div style={{ marginBottom: '1.5rem', color: 'black' }}>
                 <p style={{ marginBottom: '1rem' }}>
-                  Se exportarán <strong>{sortedAndFilteredCounters.length}</strong> registros con los filtros aplicados
+                  Se exportarán registros consolidados con los filtros aplicados
                 </p>
               </div>
 
@@ -2616,7 +2852,7 @@ export default function Counters() {
                       <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>Archivo de datos</div>
                     </div>
                   </button>
-                  
+
                   <button
                     onClick={() => exportFilteredData('pdf')}
                     style={{

@@ -9,7 +9,7 @@ interface CardProps {
 export function Card({ children, className = '', hover = false }: CardProps) {
   return (
     <div
-      className={`rounded-xl border border-gray-200 bg-white p-6 shadow-sm ${
+      className={`rounded-xl border border-gray-200 bg-white p-6 text-gray-900 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 ${
         hover ? 'transition-shadow hover:shadow-md' : ''
       } ${className}`}
     >
@@ -33,7 +33,7 @@ interface CardTitleProps {
 }
 
 export function CardTitle({ children, className = '' }: CardTitleProps) {
-  return <h3 className={`text-lg font-semibold text-gray-900 ${className}`}>{children}</h3>
+  return <h3 className={`text-lg font-semibold text-gray-900 dark:text-gray-100 ${className}`}>{children}</h3>
 }
 
 interface CardContentProps {
@@ -78,8 +78,8 @@ export function StatCard({ title, value, change, icon, iconBgColor = 'bg-blue-50
     <Card>
       <div className="flex items-center justify-between">
         <div className="flex-1">
-          <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className="mt-2 text-3xl font-bold text-gray-900">{value}</p>
+          <p className="text-sm font-medium text-gray-600 dark:text-gray-300">{title}</p>
+          <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-gray-100">{value}</p>
           {change && (
             <div className="mt-2 flex items-center text-sm">
               <span
@@ -106,12 +106,12 @@ export function StatCard({ title, value, change, icon, iconBgColor = 'bg-blue-50
                 )}
                 {change.value}
               </span>
-              {change.label && <span className="ml-2 text-gray-500">{change.label}</span>}
+              {change.label && <span className="ml-2 text-gray-500 dark:text-gray-400">{change.label}</span>}
             </div>
           )}
         </div>
         {icon && (
-          <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${iconBgColor}`}>
+          <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${iconBgColor === 'bg-blue-50' ? 'bg-blue-50 dark:bg-blue-900/30' : iconBgColor}`}>
             {icon}
           </div>
         )}
