@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from ..db import get_db
 from ..models import Printer, MonthlyCounter
 from ..services.snmp import SNMPService
+from ..services.location_counter_sync import sync_location_segments_for_printer_month
 from ..services.medical_printer_service import (
     MedicalPrinterService,
     is_medical_printer,
@@ -475,6 +476,7 @@ def create_or_update_monthly_counter(
             
             existing_counter.updated_at = now
             
+            sync_location_segments_for_printer_month(db, printer_id, year, month)
             db.commit()
             db.refresh(existing_counter)
             
@@ -524,6 +526,7 @@ def create_or_update_monthly_counter(
         )
         
         db.add(new_counter)
+        sync_location_segments_for_printer_month(db, printer_id, year, month)
         # Commit individual para thread-safety (batch commits se harían a nivel superior)
         db.commit()
         db.refresh(new_counter)
